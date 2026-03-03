@@ -1,5 +1,47 @@
 # UI Structure (Based on Team Wireframe)
 
+UI Strategy
+
+User App
+• Mobile only layout
+• Bottom navigation (5-tab structure)
+• Full-width components
+• Designed for touch interaction
+• PWA installable
+• No desktop layout support
+
+Viewport target: max-width 430px
+
+⸻
+
+Admin Console
+• Desktop only
+• Separate route: /admin
+• Table-based data view
+• Focus on reservation + settlement monitoring
+• No mobile support required
+
+⸻
+
+Layout Separation
+
+User App:
+• / (home)
+• /partner/[id]
+• /reservation
+• /checkin
+• /in-use
+• /checkout
+
+Admin:
+• /admin
+• /admin/reservations
+• /admin/settlement
+
+User and Admin must not share layout wrappers.
+
+---
+
 ## Pages
 
 1. Home

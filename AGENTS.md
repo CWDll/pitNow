@@ -25,6 +25,23 @@ If uncertain, update Decisions.md and propose 2 options with tradeoffs.
 
 ---
 
+## Reference Materials (Context Only)
+
+- refs/ directory contains:
+- Original proposal documents
+- Wireframes
+- External design drafts
+- Any raw planning materials
+
+Rules:
+
+- refs files are for contextual understanding only.
+- Do NOT treat refs as implementation source of truth.
+- If there is a conflict between docs/ and refs/, follow docs/.
+- If clarification is needed, propose update to docs/ instead of modifying refs.
+
+---
+
 ## Tech Stack
 
 - Next.js (App Router)
@@ -32,6 +49,19 @@ If uncertain, update Decisions.md and propose 2 options with tradeoffs.
 - Supabase (Auth / Postgres / Storage)
 - Vercel deploy
 - Payment: Toss (MVP default)
+
+---
+
+## Device Strategy
+
+- User-facing app is Mobile First.
+- UI is designed for mobile viewport only.
+- PWA enabled (installable web app).
+- Admin console is Desktop only.
+- Admin routes must be separated (e.g., /admin).
+- No responsive hybrid layout for MVP.
+
+User and Admin UI must be clearly separated in layout structure.
 
 ---
 
