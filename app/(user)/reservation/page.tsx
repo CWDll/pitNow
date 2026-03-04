@@ -1,10 +1,12 @@
+import Link from "next/link";
+
 interface ReservationItem {
   id: string;
   garageName: string;
   workTitle: string;
   dateLabel: string;
   bayLabel: string;
-  status: "예약확정" | "대기중" | "사용중" | "완료";
+  status: "예약확정" | "사용중" | "완료";
 }
 
 const upcomingReservations: ReservationItem[] = [
@@ -18,14 +20,6 @@ const upcomingReservations: ReservationItem[] = [
   },
   {
     id: "rsv-2",
-    garageName: "판교 모터가라지",
-    workTitle: "타이어 로테이션",
-    dateLabel: "3/5(수) 10:00",
-    bayLabel: "1번 베이",
-    status: "대기중",
-  },
-  {
-    id: "rsv-3",
     garageName: "서초 DIY 카센터",
     workTitle: "브레이크 패드 교환",
     dateLabel: "오늘 16:30",
@@ -36,7 +30,7 @@ const upcomingReservations: ReservationItem[] = [
 
 const pastReservations: ReservationItem[] = [
   {
-    id: "rsv-4",
+    id: "rsv-3",
     garageName: "서초 DIY 카센터",
     workTitle: "에어필터 교환",
     dateLabel: "2/15(토) 11:00",
@@ -50,10 +44,6 @@ function statusClass(status: ReservationItem["status"]): string {
     return "bg-blue-50 text-blue-600";
   }
 
-  if (status === "대기중") {
-    return "bg-amber-50 text-amber-600";
-  }
-
   if (status === "사용중") {
     return "bg-indigo-50 text-indigo-600";
   }
@@ -61,9 +51,34 @@ function statusClass(status: ReservationItem["status"]): string {
   return "bg-emerald-50 text-emerald-600";
 }
 
+function buildReservationCompleteHref(item: ReservationItem): string {
+  const query = new URLSearchParams({
+    reservationId: item.id,
+    garageName: item.garageName,
+    dateLabel: item.dateLabel,
+    bayLabel: item.bayLabel,
+    workTitle: item.workTitle,
+    totalPrice: "15000",
+  });
+
+  return `/reservation-complete?${query.toString()}`;
+}
+
+function buildInUseHref(item: ReservationItem): string {
+  const query = new URLSearchParams({
+    reservationId: item.id,
+    garageName: item.garageName,
+    bayLabel: item.bayLabel,
+    workTitle: item.workTitle,
+    totalPrice: "15000",
+  });
+
+  return `/in-use?${query.toString()}`;
+}
+
 function ReservationCard({ item }: { item: ReservationItem }) {
-  return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-4">
+  const cardBody = (
+    <article className="rounded-2xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-300">
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-2xl font-semibold text-zinc-900">{item.garageName}</h3>
@@ -79,6 +94,24 @@ function ReservationCard({ item }: { item: ReservationItem }) {
       </p>
     </article>
   );
+
+  if (item.status === "예약확정") {
+    return (
+      <Link href={buildReservationCompleteHref(item)} className="block">
+        {cardBody}
+      </Link>
+    );
+  }
+
+  if (item.status === "사용중") {
+    return (
+      <Link href={buildInUseHref(item)} className="block">
+        {cardBody}
+      </Link>
+    );
+  }
+
+  return cardBody;
 }
 
 export default function ReservationListPage() {
