@@ -6,6 +6,8 @@ import { useMemo, useState } from "react";
 
 import { getGarageById } from "../../../_data/mock-garages";
 
+const MIN_BLOCKS = 2; // 30분 * 2 = 1시간
+
 const days = [
   { label: "목", day: 27 },
   { label: "금", day: 28 },
@@ -16,13 +18,16 @@ const days = [
   { label: "수", day: 5 },
 ];
 
-const timeSlots = [
+// 30분 경계값 (09:00 ~ 19:00)
+const timeBoundaries = [
   "09:00",
   "09:30",
   "10:00",
   "10:30",
   "11:00",
   "11:30",
+  "12:00",
+  "12:30",
   "13:00",
   "13:30",
   "14:00",
@@ -35,23 +40,67 @@ const timeSlots = [
   "17:30",
   "18:00",
   "18:30",
-];
+  "19:00",
+] as const;
 
-const availableTimeSet = new Set([
-  "10:30",
-  "11:00",
-  "11:30",
-  "13:30",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-  "16:00",
-  "17:00",
-  "17:30",
-  "18:00",
-  "18:30",
-]);
+// block index i는 [timeBoundaries[i], timeBoundaries[i+1])를 의미
+const blockCount = timeBoundaries.length - 1;
+
+const mockReservedRangesByBay: Record<
+  number,
+  Array<{ start: string; end: string }>
+> = {
+  1: [
+    { start: "10:30", end: "12:00" },
+    { start: "15:00", end: "16:00" },
+  ],
+  2: [
+    { start: "09:30", end: "11:00" },
+    { start: "14:30", end: "15:30" },
+  ],
+  3: [
+    { start: "09:00", end: "10:30" },
+    { start: "16:30", end: "17:00" },
+  ],
+  4: [
+    { start: "11:30", end: "13:00" },
+    { start: "17:00", end: "18:00" },
+  ],
+  5: [
+    { start: "10:00", end: "11:30" },
+    { start: "15:30", end: "16:30" },
+  ],
+  6: [
+    { start: "13:00", end: "14:30" },
+    { start: "17:30", end: "18:30" },
+  ],
+};
+
+function boundaryIndex(time: string): number {
+  return timeBoundaries.findIndex((value) => value === time);
+}
+
+function isReservedBlock(blockIdx: number, bay: number): boolean {
+  const ranges = mockReservedRangesByBay[bay] ?? [];
+
+  return ranges.some((range) => {
+    const startIdx = boundaryIndex(range.start);
+    const endIdx = boundaryIndex(range.end);
+
+    if (startIdx < 0 || endIdx < 0) {
+      return false;
+    }
+
+    return blockIdx >= startIdx && blockIdx < endIdx;
+  });
+}
+
+function toIsoByDayAndTime(day: number, time: string): string {
+  const [hour, minute] = time.split(":").map((value) => Number(value));
+  const month = day >= 27 ? 1 : 2;
+  const date = new Date(Date.UTC(2026, month, day, hour, minute, 0, 0));
+  return date.toISOString();
+}
 
 export default function PartnerSchedulePage() {
   const params = useParams<{ id: string }>();
@@ -60,40 +109,16 @@ export default function PartnerSchedulePage() {
 
   const garage = useMemo(() => getGarageById(params.id), [params.id]);
 
-  const [selectedDay, setSelectedDay] = useState<number>(1);
-  const [selectedTime, setSelectedTime] = useState<string>("15:30");
+  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(1);
   const [selectedBay, setSelectedBay] = useState<number>(3);
+  // [selectedStartIdx, selectedEndIdx) 형태의 연속 range
+  const [selectedStartIdx, setSelectedStartIdx] = useState<number | null>(null);
+  const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
+  const [dragAnchorIdx, setDragAnchorIdx] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragMoved, setDragMoved] = useState<boolean>(false);
 
   const workId = searchParams.get("workId") ?? "engine-oil";
-
-  function buildStartEndIso(timeValue: string): {
-    startIso: string;
-    endIso: string;
-  } {
-    const [hour, minute] = timeValue.split(":").map((value) => Number(value));
-    const start = new Date(Date.UTC(2026, 1, 28, hour, minute, 0, 0));
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    return {
-      startIso: start.toISOString(),
-      endIso: end.toISOString(),
-    };
-  }
-
-  function goSafetyPage() {
-    const { startIso, endIso } = buildStartEndIso(selectedTime);
-    const query = new URLSearchParams({
-      partnerId: garage!.id,
-      garageName: garage!.name,
-      workId,
-      dateLabel: `2/28(금) ${selectedTime} - ${String((Number(selectedTime.slice(0, 2)) + 1) % 24).padStart(2, "0")}:${selectedTime.slice(3, 5)}`,
-      bayLabel: `${selectedBay}번 베이`,
-      bayId: "00000000-0000-0000-0000-000000000001",
-      startTime: startIso,
-      endTime: endIso,
-      totalPrice: String(garage!.hourlyPrice),
-    });
-    router.push(`/safety?${query.toString()}`);
-  }
 
   if (!garage) {
     return (
@@ -106,6 +131,159 @@ export default function PartnerSchedulePage() {
         </p>
       </section>
     );
+  }
+
+  const selectedDay = days[selectedDayIdx];
+  const hasSelection = selectedStartIdx !== null && selectedEndIdx !== null;
+
+  const selectedBlocks = hasSelection ? selectedEndIdx - selectedStartIdx : 0;
+  const startTime = hasSelection ? timeBoundaries[selectedStartIdx] : null;
+  const endTime = hasSelection ? timeBoundaries[selectedEndIdx] : null;
+
+  const halfHourPrice = Math.floor(garage.hourlyPrice / 2);
+  const additionalBlocks = Math.max(0, selectedBlocks - MIN_BLOCKS);
+  const totalPrice = garage.hourlyPrice + additionalBlocks * halfHourPrice;
+
+  const meetsMinimum = selectedBlocks >= MIN_BLOCKS;
+  const canProceed = hasSelection && meetsMinimum;
+
+  function handleBayChange(nextBay: number) {
+    setSelectedBay(nextBay);
+    setIsDragging(false);
+    setDragAnchorIdx(null);
+
+    if (!hasSelection) {
+      return;
+    }
+
+    // 현재 range에 새 베이 예약 충돌이 있으면 리셋
+    for (let i = selectedStartIdx; i < selectedEndIdx; i += 1) {
+      if (isReservedBlock(i, nextBay)) {
+        setSelectedStartIdx(null);
+        setSelectedEndIdx(null);
+        return;
+      }
+    }
+  }
+
+  function isRangeClear(
+    startIdx: number,
+    endExclusiveIdx: number,
+    bay: number,
+  ): boolean {
+    for (let i = startIdx; i < endExclusiveIdx; i += 1) {
+      if (isReservedBlock(i, bay)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function applySingleSelection(blockIdx: number) {
+    setSelectedStartIdx(blockIdx);
+    setSelectedEndIdx(blockIdx + 1);
+  }
+
+  function applyRangeFromStart(startIdx: number, targetIdx: number) {
+    const endExclusive = targetIdx + 1;
+    if (
+      targetIdx >= startIdx &&
+      isRangeClear(startIdx, endExclusive, selectedBay)
+    ) {
+      setSelectedStartIdx(startIdx);
+      setSelectedEndIdx(endExclusive);
+      return;
+    }
+
+    applySingleSelection(targetIdx);
+  }
+
+  function handleBlockClick(blockIdx: number) {
+    // 예약된 block은 선택 불가
+    if (isReservedBlock(blockIdx, selectedBay)) {
+      return;
+    }
+
+    if (!hasSelection) {
+      applySingleSelection(blockIdx);
+      return;
+    }
+
+    // 시작 블록을 다시 누르면 전체 선택 해제 (start 재선택 진입)
+    if (blockIdx === selectedStartIdx) {
+      setSelectedStartIdx(null);
+      setSelectedEndIdx(null);
+      return;
+    }
+
+    // 이미 시작이 정해진 상태에서 더 늦은 시간 클릭 시,
+    // 중간에 막힌 시간이 없으면 사이를 한 번에 포함.
+    if (blockIdx >= selectedStartIdx) {
+      applyRangeFromStart(selectedStartIdx, blockIdx);
+      return;
+    }
+
+    // 시작보다 이른 시간 클릭은 새 시작으로 재설정
+    applySingleSelection(blockIdx);
+  }
+
+  function handleBlockPointerDown(blockIdx: number) {
+    if (isReservedBlock(blockIdx, selectedBay)) {
+      return;
+    }
+
+    setIsDragging(true);
+    setDragAnchorIdx(blockIdx);
+    setDragMoved(false);
+  }
+
+  function handleBlockPointerEnter(blockIdx: number) {
+    if (!isDragging || dragAnchorIdx === null) {
+      return;
+    }
+
+    if (blockIdx < dragAnchorIdx) {
+      applySingleSelection(dragAnchorIdx);
+      return;
+    }
+
+    setDragMoved(true);
+    applyRangeFromStart(dragAnchorIdx, blockIdx);
+  }
+
+  function stopDragging() {
+    if (!isDragging) {
+      return;
+    }
+
+    if (!dragMoved && dragAnchorIdx !== null) {
+      handleBlockClick(dragAnchorIdx);
+    }
+
+    setIsDragging(false);
+    setDragAnchorIdx(null);
+    setDragMoved(false);
+  }
+
+  function goSafetyPage() {
+    if (!canProceed || !startTime || !endTime) {
+      return;
+    }
+
+    const query = new URLSearchParams({
+      partnerId: garage!.id,
+      garageName: garage!.name,
+      workId,
+      dateLabel: `${selectedDay.day}/${selectedDay.label} ${startTime} - ${endTime}`,
+      bayLabel: `${selectedBay}번 베이`,
+      bayId: garage!.bayId,
+      startTime: toIsoByDayAndTime(selectedDay.day, startTime),
+      endTime: toIsoByDayAndTime(selectedDay.day, endTime),
+      totalPrice: String(totalPrice),
+    });
+
+    router.push(`/safety?${query.toString()}`);
   }
 
   return (
@@ -135,12 +313,12 @@ export default function PartnerSchedulePage() {
 
       <div className="mb-6 grid grid-cols-7 gap-2">
         {days.map((item, index) => {
-          const active = index === selectedDay;
+          const active = index === selectedDayIdx;
           return (
             <button
               key={`${item.label}-${item.day}`}
               type="button"
-              onClick={() => setSelectedDay(index)}
+              onClick={() => setSelectedDayIdx(index)}
               className={`rounded-2xl px-2 py-3 text-center ${
                 active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"
               }`}
@@ -152,39 +330,9 @@ export default function PartnerSchedulePage() {
         })}
       </div>
 
-      <div className="mb-3">
-        <h2 className="text-2xl font-semibold text-zinc-900">
-          시간 슬롯 (30분 단위)
-        </h2>
-      </div>
-
-      <div className="grid grid-cols-4 gap-2">
-        {timeSlots.map((slot) => {
-          const available = availableTimeSet.has(slot);
-          const selected = slot === selectedTime;
-
-          return (
-            <button
-              key={slot}
-              type="button"
-              disabled={!available}
-              onClick={() => setSelectedTime(slot)}
-              className={`rounded-xl px-2 py-3 text-base font-medium ${
-                !available
-                  ? "bg-zinc-100 text-zinc-400"
-                  : selected
-                    ? "bg-blue-600 text-white"
-                    : "bg-zinc-100 text-zinc-800"
-              }`}
-            >
-              {slot}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mb-3 mt-6">
+      <div className="mb-3 flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-zinc-900">베이 선택</h2>
+        <span className="text-sm text-zinc-500">베이마다 가능 시간이 다름</span>
       </div>
 
       <div className="grid grid-cols-6 gap-2">
@@ -196,7 +344,7 @@ export default function PartnerSchedulePage() {
             <button
               key={bayNumber}
               type="button"
-              onClick={() => setSelectedBay(bayNumber)}
+              onClick={() => handleBayChange(bayNumber)}
               className={`rounded-xl px-2 py-3 text-lg font-medium ${
                 active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-800"
               }`}
@@ -208,6 +356,65 @@ export default function PartnerSchedulePage() {
       </div>
 
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-2xl font-semibold text-zinc-900">시간 선택</h2>
+          <span className="text-sm text-zinc-500">30분 단위</span>
+        </div>
+
+        <div
+          className={`grid grid-cols-4 gap-2 ${isDragging ? "touch-none select-none" : ""}`}
+          onPointerUp={stopDragging}
+          onPointerLeave={stopDragging}
+        >
+          {Array.from({ length: blockCount }).map((_, idx) => {
+            const reserved = isReservedBlock(idx, selectedBay);
+            const selected =
+              hasSelection && idx >= selectedStartIdx && idx < selectedEndIdx;
+            const label = `${timeBoundaries[idx]}~${timeBoundaries[idx + 1]}`;
+
+            return (
+              <button
+                key={`block-${idx}`}
+                type="button"
+                disabled={reserved}
+                onPointerDown={() => handleBlockPointerDown(idx)}
+                onPointerEnter={() => handleBlockPointerEnter(idx)}
+                className={`rounded-xl px-2 py-3 text-xs font-medium ${
+                  reserved
+                    ? "bg-zinc-300 text-zinc-500"
+                    : selected
+                      ? "bg-amber-400 text-white"
+                      : "bg-white text-zinc-700"
+                }`}
+                title={label}
+              >
+                {timeBoundaries[idx]}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">
+            선택
+          </span>
+          <span className="rounded-full bg-zinc-200 px-3 py-1 text-zinc-600">
+            예약됨/미선택
+          </span>
+        </div>
+
+        <p className="mt-3 text-sm text-zinc-600">
+          예약시간: {startTime ?? "-"} ~ {endTime ?? "-"}
+        </p>
+
+        {!meetsMinimum && hasSelection ? (
+          <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            최소 예약 시간은 1시간입니다 (연속 2칸 이상 선택).
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
         <h3 className="mb-3 text-2xl font-semibold text-zinc-900">요금 요약</h3>
         <div className="space-y-1 text-lg text-zinc-700">
           <div className="flex items-center justify-between">
@@ -216,30 +423,33 @@ export default function PartnerSchedulePage() {
           </div>
           <div className="flex items-center justify-between">
             <span>추가 30분 단가</span>
-            <span>
-              {Math.floor(garage.hourlyPrice / 2).toLocaleString("ko-KR")}원
-            </span>
+            <span>{halfHourPrice.toLocaleString("ko-KR")}원</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>선택 시간</span>
+            <span>{((selectedBlocks * 30) / 60).toFixed(1)}시간</span>
           </div>
           <div className="my-2 border-t border-zinc-300" />
           <div className="flex items-center justify-between text-2xl font-semibold text-zinc-900">
             <span>합계</span>
             <span className="text-blue-600">
-              {garage.hourlyPrice.toLocaleString("ko-KR")}원
+              {totalPrice.toLocaleString("ko-KR")}원
             </span>
           </div>
         </div>
       </div>
 
       <p className="mt-4 text-sm text-zinc-500">
-        선택됨: {days[selectedDay]?.label} {days[selectedDay]?.day}일 ·{" "}
-        {selectedTime} · {selectedBay}번 베이 · {workId}
+        선택됨: {selectedDay.label} {selectedDay.day}일 · {startTime ?? "-"} ~{" "}
+        {endTime ?? "-"} · {selectedBay}번 베이 · {workId}
       </p>
 
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
           onClick={goSafetyPage}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
+          disabled={!canProceed}
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
         >
           안전 동의
         </button>
