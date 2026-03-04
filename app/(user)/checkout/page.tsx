@@ -1,11 +1,15 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface CheckoutApiError {
   error?: string | { message?: string };
 }
+
+const paymentMethods = ["신용/체크카드", "카카오페이", "네이버페이", "토스페이"] as const;
+
+type PaymentMethod = (typeof paymentMethods)[number];
 
 function extractError(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") {
@@ -42,16 +46,61 @@ export default function CheckoutPage() {
   const [checks, setChecks] = useState<boolean[]>([false, false, false]);
   const [photo1, setPhoto1] = useState<File | null>(null);
   const [photo2, setPhoto2] = useState<File | null>(null);
+  const [method, setMethod] = useState<PaymentMethod | null>(null);
+  const [isPaid, setIsPaid] = useState<boolean>(false);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isPaying, setIsPaying] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
 
-  const canSubmit = reservationId.length > 0 && checks.every(Boolean) && photo1 !== null && photo2 !== null;
+  const additionalFee = useMemo(() => {
+    if (!Number.isFinite(previewFee) || previewFee <= 0) {
+      return 0;
+    }
+
+    return previewFee;
+  }, [previewFee]);
+
+  const requiresAdditionalPayment = additionalFee > 0;
+
+  const canSubmitBase =
+    reservationId.length > 0 && checks.every(Boolean) && photo1 !== null && photo2 !== null;
+  const canSubmit = canSubmitBase && (!requiresAdditionalPayment || isPaid);
+
+  async function handleMockAdditionalPayment() {
+    setError("");
+
+    if (!requiresAdditionalPayment) {
+      setIsPaid(true);
+      return;
+    }
+
+    if (!method) {
+      setError("추가 요금 결제 수단을 선택해 주세요.");
+      return;
+    }
+
+    setIsPaying(true);
+    try {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 600);
+      });
+      setIsPaid(true);
+    } finally {
+      setIsPaying(false);
+    }
+  }
 
   async function handleComplete() {
     setError("");
 
-    if (!canSubmit) {
+    if (!canSubmitBase) {
       setError("체크리스트와 사진 2장을 모두 완료해 주세요.");
+      return;
+    }
+
+    if (requiresAdditionalPayment && !isPaid) {
+      setError("추가 요금을 먼저 결제해야 완료할 수 있습니다.");
       return;
     }
 
@@ -75,7 +124,7 @@ export default function CheckoutPage() {
       const extraFee =
         data && typeof data === "object" && "extraFee" in data && typeof (data as { extraFee?: unknown }).extraFee === "number"
           ? (data as { extraFee: number }).extraFee
-          : previewFee;
+          : additionalFee;
 
       const query = new URLSearchParams({
         garageName,
@@ -141,13 +190,53 @@ export default function CheckoutPage() {
       <div className="mt-5 rounded-2xl bg-zinc-100 p-4 text-base text-zinc-700">
         <h3 className="mb-2 text-xl font-semibold text-zinc-900">추가요금 / 패널티</h3>
         <p className="flex justify-between"><span>초과 이용 시간</span><span>{overdueMinutes}분</span></p>
-        <p className="mt-2 flex justify-between text-red-500"><span>추가 요금</span><span>{previewFee.toLocaleString("ko-KR")}원</span></p>
+        <p className="mt-2 flex justify-between text-red-500"><span>추가 요금</span><span>{additionalFee.toLocaleString("ko-KR")}원</span></p>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-xl font-semibold text-zinc-900">
           <span>추가 결제 금액</span>
-          <span className="text-red-500">{previewFee.toLocaleString("ko-KR")}원</span>
+          <span className="text-red-500">{additionalFee.toLocaleString("ko-KR")}원</span>
         </p>
       </div>
+
+      {requiresAdditionalPayment ? (
+        <div className="mt-5 rounded-2xl border border-zinc-200 bg-white p-4">
+          <h3 className="mb-2 text-xl font-semibold text-zinc-900">추가요금 결제 수단</h3>
+          <div className="space-y-2">
+            {paymentMethods.map((item) => {
+              const selected = method === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    setMethod(item);
+                    setIsPaid(false);
+                  }}
+                  className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left text-base ${
+                    selected ? "border-blue-600 bg-blue-50" : "border-zinc-300 bg-white"
+                  }`}
+                >
+                  <span>{item}</span>
+                  <span className={`h-5 w-5 rounded-full border ${selected ? "border-blue-600 bg-blue-600" : "border-zinc-300"}`} />
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleMockAdditionalPayment}
+            disabled={isPaying || isPaid}
+            className="mt-3 flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 text-base font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
+          >
+            {isPaid
+              ? "추가요금 결제 완료"
+              : isPaying
+                ? "추가요금 결제 중..."
+                : `${additionalFee.toLocaleString("ko-KR")}원 추가 결제하기`}
+          </button>
+        </div>
+      ) : null}
 
       {error ? <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p> : null}
 

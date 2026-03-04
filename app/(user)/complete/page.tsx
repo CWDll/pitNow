@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 
 export default function CompletePage() {
   const searchParams = useSearchParams();
@@ -10,6 +11,9 @@ export default function CompletePage() {
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
   const extraFee = Number(searchParams.get("extraFee") ?? "0");
+
+  const [rating, setRating] = useState<number>(0);
+  const [reviewText, setReviewText] = useState<string>("");
 
   const total = totalPrice + extraFee;
 
@@ -38,9 +42,37 @@ export default function CompletePage() {
 
       <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
         <h2 className="text-2xl font-semibold text-zinc-900">후기를 남겨주세요</h2>
-        <p className="mt-3 text-3xl text-zinc-300">☆ ☆ ☆ ☆ ☆</p>
-        <textarea className="mt-3 h-24 w-full rounded-xl bg-zinc-100 p-3 text-sm" placeholder="한줄 후기를 남겨주세요" />
-        <button type="button" className="mt-3 h-11 w-full rounded-xl bg-zinc-200 text-base font-semibold text-zinc-500">
+
+        <div className="mt-3 flex items-center gap-2">
+          {Array.from({ length: 5 }).map((_, index) => {
+            const starNumber = index + 1;
+            const active = starNumber <= rating;
+
+            return (
+              <button
+                key={starNumber}
+                type="button"
+                onClick={() => setRating(starNumber)}
+                className={`text-4xl leading-none ${active ? "text-amber-400" : "text-zinc-300"}`}
+                aria-label={`${starNumber}점 선택`}
+              >
+                ★
+              </button>
+            );
+          })}
+        </div>
+
+        <textarea
+          className="mt-3 h-24 w-full rounded-xl bg-zinc-100 p-3 text-sm"
+          placeholder="한줄 후기를 남겨주세요"
+          value={reviewText}
+          onChange={(event) => setReviewText(event.target.value)}
+        />
+
+        <button
+          type="button"
+          className="mt-3 h-11 w-full rounded-xl bg-zinc-200 text-base font-semibold text-zinc-600"
+        >
           후기 제출
         </button>
       </div>
