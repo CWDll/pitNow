@@ -8,15 +8,7 @@ import { getGarageById } from "../../../_data/mock-garages";
 
 const MIN_BLOCKS = 2; // 30분 * 2 = 1시간
 
-const days = [
-  { label: "목", day: 27 },
-  { label: "금", day: 28 },
-  { label: "토", day: 1 },
-  { label: "일", day: 2 },
-  { label: "월", day: 3 },
-  { label: "화", day: 4 },
-  { label: "수", day: 5 },
-];
+const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
 // 30분 경계값 (09:00 ~ 19:00)
 const timeBoundaries = [
@@ -43,7 +35,7 @@ const timeBoundaries = [
   "19:00",
 ] as const;
 
-// block index i는 [timeBoundaries[i], timeBoundaries[i+1])를 의미
+// block index i는 [timeBoundaries[i], timeBoundaries[i+1])
 const blockCount = timeBoundaries.length - 1;
 
 const mockReservedRangesByBay: Record<
@@ -76,6 +68,47 @@ const mockReservedRangesByBay: Record<
   ],
 };
 
+function stripTime(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+const TODAY_ON_LOAD = stripTime(new Date());
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return stripTime(next);
+}
+
+function formatMonthLabel(date: Date): string {
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
+}
+
+function formatMonthValue(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${date.getFullYear()}-${month}`;
+}
+
+function monthValueToDate(monthValue: string, prevDate: Date): Date | null {
+  const [yearRaw, monthRaw] = monthValue.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
+    return null;
+  }
+
+  const lastDay = new Date(year, month, 0).getDate();
+  const nextDay = Math.min(prevDate.getDate(), lastDay);
+
+  return new Date(year, month - 1, nextDay);
+}
+
 function boundaryIndex(time: string): number {
   return timeBoundaries.findIndex((value) => value === time);
 }
@@ -95,11 +128,19 @@ function isReservedBlock(blockIdx: number, bay: number): boolean {
   });
 }
 
-function toIsoByDayAndTime(day: number, time: string): string {
+function toIsoByDateAndTime(date: Date, time: string): string {
   const [hour, minute] = time.split(":").map((value) => Number(value));
-  const month = day >= 27 ? 1 : 2;
-  const date = new Date(Date.UTC(2026, month, day, hour, minute, 0, 0));
-  return date.toISOString();
+  return new Date(
+    Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      hour,
+      minute,
+      0,
+      0,
+    ),
+  ).toISOString();
 }
 
 export default function PartnerSchedulePage() {
@@ -109,14 +150,14 @@ export default function PartnerSchedulePage() {
 
   const garage = useMemo(() => getGarageById(params.id), [params.id]);
 
-  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(1);
+  const [selectedDate, setSelectedDate] = useState<Date>(TODAY_ON_LOAD);
   const [selectedBay, setSelectedBay] = useState<number>(3);
-  // [selectedStartIdx, selectedEndIdx) 형태의 연속 range
   const [selectedStartIdx, setSelectedStartIdx] = useState<number | null>(null);
   const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
   const [dragAnchorIdx, setDragAnchorIdx] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragMoved, setDragMoved] = useState<boolean>(false);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
 
   const workId = searchParams.get("workId") ?? "engine-oil";
 
@@ -133,9 +174,11 @@ export default function PartnerSchedulePage() {
     );
   }
 
-  const selectedDay = days[selectedDayIdx];
-  const hasSelection = selectedStartIdx !== null && selectedEndIdx !== null;
+  const weekDates = Array.from({ length: 7 }, (_, index) =>
+    addDays(selectedDate, index - 3),
+  );
 
+  const hasSelection = selectedStartIdx !== null && selectedEndIdx !== null;
   const selectedBlocks = hasSelection ? selectedEndIdx - selectedStartIdx : 0;
   const startTime = hasSelection ? timeBoundaries[selectedStartIdx] : null;
   const endTime = hasSelection ? timeBoundaries[selectedEndIdx] : null;
@@ -147,6 +190,21 @@ export default function PartnerSchedulePage() {
   const meetsMinimum = selectedBlocks >= MIN_BLOCKS;
   const canProceed = hasSelection && meetsMinimum;
 
+  function handleWeekShift(daysToMove: number) {
+    setSelectedDate((prev) =>
+      addDays(prev ?? stripTime(new Date()), daysToMove),
+    );
+  }
+
+  function handleMonthChange(monthValue: string) {
+    const next = monthValueToDate(monthValue, selectedDate);
+    if (!next) {
+      return;
+    }
+
+    setSelectedDate(next);
+  }
+
   function handleBayChange(nextBay: number) {
     setSelectedBay(nextBay);
     setIsDragging(false);
@@ -156,7 +214,6 @@ export default function PartnerSchedulePage() {
       return;
     }
 
-    // 현재 range에 새 베이 예약 충돌이 있으면 리셋
     for (let i = selectedStartIdx; i < selectedEndIdx; i += 1) {
       if (isReservedBlock(i, nextBay)) {
         setSelectedStartIdx(null);
@@ -200,7 +257,6 @@ export default function PartnerSchedulePage() {
   }
 
   function handleBlockClick(blockIdx: number) {
-    // 예약된 block은 선택 불가
     if (isReservedBlock(blockIdx, selectedBay)) {
       return;
     }
@@ -210,21 +266,17 @@ export default function PartnerSchedulePage() {
       return;
     }
 
-    // 시작 블록을 다시 누르면 전체 선택 해제 (start 재선택 진입)
     if (blockIdx === selectedStartIdx) {
       setSelectedStartIdx(null);
       setSelectedEndIdx(null);
       return;
     }
 
-    // 이미 시작이 정해진 상태에서 더 늦은 시간 클릭 시,
-    // 중간에 막힌 시간이 없으면 사이를 한 번에 포함.
     if (blockIdx >= selectedStartIdx) {
       applyRangeFromStart(selectedStartIdx, blockIdx);
       return;
     }
 
-    // 시작보다 이른 시간 클릭은 새 시작으로 재설정
     applySingleSelection(blockIdx);
   }
 
@@ -271,15 +323,17 @@ export default function PartnerSchedulePage() {
       return;
     }
 
+    const selectedWeekdayLabel = weekdayLabels[selectedDate.getDay()];
+
     const query = new URLSearchParams({
       partnerId: garage!.id,
       garageName: garage!.name,
       workId,
-      dateLabel: `${selectedDay.day}/${selectedDay.label} ${startTime} - ${endTime}`,
+      dateLabel: `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}(${selectedWeekdayLabel}) ${startTime} - ${endTime}`,
       bayLabel: `${selectedBay}번 베이`,
       bayId: garage!.bayId,
-      startTime: toIsoByDayAndTime(selectedDay.day, startTime),
-      endTime: toIsoByDayAndTime(selectedDay.day, endTime),
+      startTime: toIsoByDateAndTime(selectedDate, startTime),
+      endTime: toIsoByDateAndTime(selectedDate, endTime),
       totalPrice: String(totalPrice),
     });
 
@@ -302,29 +356,62 @@ export default function PartnerSchedulePage() {
       </header>
 
       <div className="mb-4 flex items-center justify-between px-1">
-        <button type="button" className="text-xl text-zinc-500">
+        <button
+          type="button"
+          className="text-xl text-zinc-500"
+          onClick={() => handleWeekShift(-7)}
+        >
           ‹
         </button>
-        <p className="text-2xl font-semibold text-zinc-900">2026년 2월</p>
-        <button type="button" className="text-xl text-zinc-500">
+        <button
+          type="button"
+          className="text-2xl font-semibold text-zinc-900"
+          onClick={() => setIsMonthPickerOpen((prev) => !prev)}
+        >
+          {formatMonthLabel(selectedDate)}
+        </button>
+        <button
+          type="button"
+          className="text-xl text-zinc-500"
+          onClick={() => handleWeekShift(7)}
+        >
           ›
         </button>
       </div>
 
+      {isMonthPickerOpen ? (
+        <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-3">
+          <label className="mb-1 block text-sm text-zinc-600">월 선택</label>
+          <input
+            type="month"
+            value={formatMonthValue(selectedDate)}
+            onChange={(event) => handleMonthChange(event.target.value)}
+            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => setIsMonthPickerOpen(false)}
+            className="mt-2 w-full rounded-xl bg-zinc-100 py-2 text-sm font-medium text-zinc-700"
+          >
+            닫기
+          </button>
+        </div>
+      ) : null}
+
       <div className="mb-6 grid grid-cols-7 gap-2">
-        {days.map((item, index) => {
-          const active = index === selectedDayIdx;
+        {weekDates.map((date) => {
+          const active = date.getTime() === selectedDate.getTime();
           return (
             <button
-              key={`${item.label}-${item.day}`}
+              key={`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
               type="button"
-              onClick={() => setSelectedDayIdx(index)}
+              onClick={() => setSelectedDate(date)}
               className={`rounded-2xl px-2 py-3 text-center ${
                 active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"
               }`}
             >
-              <p className="text-xs">{item.label}</p>
-              <p className="text-2xl font-semibold">{item.day}</p>
+              <p className="text-xs">{weekdayLabels[date.getDay()]}</p>
+              <p className="text-2xl font-semibold">{date.getDate()}</p>
             </button>
           );
         })}
@@ -440,8 +527,8 @@ export default function PartnerSchedulePage() {
       </div>
 
       <p className="mt-4 text-sm text-zinc-500">
-        선택됨: {selectedDay.label} {selectedDay.day}일 · {startTime ?? "-"} ~{" "}
-        {endTime ?? "-"} · {selectedBay}번 베이 · {workId}
+        선택됨: {formatMonthLabel(selectedDate)} {selectedDate.getDate()}일 ·{" "}
+        {startTime ?? "-"} ~ {endTime ?? "-"} · {selectedBay}번 베이 · {workId}
       </p>
 
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
