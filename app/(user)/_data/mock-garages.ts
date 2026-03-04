@@ -1,5 +1,6 @@
 export interface GarageSummary {
   id: string;
+  bayId: string;
   name: string;
   distanceKm: number;
   bayCount: number;
@@ -25,6 +26,7 @@ export interface WorkOption {
 export const garageList: GarageSummary[] = [
   {
     id: "gangnam-self",
+    bayId: "00000000-0000-0000-0000-000000000001",
     name: "강남 셀프정비소",
     distanceKm: 1.2,
     bayCount: 6,
@@ -38,6 +40,7 @@ export const garageList: GarageSummary[] = [
   },
   {
     id: "seocho-diy",
+    bayId: "00000000-0000-0000-0000-000000000002",
     name: "서초 DIY 카센터",
     distanceKm: 2.5,
     bayCount: 4,

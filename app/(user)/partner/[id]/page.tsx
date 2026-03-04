@@ -1,10 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { supabase } from "@/src/lib/supabase";
 import { getGarageById, workOptions } from "../../_data/mock-garages";
 
 interface PartnerDetailPageProps {
   params: Promise<{ id: string }>;
+}
+
+interface ReviewRow {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
 }
 
 function levelClass(level: "초급" | "중급"): string {
@@ -17,6 +25,72 @@ function formatPrice(price: number): string {
   return `${price.toLocaleString("ko-KR")}원`;
 }
 
+function renderStars(rating: number): string {
+  const safe = Math.max(0, Math.min(5, Math.round(rating)));
+  return "★".repeat(safe) + "☆".repeat(5 - safe);
+}
+
+function formatDate(iso: string): string {
+  const parsed = new Date(iso);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "날짜 정보 없음";
+  }
+
+  return parsed.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+async function getReviewsByBayId(bayId: string) {
+  const { data: reservations, error: reservationError } = await supabase
+    .from("reservations")
+    .select("id")
+    .eq("bay_id", bayId)
+    .limit(200)
+    .returns<Array<{ id: string }>>();
+
+  if (reservationError) {
+    console.error("RESERVATION LOOKUP ERROR:", reservationError);
+    return { reviews: [] as ReviewRow[], totalCount: 0 };
+  }
+
+  const reservationIds = (reservations ?? []).map((item) => item.id);
+
+  if (reservationIds.length === 0) {
+    return { reviews: [] as ReviewRow[], totalCount: 0 };
+  }
+
+  const { count, error: countError } = await supabase
+    .from("reviews")
+    .select("id", { count: "exact", head: true })
+    .in("reservation_id", reservationIds);
+
+  if (countError) {
+    console.error("REVIEW COUNT ERROR:", countError);
+  }
+
+  const { data: reviewRows, error: reviewError } = await supabase
+    .from("reviews")
+    .select("id, rating, comment, created_at")
+    .in("reservation_id", reservationIds)
+    .order("created_at", { ascending: false })
+    .limit(3)
+    .returns<ReviewRow[]>();
+
+  if (reviewError) {
+    console.error("REVIEW LOOKUP ERROR:", reviewError);
+    return { reviews: [] as ReviewRow[], totalCount: count ?? 0 };
+  }
+
+  return {
+    reviews: reviewRows ?? [],
+    totalCount: count ?? reviewRows?.length ?? 0,
+  };
+}
+
 export default async function PartnerDetailPage({ params }: PartnerDetailPageProps) {
   const { id } = await params;
   const garage = getGarageById(id);
@@ -24,6 +98,12 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
   if (!garage) {
     notFound();
   }
+
+  const { reviews, totalCount } = await getReviewsByBayId(garage.bayId);
+  const averageRating =
+    reviews.length > 0
+      ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+      : garage.rating;
 
   return (
     <section className="pb-24">
@@ -33,7 +113,9 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
 
       <div className="space-y-2">
         <h1 className="text-4xl font-semibold text-zinc-900">{garage.name}</h1>
-        <p className="text-lg text-zinc-700">★ {garage.rating} ({garage.reviewCount}개 후기)</p>
+        <p className="text-lg text-zinc-700">
+          ★ {averageRating.toFixed(1)} ({totalCount || garage.reviewCount}개 후기)
+        </p>
         <p className="text-lg text-zinc-700">📍 {garage.address}</p>
         <p className="text-lg text-zinc-700">🕒 {garage.hours}</p>
         <p className="text-lg text-zinc-700">🚗 베이 {garage.bayCount}개 · 주차 가능</p>
@@ -68,14 +150,24 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-2xl font-semibold text-zinc-900">후기</h3>
-          <button type="button" className="text-sm font-semibold text-blue-600">
+          <Link href={`/partner/${garage.id}/reviews`} className="text-sm font-semibold text-blue-600">
             전체보기
-          </button>
+          </Link>
         </div>
-        <p className="text-lg text-zinc-700">★ ★ ★ ★ ☆ 4.8 (128개)</p>
-        <p className="mt-2 text-base text-zinc-600">
-          &#34;시설이 깨끗하고 공구 상태가 좋아요. 초보자도 쉽게 오일 교환할 수 있었습니다.&#34;
-        </p>
+
+        {reviews.length === 0 ? (
+          <p className="text-base text-zinc-600">아직 등록된 후기가 없습니다.</p>
+        ) : (
+          <div className="space-y-3">
+            {reviews.map((review) => (
+              <article key={review.id} className="rounded-xl bg-white p-3">
+                <p className="text-lg text-amber-500">{renderStars(review.rating)}</p>
+                <p className="mt-1 text-sm text-zinc-500">{formatDate(review.created_at)}</p>
+                <p className="mt-2 text-base text-zinc-700">{review.comment || "코멘트 없음"}</p>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
