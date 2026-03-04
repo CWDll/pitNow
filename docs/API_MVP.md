@@ -112,6 +112,39 @@ extraFee: number
 
 ⸻
 
+4. POST /api/reviews
+
+⸻
+
+기능:
+이용 완료 후 매장 후기 작성
+
+입력:
+{
+reservationId: string,
+partnerId: string,
+rating: number (1~5),
+comment?: string
+}
+
+검증:
+• reservation 존재
+• reservation.status = COMPLETED
+• reservation의 bay가 partnerId와 일치
+• 이미 작성한 reservation 후기 중복 불가
+• rating은 1~5 정수
+
+로직:
+• reviews insert
+
+성공 응답:
+{
+success: true,
+reviewId: string
+}
+
+⸻
+
 상태 전환 규칙
 
 허용:

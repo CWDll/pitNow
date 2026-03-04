@@ -45,6 +45,7 @@ export default function CheckinPage() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId")?.trim() ?? "";
+  const partnerId = searchParams.get("partnerId") ?? "";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
   const startTime = searchParams.get("startTime") ?? "";
@@ -117,6 +118,7 @@ export default function CheckinPage() {
 
       const query = new URLSearchParams({
         reservationId,
+        partnerId,
         garageName,
         bayLabel,
         startTime,

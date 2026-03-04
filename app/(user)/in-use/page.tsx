@@ -24,6 +24,7 @@ export default function InUsePage() {
   const [tick, setTick] = useState<number>(0);
 
   const reservationId = searchParams.get("reservationId") ?? "";
+  const partnerId = searchParams.get("partnerId") ?? "";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
   const totalPrice = Number(
@@ -55,6 +56,7 @@ export default function InUsePage() {
   function goCheckout() {
     const query = new URLSearchParams({
       reservationId,
+      partnerId,
       garageName,
       bayLabel,
       workTitle,

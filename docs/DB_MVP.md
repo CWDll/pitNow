@@ -108,11 +108,27 @@ completed_at timestamptz default now()
 
 ⸻
 
+reviews
+
+create table reviews (
+id uuid primary key default gen_random_uuid(),
+reservation_id uuid unique references reservations(id) on delete cascade,
+partner_id uuid references partners(id) on delete cascade,
+user_id uuid not null,
+rating int not null check (rating between 1 and 5),
+comment text,
+created_at timestamptz default now()
+);
+
+create index idx_reviews_partner on reviews(partner_id);
+create index idx_reviews_user on reviews(user_id);
+
+⸻
+
 MVP 제외 (향후 확장용)
 • vehicles
 • payments
 • helper_requests
-• reviews
 • status_logs
 
 지금은 최소 스키마만 유지한다.

@@ -66,7 +66,10 @@ export default function PartnerSchedulePage() {
 
   const workId = searchParams.get("workId") ?? "engine-oil";
 
-  function buildStartEndIso(timeValue: string): { startIso: string; endIso: string } {
+  function buildStartEndIso(timeValue: string): {
+    startIso: string;
+    endIso: string;
+  } {
     const [hour, minute] = timeValue.split(":").map((value) => Number(value));
     const start = new Date(Date.UTC(2026, 1, 28, hour, minute, 0, 0));
     const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -79,15 +82,15 @@ export default function PartnerSchedulePage() {
   function goSafetyPage() {
     const { startIso, endIso } = buildStartEndIso(selectedTime);
     const query = new URLSearchParams({
-      garageId: garage.id,
-      garageName: garage.name,
+      partnerId: garage!.id,
+      garageName: garage!.name,
       workId,
       dateLabel: `2/28(금) ${selectedTime} - ${String((Number(selectedTime.slice(0, 2)) + 1) % 24).padStart(2, "0")}:${selectedTime.slice(3, 5)}`,
       bayLabel: `${selectedBay}번 베이`,
       bayId: "00000000-0000-0000-0000-000000000001",
       startTime: startIso,
       endTime: endIso,
-      totalPrice: String(garage.hourlyPrice),
+      totalPrice: String(garage!.hourlyPrice),
     });
     router.push(`/safety?${query.toString()}`);
   }
@@ -95,7 +98,9 @@ export default function PartnerSchedulePage() {
   if (!garage) {
     return (
       <section className="space-y-4">
-        <h1 className="text-3xl font-semibold text-zinc-900">시간 / 베이 선택</h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">
+          시간 / 베이 선택
+        </h1>
         <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
           정비소 정보를 찾을 수 없습니다.
         </p>
@@ -106,10 +111,16 @@ export default function PartnerSchedulePage() {
   return (
     <section className="pb-24">
       <header className="mb-4 flex items-center gap-2">
-        <Link href={`/partner/${garage.id}/work`} className="text-2xl text-zinc-700" aria-label="뒤로가기">
+        <Link
+          href={`/partner/${garage.id}/work`}
+          className="text-2xl text-zinc-700"
+          aria-label="뒤로가기"
+        >
           ←
         </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900">시간 / 베이 선택</h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">
+          시간 / 베이 선택
+        </h1>
       </header>
 
       <div className="mb-4 flex items-center justify-between px-1">
@@ -142,7 +153,9 @@ export default function PartnerSchedulePage() {
       </div>
 
       <div className="mb-3">
-        <h2 className="text-2xl font-semibold text-zinc-900">시간 슬롯 (30분 단위)</h2>
+        <h2 className="text-2xl font-semibold text-zinc-900">
+          시간 슬롯 (30분 단위)
+        </h2>
       </div>
 
       <div className="grid grid-cols-4 gap-2">
@@ -203,18 +216,23 @@ export default function PartnerSchedulePage() {
           </div>
           <div className="flex items-center justify-between">
             <span>추가 30분 단가</span>
-            <span>{Math.floor(garage.hourlyPrice / 2).toLocaleString("ko-KR")}원</span>
+            <span>
+              {Math.floor(garage.hourlyPrice / 2).toLocaleString("ko-KR")}원
+            </span>
           </div>
           <div className="my-2 border-t border-zinc-300" />
           <div className="flex items-center justify-between text-2xl font-semibold text-zinc-900">
             <span>합계</span>
-            <span className="text-blue-600">{garage.hourlyPrice.toLocaleString("ko-KR")}원</span>
+            <span className="text-blue-600">
+              {garage.hourlyPrice.toLocaleString("ko-KR")}원
+            </span>
           </div>
         </div>
       </div>
 
       <p className="mt-4 text-sm text-zinc-500">
-        선택됨: {days[selectedDay]?.label} {days[selectedDay]?.day}일 · {selectedTime} · {selectedBay}번 베이 · {workId}
+        선택됨: {days[selectedDay]?.label} {days[selectedDay]?.day}일 ·{" "}
+        {selectedTime} · {selectedBay}번 베이 · {workId}
       </p>
 
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">

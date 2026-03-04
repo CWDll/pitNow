@@ -33,6 +33,16 @@ export interface CheckOut {
   completedAt: string;
 }
 
+export interface Review {
+  id: string;
+  reservationId: string;
+  partnerId: string;
+  userId: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
 export interface CreateReservationPayload {
   bayId: string;
   startTime: string;
@@ -49,6 +59,12 @@ export interface CheckInPayload {
 
 export interface CheckOutPayload {
   reservationId: string;
+}
+
+export interface CreateReviewPayload {
+  reservationId: string;
+  rating: number;
+  comment?: string;
 }
 
 export type ApiSuccess<T extends Record<string, unknown> = Record<string, never>> = {

@@ -30,6 +30,7 @@ export default function PaymentPage() {
   const [error, setError] = useState<string>("");
 
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
+  const partnerId = searchParams.get("partnerId") ?? "";
   const workId = searchParams.get("workId") ?? "engine-oil";
   const dateLabel = searchParams.get("dateLabel") ?? "2/28(금) 14:00 - 15:00";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
@@ -90,6 +91,7 @@ export default function PaymentPage() {
 
       const query = new URLSearchParams({
         reservationId,
+        partnerId,
         garageName,
         workTitle,
         dateLabel,

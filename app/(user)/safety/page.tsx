@@ -26,7 +26,7 @@ export default function SafetyPage() {
   const forwardQuery = useMemo(() => {
     const query = new URLSearchParams();
     const keys = [
-      "garageId",
+      "partnerId",
       "garageName",
       "workId",
       "dateLabel",

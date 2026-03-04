@@ -37,6 +37,7 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId") ?? "";
+  const partnerId = searchParams.get("partnerId") ?? "";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
@@ -127,6 +128,8 @@ export default function CheckoutPage() {
           : additionalFee;
 
       const query = new URLSearchParams({
+        reservationId,
+        partnerId,
         garageName,
         workTitle,
         totalPrice: String(totalPrice),

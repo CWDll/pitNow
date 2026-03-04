@@ -4,9 +4,34 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import type { CreateReviewPayload } from "@/src/domain/types";
+
+interface ReviewApiError {
+  error?: string | { message?: string };
+}
+
+function extractErrorMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const typed = payload as ReviewApiError;
+
+  if (typeof typed.error === "string" && typed.error) {
+    return typed.error;
+  }
+
+  if (typed.error && typeof typed.error === "object" && typeof typed.error.message === "string") {
+    return typed.error.message;
+  }
+
+  return null;
+}
+
 export default function CompletePage() {
   const searchParams = useSearchParams();
 
+  const reservationId = searchParams.get("reservationId") ?? "";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
@@ -14,8 +39,56 @@ export default function CompletePage() {
 
   const [rating, setRating] = useState<number>(0);
   const [reviewText, setReviewText] = useState<string>("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
+  const [reviewSaved, setReviewSaved] = useState<boolean>(false);
+  const [reviewError, setReviewError] = useState<string>("");
 
   const total = totalPrice + extraFee;
+
+  async function handleSubmitReview() {
+    setReviewError("");
+
+    if (!reservationId) {
+      setReviewError("후기 작성에 필요한 예약 정보가 누락되었습니다.");
+      return;
+    }
+
+    if (rating < 1 || rating > 5) {
+      setReviewError("별점을 선택해 주세요.");
+      return;
+    }
+
+    setIsSubmittingReview(true);
+
+    try {
+      const payload: CreateReviewPayload = {
+        reservationId,
+        rating,
+        comment: reviewText.trim() || undefined,
+      };
+
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data: unknown = await response.json();
+
+      if (!response.ok) {
+        setReviewError(extractErrorMessage(data) ?? "후기 저장에 실패했습니다.");
+        return;
+      }
+
+      setReviewSaved(true);
+    } catch {
+      setReviewError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  }
 
   return (
     <section className="pb-24 pt-6">
@@ -55,6 +128,7 @@ export default function CompletePage() {
                 onClick={() => setRating(starNumber)}
                 className={`text-4xl leading-none ${active ? "text-amber-400" : "text-zinc-300"}`}
                 aria-label={`${starNumber}점 선택`}
+                disabled={reviewSaved}
               >
                 ★
               </button>
@@ -67,13 +141,28 @@ export default function CompletePage() {
           placeholder="한줄 후기를 남겨주세요"
           value={reviewText}
           onChange={(event) => setReviewText(event.target.value)}
+          disabled={reviewSaved}
         />
+
+        {reviewError ? (
+          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            {reviewError}
+          </p>
+        ) : null}
+
+        {reviewSaved ? (
+          <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            후기 저장이 완료되었습니다.
+          </p>
+        ) : null}
 
         <button
           type="button"
-          className="mt-3 h-11 w-full rounded-xl bg-zinc-200 text-base font-semibold text-zinc-600"
+          onClick={handleSubmitReview}
+          disabled={isSubmittingReview || reviewSaved}
+          className="mt-3 h-11 w-full rounded-xl bg-zinc-900 text-base font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-500"
         >
-          후기 제출
+          {reviewSaved ? "후기 제출 완료" : isSubmittingReview ? "제출 중..." : "후기 제출"}
         </button>
       </div>
 
