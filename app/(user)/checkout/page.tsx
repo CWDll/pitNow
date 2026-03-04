@@ -38,6 +38,8 @@ export default function CheckoutPage() {
 
   const reservationId = searchParams.get("reservationId") ?? "";
   const partnerId = searchParams.get("partnerId") ?? "";
+  const carId = searchParams.get("carId") ?? "";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
@@ -130,6 +132,8 @@ export default function CheckoutPage() {
       const query = new URLSearchParams({
         reservationId,
         partnerId,
+        carId,
+        carLabel,
         garageName,
         workTitle,
         totalPrice: String(totalPrice),

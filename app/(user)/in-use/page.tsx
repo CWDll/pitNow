@@ -25,6 +25,8 @@ export default function InUsePage() {
 
   const reservationId = searchParams.get("reservationId") ?? "";
   const partnerId = searchParams.get("partnerId") ?? "";
+  const carId = searchParams.get("carId") ?? "";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
   const totalPrice = Number(
@@ -57,6 +59,8 @@ export default function InUsePage() {
     const query = new URLSearchParams({
       reservationId,
       partnerId,
+      carId,
+      carLabel,
       garageName,
       bayLabel,
       workTitle,

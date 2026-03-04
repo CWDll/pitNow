@@ -160,6 +160,8 @@ export default function PartnerSchedulePage() {
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
 
   const workId = searchParams.get("workId") ?? "engine-oil";
+  const carId = searchParams.get("carId") ?? "";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
 
   if (!garage) {
     return (
@@ -329,6 +331,8 @@ export default function PartnerSchedulePage() {
       partnerId: garage!.id,
       garageName: garage!.name,
       workId,
+      carId,
+      carLabel,
       dateLabel: `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}(${selectedWeekdayLabel}) ${startTime} - ${endTime}`,
       bayLabel: `${selectedBay}번 베이`,
       bayId: garage!.bayId,

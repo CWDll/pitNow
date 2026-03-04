@@ -33,6 +33,7 @@ export default function CompletePage() {
 
   const reservationId = searchParams.get("reservationId") ?? "";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
   const extraFee = Number(searchParams.get("extraFee") ?? "0");
@@ -102,6 +103,7 @@ export default function CompletePage() {
         <h2 className="text-xl font-semibold text-zinc-900">이용 요약</h2>
         <p className="mt-3 flex justify-between text-base text-zinc-700"><span>작업</span><span>{workTitle}</span></p>
         <p className="mt-2 flex justify-between text-base text-zinc-700"><span>지점</span><span>{garageName}</span></p>
+        <p className="mt-2 flex justify-between text-base text-zinc-700"><span>차량</span><span>{carLabel}</span></p>
         <p className="mt-2 flex justify-between text-base text-zinc-700"><span>이용 시간</span><span>1시간 15분</span></p>
       </div>
 

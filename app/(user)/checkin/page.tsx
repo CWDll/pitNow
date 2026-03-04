@@ -46,6 +46,8 @@ export default function CheckinPage() {
 
   const reservationId = searchParams.get("reservationId")?.trim() ?? "";
   const partnerId = searchParams.get("partnerId") ?? "";
+  const carId = searchParams.get("carId") ?? "";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
   const startTime = searchParams.get("startTime") ?? "";
@@ -119,6 +121,8 @@ export default function CheckinPage() {
       const query = new URLSearchParams({
         reservationId,
         partnerId,
+        carId,
+        carLabel,
         garageName,
         bayLabel,
         startTime,

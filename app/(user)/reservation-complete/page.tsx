@@ -8,6 +8,8 @@ export default function ReservationCompletePage() {
 
   const reservationId = searchParams.get("reservationId") ?? "";
   const partnerId = searchParams.get("partnerId") ?? "";
+  const carId = searchParams.get("carId") ?? "";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const dateLabel = searchParams.get("dateLabel") ?? "2/28(금) 14:00 - 15:00";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
@@ -19,6 +21,8 @@ export default function ReservationCompletePage() {
   const query = new URLSearchParams({
     reservationId,
     partnerId,
+    carId,
+    carLabel,
     garageName,
     bayLabel,
     startTime,
@@ -46,6 +50,7 @@ export default function ReservationCompletePage() {
         <p className="flex justify-between"><span>날짜/시간</span><span>{dateLabel}</span></p>
         <p className="mt-2 flex justify-between"><span>지점</span><span>{garageName}</span></p>
         <p className="mt-2 flex justify-between"><span>베이</span><span>{bayLabel}</span></p>
+        <p className="mt-2 flex justify-between"><span>차량</span><span>{carLabel}</span></p>
         <p className="mt-2 flex justify-between"><span>예약 ID</span><span className="max-w-[220px] truncate">{reservationId || "(없음)"}</span></p>
       </div>
 

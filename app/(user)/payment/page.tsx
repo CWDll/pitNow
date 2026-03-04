@@ -31,6 +31,8 @@ export default function PaymentPage() {
 
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const partnerId = searchParams.get("partnerId") ?? "";
+  const carId = searchParams.get("carId") ?? "";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
   const workId = searchParams.get("workId") ?? "engine-oil";
   const dateLabel = searchParams.get("dateLabel") ?? "2/28(금) 14:00 - 15:00";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
@@ -92,6 +94,8 @@ export default function PaymentPage() {
       const query = new URLSearchParams({
         reservationId,
         partnerId,
+        carId,
+        carLabel,
         garageName,
         workTitle,
         dateLabel,
@@ -124,7 +128,7 @@ export default function PaymentPage() {
           <p className="flex justify-between"><span>지점</span><span>{garageName}</span></p>
           <p className="flex justify-between"><span>날짜/시간</span><span>{dateLabel}</span></p>
           <p className="flex justify-between"><span>베이</span><span>{bayLabel}</span></p>
-          <p className="flex justify-between"><span>차량</span><span>현대 아반떼 CN7</span></p>
+          <p className="flex justify-between"><span>차량</span><span>{carLabel}</span></p>
         </div>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-2xl font-semibold">

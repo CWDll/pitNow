@@ -29,6 +29,8 @@ export default function SafetyPage() {
       "partnerId",
       "garageName",
       "workId",
+      "carId",
+      "carLabel",
       "dateLabel",
       "bayLabel",
       "bayId",

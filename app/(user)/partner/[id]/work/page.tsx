@@ -5,6 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { getGarageById, workOptions } from "../../../_data/mock-garages";
+import {
+  getInitialActiveCarId,
+  initialMockCars,
+  loadMockCarsFromStorage,
+} from "../../../_data/mock-cars";
 
 function levelClass(level: "초급" | "중급"): string {
   return level === "초급"
@@ -15,9 +20,19 @@ function levelClass(level: "초급" | "중급"): string {
 export default function PartnerWorkPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const [cars] = useState(() => loadMockCarsFromStorage() ?? initialMockCars);
   const [selectedWorkId, setSelectedWorkId] = useState<string>(workOptions[0].id);
+  const [selectedCarId, setSelectedCarId] = useState<string>(() =>
+    getInitialActiveCarId(loadMockCarsFromStorage() ?? initialMockCars),
+  );
+  const [isCarPickerOpen, setIsCarPickerOpen] = useState<boolean>(false);
+  const shouldScrollCars = cars.length > 3;
 
   const garage = useMemo(() => getGarageById(params.id), [params.id]);
+  const selectedCar = useMemo(
+    () => cars.find((car) => car.id === selectedCarId) ?? cars[0],
+    [cars, selectedCarId],
+  );
 
   if (!garage) {
     return (
@@ -39,8 +54,18 @@ export default function PartnerWorkPage() {
         <h1 className="text-3xl font-semibold text-zinc-900">작업 선택</h1>
       </header>
 
-      <div className="mb-4 rounded-2xl bg-zinc-100 px-4 py-3 text-lg text-zinc-800">
-        현대 아반떼 CN7 (2022)
+      <div className="mb-4 rounded-2xl bg-zinc-100 px-4 py-3">
+        <p className="mb-1 block text-xs text-zinc-500">내 차 선택</p>
+        <button
+          type="button"
+          onClick={() => setIsCarPickerOpen(true)}
+          className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-3 text-left"
+        >
+          <span className="text-lg text-zinc-800">
+            {selectedCar ? `${selectedCar.model} (${selectedCar.year}) · ${selectedCar.number}` : "차량 없음"}
+          </span>
+          <span className="text-sm text-zinc-500">선택</span>
+        </button>
       </div>
 
       <div className="space-y-3">
@@ -91,12 +116,62 @@ export default function PartnerWorkPage() {
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
-          onClick={() => router.push(`/partner/${garage.id}/schedule?workId=${selectedWorkId}`)}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
+          disabled={!selectedCar}
+          onClick={() =>
+            selectedCar
+              ? router.push(
+                  `/partner/${garage.id}/schedule?workId=${selectedWorkId}&carId=${selectedCar.id}&carLabel=${encodeURIComponent(`${selectedCar.model} (${selectedCar.year})`)}`,
+                )
+              : null
+          }
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300"
         >
           시간 선택
         </button>
       </div>
+
+      {isCarPickerOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-end bg-black/35">
+          <div className="mb-16 w-full rounded-t-3xl bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-zinc-900">차량 선택</h3>
+              <button
+                type="button"
+                onClick={() => setIsCarPickerOpen(false)}
+                className="text-sm text-zinc-500"
+              >
+                닫기
+              </button>
+            </div>
+            <div
+              className={`space-y-2 ${shouldScrollCars ? "max-h-[240px] overflow-y-auto pr-1" : ""}`}
+            >
+              {cars.map((car) => {
+                const selected = car.id === selectedCarId;
+
+                return (
+                  <button
+                    key={car.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCarId(car.id);
+                      setIsCarPickerOpen(false);
+                    }}
+                    className={`w-full rounded-xl border px-3 py-3 text-left ${
+                      selected
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-zinc-200 bg-white"
+                    }`}
+                  >
+                    <p className="text-base font-semibold text-zinc-900">{car.number}</p>
+                    <p className="mt-1 text-sm text-zinc-600">{car.model} ({car.year})</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
