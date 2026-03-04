@@ -3,31 +3,19 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Card, Pill, Screen } from "../_components/mobile-ui";
 import type { CheckInPayload } from "@/src/domain/types";
-
-interface ApiErrorShape {
-  error?: {
-    message?: string;
-  };
-}
 
 type PhotoField = "frontImg" | "rearImg" | "leftImg" | "rightImg";
 
 const photoLabels: Record<PhotoField, string> = {
-  frontImg: "전면 사진",
-  rearImg: "후면 사진",
-  leftImg: "좌측 사진",
-  rightImg: "우측 사진",
+  frontImg: "전면",
+  rearImg: "후면",
+  leftImg: "좌측",
+  rightImg: "우측",
 };
 
-function buildMockImageUrl(
-  reservationId: string,
-  field: PhotoField,
-  file: File,
-): string {
-  const safeName = encodeURIComponent(file.name);
-  return `mock://checkin/${reservationId}/${field}/${safeName}`;
+interface ApiErrorShape {
+  error?: string | { message?: string };
 }
 
 function extractErrorMessage(payload: unknown): string | null {
@@ -35,23 +23,36 @@ function extractErrorMessage(payload: unknown): string | null {
     return null;
   }
 
-  if ("error" in payload && typeof payload.error === "string") {
-    return payload.error;
+  const typed = payload as ApiErrorShape;
+
+  if (typeof typed.error === "string" && typed.error) {
+    return typed.error;
   }
 
-  const typed = payload as ApiErrorShape;
-  if (typed.error?.message && typeof typed.error.message === "string") {
+  if (typed.error && typeof typed.error === "object" && typeof typed.error.message === "string") {
     return typed.error.message;
   }
 
   return null;
 }
 
+function buildMockUrl(reservationId: string, field: PhotoField, file: File): string {
+  return `mock://checkin/${reservationId}/${field}/${encodeURIComponent(file.name)}`;
+}
+
 export default function CheckinPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const reservationId = searchParams.get("reservationId")?.trim() ?? "";
 
+  const reservationId = searchParams.get("reservationId")?.trim() ?? "";
+  const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
+  const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
+  const startTime = searchParams.get("startTime") ?? "";
+  const endTime = searchParams.get("endTime") ?? "";
+  const totalPrice = searchParams.get("totalPrice") ?? "15000";
+  const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
+
+  const [qrScanned, setQrScanned] = useState<boolean>(false);
   const [frontImgFile, setFrontImgFile] = useState<File | null>(null);
   const [rearImgFile, setRearImgFile] = useState<File | null>(null);
   const [leftImgFile, setLeftImgFile] = useState<File | null>(null);
@@ -60,34 +61,41 @@ export default function CheckinPage() {
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const missingReservationId = useMemo(() => !reservationId, [reservationId]);
+  const missingReservationId = reservationId.length === 0;
 
-  const allSelected =
+  const allPhotosSelected =
     frontImgFile !== null &&
     rearImgFile !== null &&
     leftImgFile !== null &&
     rightImgFile !== null;
 
+  const canSubmit = qrScanned && allPhotosSelected && !missingReservationId;
+
+  const tiles: Array<{ field: PhotoField; file: File | null }> = useMemo(
+    () => [
+      { field: "frontImg", file: frontImgFile },
+      { field: "rearImg", file: rearImgFile },
+      { field: "leftImg", file: leftImgFile },
+      { field: "rightImg", file: rightImgFile },
+    ],
+    [frontImgFile, leftImgFile, rearImgFile, rightImgFile],
+  );
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
-    if (missingReservationId) {
-      setError("reservationId가 없어 체크인을 진행할 수 없습니다.");
-      return;
-    }
-
-    if (!allSelected || !frontImgFile || !rearImgFile || !leftImgFile || !rightImgFile) {
-      setError("전/후/좌/우 사진 4장을 모두 선택해 주세요.");
+    if (!canSubmit || !frontImgFile || !rearImgFile || !leftImgFile || !rightImgFile) {
+      setError("QR 스캔과 차량 사진 4장을 모두 완료해 주세요.");
       return;
     }
 
     const payload: CheckInPayload = {
       reservationId,
-      frontImg: buildMockImageUrl(reservationId, "frontImg", frontImgFile),
-      rearImg: buildMockImageUrl(reservationId, "rearImg", rearImgFile),
-      leftImg: buildMockImageUrl(reservationId, "leftImg", leftImgFile),
-      rightImg: buildMockImageUrl(reservationId, "rightImg", rightImgFile),
+      frontImg: buildMockUrl(reservationId, "frontImg", frontImgFile),
+      rearImg: buildMockUrl(reservationId, "rearImg", rearImgFile),
+      leftImg: buildMockUrl(reservationId, "leftImg", leftImgFile),
+      rightImg: buildMockUrl(reservationId, "rightImg", rightImgFile),
     };
 
     setIsLoading(true);
@@ -103,12 +111,20 @@ export default function CheckinPage() {
       const data: unknown = await response.json();
 
       if (!response.ok) {
-        const message = extractErrorMessage(data);
-        setError(message ?? "체크인에 실패했습니다. 다시 시도해 주세요.");
+        setError(extractErrorMessage(data) ?? "체크인 처리에 실패했습니다.");
         return;
       }
 
-      router.push(`/in-use?reservationId=${reservationId}`);
+      const query = new URLSearchParams({
+        reservationId,
+        garageName,
+        bayLabel,
+        startTime,
+        endTime,
+        totalPrice,
+        workTitle,
+      });
+      router.push(`/in-use?${query.toString()}`);
     } catch {
       setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
@@ -117,70 +133,83 @@ export default function CheckinPage() {
   }
 
   return (
-    <Screen title="Check-in" subtitle="차량 4면 사진을 등록하고 체크인을 완료하세요.">
-      <Card className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-zinc-900">사진 업로드</h2>
-          <Pill label="4장 필수" tone="accent" />
+    <section className="pb-24">
+      <header className="mb-4 flex items-center gap-2">
+        <button type="button" onClick={() => router.back()} className="text-2xl text-zinc-700" aria-label="뒤로가기">
+          ←
+        </button>
+        <h1 className="text-3xl font-semibold text-zinc-900">체크인</h1>
+      </header>
+
+      {missingReservationId ? (
+        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          reservationId가 누락되었습니다.
+        </p>
+      ) : null}
+
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <div>
+          <h2 className="mb-2 text-xl font-semibold">QR 스캔</h2>
+          <button
+            type="button"
+            onClick={() => setQrScanned(true)}
+            className={`flex h-36 w-full items-center justify-center rounded-2xl border-2 border-dashed text-lg ${
+              qrScanned ? "border-emerald-500 bg-emerald-50 text-emerald-600" : "border-zinc-300 bg-zinc-100 text-zinc-500"
+            }`}
+          >
+            {qrScanned ? "스캔 완료" : "탭하여 QR 스캔"}
+          </button>
         </div>
 
-        <p className="rounded-xl bg-zinc-100 px-3 py-2 text-xs text-zinc-700">
-          reservationId: {reservationId || "(없음)"}
-        </p>
+        <div>
+          <h2 className="mb-2 text-xl font-semibold">차량 사진 촬영 (4방향)</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {tiles.map((tile) => (
+              <label
+                key={tile.field}
+                className={`flex h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed text-base ${
+                  tile.file ? "border-emerald-500 bg-emerald-50 text-emerald-600" : "border-zinc-300 bg-zinc-100 text-zinc-500"
+                }`}
+              >
+                <span>{tile.file ? "✓" : "📷"}</span>
+                <span className="mt-1">{tile.file ? `${photoLabels[tile.field]} 완료` : photoLabels[tile.field]}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const selected = event.target.files?.[0] ?? null;
+                    if (tile.field === "frontImg") setFrontImgFile(selected);
+                    if (tile.field === "rearImg") setRearImgFile(selected);
+                    if (tile.field === "leftImg") setLeftImgFile(selected);
+                    if (tile.field === "rightImg") setRightImgFile(selected);
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
 
-        {missingReservationId ? (
+        {!canSubmit ? (
           <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            reservationId가 누락되었습니다. 예약 페이지에서 다시 진입해 주세요.
+            ⚠ 사진 4장 없으면 시작 불가
           </p>
         ) : null}
 
-        <form className="space-y-3" onSubmit={handleSubmit}>
-          {(Object.keys(photoLabels) as PhotoField[]).map((field) => (
-            <div key={field} className="space-y-1">
-              <label className="text-sm font-medium text-zinc-700" htmlFor={field}>
-                {photoLabels[field]}
-              </label>
-              <input
-                id={field}
-                type="file"
-                accept="image/*"
-                required
-                disabled={isLoading || missingReservationId}
-                onChange={(event) => {
-                  const selected = event.target.files?.[0] ?? null;
-                  if (field === "frontImg") {
-                    setFrontImgFile(selected);
-                  }
-                  if (field === "rearImg") {
-                    setRearImgFile(selected);
-                  }
-                  if (field === "leftImg") {
-                    setLeftImgFile(selected);
-                  }
-                  if (field === "rightImg") {
-                    setRightImgFile(selected);
-                  }
-                }}
-                className="block w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-xs file:font-medium file:text-white"
-              />
-            </div>
-          ))}
+        {error ? (
+          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        ) : null}
 
-          {error ? (
-            <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-              {error}
-            </p>
-          ) : null}
-
+        <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
           <button
             type="submit"
-            disabled={isLoading || missingReservationId}
-            className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-zinc-400"
+            disabled={!canSubmit || isLoading}
+            className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
           >
-            {isLoading ? "체크인 처리 중..." : "체크인 완료"}
+            {isLoading ? "처리 중..." : "체크인 완료 (타이머 시작)"}
           </button>
-        </form>
-      </Card>
-    </Screen>
+        </div>
+      </form>
+    </section>
   );
 }

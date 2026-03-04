@@ -3,94 +3,41 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Card, Pill, Screen } from "../_components/mobile-ui";
 import {
   calculateOverduePreview,
   calculateRemainingTime,
   formatRemainingTime,
 } from "@/src/lib/timer";
 
-interface CheckoutErrorShape {
-  error?: string | { message?: string };
-}
+const DEFAULT_TOTAL_PRICE = 15000;
 
-const DEFAULT_TOTAL_PRICE = 20000;
-
-function getFallbackReservationWindow(): { startTime: string; endTime: string } {
+function fallbackWindow(): { start: string; end: string } {
   const now = new Date();
-  const start = new Date(now.getTime() - 10 * 60 * 1000);
+  const start = new Date(now.getTime() - 5 * 60 * 1000);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
-
-  return {
-    startTime: start.toISOString(),
-    endTime: end.toISOString(),
-  };
-}
-
-function extractErrorMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const typed = payload as CheckoutErrorShape;
-
-  if (typeof typed.error === "string" && typed.error) {
-    return typed.error;
-  }
-
-  if (
-    typed.error &&
-    typeof typed.error === "object" &&
-    typeof typed.error.message === "string" &&
-    typed.error.message
-  ) {
-    return typed.error.message;
-  }
-
-  return null;
-}
-
-function formatCurrency(value: number): string {
-  const safe = Number.isFinite(value) ? value : 0;
-
-  return new Intl.NumberFormat("ko-KR", {
-    style: "currency",
-    currency: "KRW",
-    maximumFractionDigits: 0,
-  }).format(safe);
+  return { start: start.toISOString(), end: end.toISOString() };
 }
 
 export default function InUsePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [tick, setTick] = useState<number>(0);
 
-  const reservationId = searchParams.get("reservationId")?.trim() ?? "";
-  const missingReservationId = reservationId.length === 0;
+  const reservationId = searchParams.get("reservationId") ?? "";
+  const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
+  const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
+  const totalPrice = Number(
+    searchParams.get("totalPrice") ?? String(DEFAULT_TOTAL_PRICE),
+  );
+  const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
 
-  const initialWindow = useMemo(() => getFallbackReservationWindow(), []);
-
-  const startTime =
-    searchParams.get("startTime")?.trim() || initialWindow.startTime;
-  const endTime = searchParams.get("endTime")?.trim() || initialWindow.endTime;
-
-  const totalPriceParam = searchParams.get("totalPrice")?.trim();
-  const totalPriceNumber =
-    totalPriceParam && Number.isFinite(Number(totalPriceParam))
-      ? Number(totalPriceParam)
-      : DEFAULT_TOTAL_PRICE;
-
-  const [tick, setTick] = useState<number>(Date.now());
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [error, setError] = useState<string>("");
+  const fallback = useMemo(() => fallbackWindow(), []);
+  const startTime = searchParams.get("startTime") ?? fallback.start;
+  const endTime = searchParams.get("endTime") ?? fallback.end;
 
   useEffect(() => {
-    const timerId = window.setInterval(() => {
-      setTick(Date.now());
-    }, 1000);
-
-    return () => {
-      window.clearInterval(timerId);
-    };
+    const id = window.setInterval(() => setTick(Date.now()), 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   const remaining = useMemo(() => {
@@ -98,113 +45,92 @@ export default function InUsePage() {
     return calculateRemainingTime(endTime);
   }, [endTime, tick]);
 
-  const overduePreview = useMemo(
-    () => {
-      void tick;
-      return calculateOverduePreview(endTime, totalPriceNumber, startTime);
-    },
-    [endTime, startTime, tick, totalPriceNumber],
-  );
+  const overdue = useMemo(() => {
+    void tick;
+    return calculateOverduePreview(endTime, totalPrice, startTime);
+  }, [endTime, startTime, tick, totalPrice]);
 
-  const formattedRemaining = useMemo(
-    () => formatRemainingTime(remaining.remainingMs),
-    [remaining.remainingMs],
-  );
+  const timeText = formatRemainingTime(remaining.remainingMs);
 
-  async function handleCheckout() {
-    setError("");
-
-    if (missingReservationId) {
-      setError("reservationId가 없어 사용 종료를 진행할 수 없습니다.");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ reservationId }),
-      });
-
-      const payload: unknown = await response.json();
-
-      if (!response.ok) {
-        setError(
-          extractErrorMessage(payload) ??
-            "사용 종료 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.",
-        );
-        return;
-      }
-
-      router.push("/mypage");
-    } catch {
-      setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setIsSubmitting(false);
-    }
+  function goCheckout() {
+    const query = new URLSearchParams({
+      reservationId,
+      garageName,
+      bayLabel,
+      workTitle,
+      startTime,
+      endTime,
+      totalPrice: String(totalPrice),
+      overdueMinutes: String(overdue.overdueMinutes),
+      previewFee: String(overdue.previewFee),
+    });
+    router.push(`/checkout?${query.toString()}`);
   }
 
   return (
-    <Screen title="사용 중" subtitle="타이머와 예상 초과 요금을 확인하세요.">
-      <Card className="space-y-4">
-        <div className="space-y-1">
-          <p className="text-xs text-zinc-500">Reservation</p>
-          <p className="rounded-xl bg-zinc-100 px-3 py-2 text-sm text-zinc-800">
-            예약 ID: {reservationId || "(없음)"}
-          </p>
-        </div>
+    <section className="pb-24 pt-8 text-center">
+      <p className="text-lg text-zinc-500">이용 중</p>
 
-        {missingReservationId ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            reservationId가 누락되었습니다. 체크인 페이지부터 다시 진입해 주세요.
-          </p>
-        ) : null}
+      <div className="mx-auto mt-4 flex h-64 w-64 flex-col items-center justify-center rounded-full border-4 border-blue-600 text-blue-600 shadow-[0_0_0_8px_rgba(59,130,246,0.2)]">
+        <p className="text-2xl">🕒</p>
+        <p className="mt-2 text-5xl font-semibold">{timeText}</p>
+      </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-zinc-700">남은 시간</p>
-            <Pill label={remaining.isOverdue ? "연장 필요" : "진행 중"} tone="accent" />
-          </div>
-          <p
-            className={`rounded-xl px-3 py-3 text-3xl font-semibold tracking-tight ${
-              remaining.isOverdue ? "bg-red-50 text-red-600" : "bg-zinc-900 text-white"
-            }`}
-          >
-            {formattedRemaining}
-          </p>
-        </div>
+      <p className="mt-6 text-lg text-zinc-600">
+        {garageName} · {bayLabel}
+      </p>
 
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-zinc-700">예상 초과 요금 (미리보기)</p>
-          <div className="rounded-xl bg-zinc-100 px-3 py-3">
-            <p className="text-2xl font-semibold text-zinc-900">
-              {formatCurrency(overduePreview.previewFee)}
-            </p>
-            <p className="mt-1 text-xs text-zinc-500">
-              초과 {overduePreview.overdueMinutes}분 기준. 서버 계산값이 최종 금액입니다.
-            </p>
-          </div>
-        </div>
-
-        {error ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            {error}
-          </p>
-        ) : null}
-
+      <div className="mt-6 grid grid-cols-2 gap-3">
         <button
           type="button"
-          onClick={handleCheckout}
-          disabled={isSubmitting || missingReservationId}
-          className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-zinc-400"
+          className="rounded-2xl bg-blue-50 py-6 text-2xl font-semibold text-blue-600"
         >
-          {isSubmitting ? "종료 처리 중..." : "사용 종료"}
+          연장
         </button>
-      </Card>
-    </Screen>
+        <button
+          type="button"
+          className="rounded-2xl bg-rose-50 py-6 text-2xl font-semibold text-rose-500"
+        >
+          SOS
+        </button>
+      </div>
+
+      <div className="mt-6 rounded-2xl bg-zinc-100 p-4 text-left">
+        <p className="text-xl font-semibold text-zinc-900">
+          {workTitle} 가이드
+        </p>
+        <p className="mt-1 text-base text-zinc-600">작업 영상 보기</p>
+        <p className="mt-2 text-sm text-zinc-500">
+          예상 초과요금(미리보기):{" "}
+          {Number(overdue.previewFee).toLocaleString("ko-KR")}원
+        </p>
+      </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700"
+        >
+          매장 연락
+        </button>
+        <button
+          type="button"
+          className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700"
+        >
+          안내/규정
+        </button>
+      </div>
+
+      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+        <button
+          type="button"
+          onClick={goCheckout}
+          disabled={!reservationId}
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
+        >
+          작업 종료
+        </button>
+      </div>
+    </section>
   );
 }

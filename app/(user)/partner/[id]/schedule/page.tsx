@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { getGarageById } from "../../../_data/mock-garages";
@@ -55,6 +55,7 @@ const availableTimeSet = new Set([
 
 export default function PartnerSchedulePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const garage = useMemo(() => getGarageById(params.id), [params.id]);
@@ -64,6 +65,32 @@ export default function PartnerSchedulePage() {
   const [selectedBay, setSelectedBay] = useState<number>(3);
 
   const workId = searchParams.get("workId") ?? "engine-oil";
+
+  function buildStartEndIso(timeValue: string): { startIso: string; endIso: string } {
+    const [hour, minute] = timeValue.split(":").map((value) => Number(value));
+    const start = new Date(Date.UTC(2026, 1, 28, hour, minute, 0, 0));
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    return {
+      startIso: start.toISOString(),
+      endIso: end.toISOString(),
+    };
+  }
+
+  function goSafetyPage() {
+    const { startIso, endIso } = buildStartEndIso(selectedTime);
+    const query = new URLSearchParams({
+      garageId: garage.id,
+      garageName: garage.name,
+      workId,
+      dateLabel: `2/28(금) ${selectedTime} - ${String((Number(selectedTime.slice(0, 2)) + 1) % 24).padStart(2, "0")}:${selectedTime.slice(3, 5)}`,
+      bayLabel: `${selectedBay}번 베이`,
+      bayId: "00000000-0000-0000-0000-000000000001",
+      startTime: startIso,
+      endTime: endIso,
+      totalPrice: String(garage.hourlyPrice),
+    });
+    router.push(`/safety?${query.toString()}`);
+  }
 
   if (!garage) {
     return (
@@ -193,7 +220,8 @@ export default function PartnerSchedulePage() {
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-zinc-300 text-lg font-semibold text-zinc-600"
+          onClick={goSafetyPage}
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
         >
           안전 동의
         </button>
