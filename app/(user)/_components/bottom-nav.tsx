@@ -9,16 +9,16 @@ interface TabItem {
 }
 
 const tabs: TabItem[] = [
-  { href: "/", label: "Home" },
-  { href: "/guide", label: "Guide" },
-  { href: "/reservation", label: "Reservation" },
-  { href: "/my-car", label: "My Car" },
-  { href: "/mypage", label: "My Page" },
+  { href: "/", label: "홈" },
+  { href: "/guide", label: "가이드" },
+  { href: "/reservation", label: "예약" },
+  { href: "/my-car", label: "내 차" },
+  { href: "/mypage", label: "마이" },
 ];
 
 function isActivePath(currentPath: string, tabPath: string): boolean {
   if (tabPath === "/") {
-    return currentPath === "/";
+    return currentPath === "/" || currentPath.startsWith("/partner/");
   }
 
   return currentPath === tabPath || currentPath.startsWith(`${tabPath}/`);
