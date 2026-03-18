@@ -2,15 +2,19 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
-import { getGarageById } from "../../../_data/mock-garages";
-
-const MIN_BLOCKS = 2; // 30분 * 2 = 1시간
+import {
+  formatMinutesLabel,
+  getGarageById,
+  getReservationTypeLabel,
+  getSelfWorkById,
+  getShopPackageById,
+  roundUpToBlockMinutes,
+} from "@/app/(user)/_data/mock-garages";
+import type { ReservationType } from "@/src/domain/types";
 
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
-
-// 30분 경계값 (09:00 ~ 19:00)
 const timeBoundaries = [
   "09:00",
   "09:30",
@@ -35,13 +39,9 @@ const timeBoundaries = [
   "19:00",
 ] as const;
 
-// block index i는 [timeBoundaries[i], timeBoundaries[i+1])
 const blockCount = timeBoundaries.length - 1;
 
-const mockReservedRangesByBay: Record<
-  number,
-  Array<{ start: string; end: string }>
-> = {
+const mockReservedRangesByBay: Record<number, Array<{ start: string; end: string }>> = {
   1: [
     { start: "10:30", end: "12:00" },
     { start: "15:00", end: "16:00" },
@@ -68,45 +68,18 @@ const mockReservedRangesByBay: Record<
   ],
 };
 
+function parseMode(value: string | null): ReservationType {
+  return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
+}
+
 function stripTime(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
-
-const TODAY_ON_LOAD = stripTime(new Date());
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return stripTime(next);
-}
-
-function formatMonthLabel(date: Date): string {
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
-}
-
-function formatMonthValue(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${date.getFullYear()}-${month}`;
-}
-
-function monthValueToDate(monthValue: string, prevDate: Date): Date | null {
-  const [yearRaw, monthRaw] = monthValue.split("-");
-  const year = Number(yearRaw);
-  const month = Number(monthRaw);
-
-  if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    month < 1 ||
-    month > 12
-  ) {
-    return null;
-  }
-
-  const lastDay = new Date(year, month, 0).getDate();
-  const nextDay = Math.min(prevDate.getDate(), lastDay);
-
-  return new Date(year, month - 1, nextDay);
 }
 
 function boundaryIndex(time: string): number {
@@ -119,56 +92,37 @@ function isReservedBlock(blockIdx: number, bay: number): boolean {
   return ranges.some((range) => {
     const startIdx = boundaryIndex(range.start);
     const endIdx = boundaryIndex(range.end);
-
-    if (startIdx < 0 || endIdx < 0) {
-      return false;
-    }
-
-    return blockIdx >= startIdx && blockIdx < endIdx;
+    return startIdx >= 0 && endIdx >= 0 && blockIdx >= startIdx && blockIdx < endIdx;
   });
 }
 
 function toIsoByDateAndTime(date: Date, time: string): string {
-  const [hour, minute] = time.split(":").map((value) => Number(value));
-  return new Date(
-    Date.UTC(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-      hour,
-      minute,
-      0,
-      0,
-    ),
-  ).toISOString();
+  const [hour, minute] = time.split(":").map(Number);
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0)).toISOString();
 }
 
-export default function PartnerSchedulePage() {
+function PartnerSchedulePageContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const reservationType = parseMode(searchParams.get("mode"));
   const garage = useMemo(() => getGarageById(params.id), [params.id]);
+  const selfWork = useMemo(() => getSelfWorkById(searchParams.get("workId") ?? ""), [searchParams]);
+  const selectedPackage = useMemo(() => getShopPackageById(searchParams.get("packageId") ?? ""), [searchParams]);
 
-  const [selectedDate, setSelectedDate] = useState<Date>(TODAY_ON_LOAD);
+  const [selectedDate, setSelectedDate] = useState<Date>(stripTime(new Date()));
   const [selectedBay, setSelectedBay] = useState<number>(3);
   const [selectedStartIdx, setSelectedStartIdx] = useState<number | null>(null);
   const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
-  const [dragAnchorIdx, setDragAnchorIdx] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragMoved, setDragMoved] = useState<boolean>(false);
-  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
 
-  const workId = searchParams.get("workId") ?? "engine-oil";
   const carId = searchParams.get("carId") ?? "";
-  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
+  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
 
   if (!garage) {
     return (
       <section className="space-y-4">
-        <h1 className="text-3xl font-semibold text-zinc-900">
-          시간 / 베이 선택
-        </h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">시간 선택</h1>
         <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
           정비소 정보를 찾을 수 없습니다.
         </p>
@@ -176,231 +130,97 @@ export default function PartnerSchedulePage() {
     );
   }
 
-  const weekDates = Array.from({ length: 7 }, (_, index) =>
-    addDays(selectedDate, index - 3),
-  );
+  const resolvedGarage = garage;
 
-  const hasSelection = selectedStartIdx !== null && selectedEndIdx !== null;
-  const selectedBlocks = hasSelection ? selectedEndIdx - selectedStartIdx : 0;
-  const startTime = hasSelection ? timeBoundaries[selectedStartIdx] : null;
-  const endTime = hasSelection ? timeBoundaries[selectedEndIdx] : null;
+  const requiredBlocks =
+    reservationType === "SELF_SERVICE"
+      ? Math.max(2, Math.ceil((selfWork?.recommendedMinutes ?? 60) / 30))
+      : Math.max(1, roundUpToBlockMinutes(selectedPackage?.durationMinutes ?? 30) / 30);
 
-  const halfHourPrice = Math.floor(garage.hourlyPrice / 2);
-  const additionalBlocks = Math.max(0, selectedBlocks - MIN_BLOCKS);
-  const totalPrice = garage.hourlyPrice + additionalBlocks * halfHourPrice;
+  const weekDates = Array.from({ length: 7 }, (_, index) => addDays(selectedDate, index - 3));
+  const startTime = selectedStartIdx !== null ? timeBoundaries[selectedStartIdx] : null;
+  const endTime = selectedEndIdx !== null ? timeBoundaries[selectedEndIdx] : null;
+  const selectedBlocks =
+    selectedStartIdx !== null && selectedEndIdx !== null ? selectedEndIdx - selectedStartIdx : 0;
+  const canProceed = selectedStartIdx !== null && selectedEndIdx !== null && selectedBlocks === requiredBlocks;
 
-  const meetsMinimum = selectedBlocks >= MIN_BLOCKS;
-  const canProceed = hasSelection && meetsMinimum;
+  const totalPrice =
+    reservationType === "SELF_SERVICE"
+      ? resolvedGarage.hourlyPrice + Math.max(0, selectedBlocks - 2) * Math.floor(resolvedGarage.hourlyPrice / 2)
+      : selectedPackage?.priceByGarageId[resolvedGarage.id] ?? 0;
 
-  function handleWeekShift(daysToMove: number) {
-    setSelectedDate((prev) =>
-      addDays(prev ?? stripTime(new Date()), daysToMove),
-    );
-  }
-
-  function handleMonthChange(monthValue: string) {
-    const next = monthValueToDate(monthValue, selectedDate);
-    if (!next) {
+  function selectRange(startIdx: number, bay: number) {
+    const endExclusive = startIdx + requiredBlocks;
+    if (endExclusive > blockCount) {
       return;
     }
 
-    setSelectedDate(next);
-  }
-
-  function handleBayChange(nextBay: number) {
-    setSelectedBay(nextBay);
-    setIsDragging(false);
-    setDragAnchorIdx(null);
-
-    if (!hasSelection) {
-      return;
-    }
-
-    for (let i = selectedStartIdx; i < selectedEndIdx; i += 1) {
-      if (isReservedBlock(i, nextBay)) {
-        setSelectedStartIdx(null);
-        setSelectedEndIdx(null);
+    for (let idx = startIdx; idx < endExclusive; idx += 1) {
+      if (isReservedBlock(idx, bay)) {
         return;
       }
     }
+
+    setSelectedStartIdx(startIdx);
+    setSelectedEndIdx(endExclusive);
   }
 
-  function isRangeClear(
-    startIdx: number,
-    endExclusiveIdx: number,
-    bay: number,
-  ): boolean {
-    for (let i = startIdx; i < endExclusiveIdx; i += 1) {
-      if (isReservedBlock(i, bay)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  function applySingleSelection(blockIdx: number) {
-    setSelectedStartIdx(blockIdx);
-    setSelectedEndIdx(blockIdx + 1);
-  }
-
-  function applyRangeFromStart(startIdx: number, targetIdx: number) {
-    const endExclusive = targetIdx + 1;
-    if (
-      targetIdx >= startIdx &&
-      isRangeClear(startIdx, endExclusive, selectedBay)
-    ) {
-      setSelectedStartIdx(startIdx);
-      setSelectedEndIdx(endExclusive);
-      return;
-    }
-
-    applySingleSelection(targetIdx);
-  }
-
-  function handleBlockClick(blockIdx: number) {
-    if (isReservedBlock(blockIdx, selectedBay)) {
-      return;
-    }
-
-    if (!hasSelection) {
-      applySingleSelection(blockIdx);
-      return;
-    }
-
-    if (blockIdx === selectedStartIdx) {
-      setSelectedStartIdx(null);
-      setSelectedEndIdx(null);
-      return;
-    }
-
-    if (blockIdx >= selectedStartIdx) {
-      applyRangeFromStart(selectedStartIdx, blockIdx);
-      return;
-    }
-
-    applySingleSelection(blockIdx);
-  }
-
-  function handleBlockPointerDown(blockIdx: number) {
-    if (isReservedBlock(blockIdx, selectedBay)) {
-      return;
-    }
-
-    setIsDragging(true);
-    setDragAnchorIdx(blockIdx);
-    setDragMoved(false);
-  }
-
-  function handleBlockPointerEnter(blockIdx: number) {
-    if (!isDragging || dragAnchorIdx === null) {
-      return;
-    }
-
-    if (blockIdx < dragAnchorIdx) {
-      applySingleSelection(dragAnchorIdx);
-      return;
-    }
-
-    setDragMoved(true);
-    applyRangeFromStart(dragAnchorIdx, blockIdx);
-  }
-
-  function stopDragging() {
-    if (!isDragging) {
-      return;
-    }
-
-    if (!dragMoved && dragAnchorIdx !== null) {
-      handleBlockClick(dragAnchorIdx);
-    }
-
-    setIsDragging(false);
-    setDragAnchorIdx(null);
-    setDragMoved(false);
-  }
-
-  function goSafetyPage() {
+  function goNext() {
     if (!canProceed || !startTime || !endTime) {
       return;
     }
 
-    const selectedWeekdayLabel = weekdayLabels[selectedDate.getDay()];
-
+    const weekday = weekdayLabels[selectedDate.getDay()];
     const query = new URLSearchParams({
-      partnerId: garage!.id,
-      garageName: garage!.name,
-      workId,
+      reservationType,
+      partnerId: resolvedGarage.id,
+      garageName: resolvedGarage.name,
       carId,
       carLabel,
-      dateLabel: `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}(${selectedWeekdayLabel}) ${startTime} - ${endTime}`,
-      bayLabel: `${selectedBay}번 베이`,
-      bayId: garage!.bayId,
+      dateLabel: `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}(${weekday}) ${startTime} - ${endTime}`,
       startTime: toIsoByDateAndTime(selectedDate, startTime),
       endTime: toIsoByDateAndTime(selectedDate, endTime),
       totalPrice: String(totalPrice),
+      blockedMinutes: String(selectedBlocks * 30),
+      bayId: resolvedGarage.bayId,
+      bayLabel: `${selectedBay}번 베이`,
     });
 
-    router.push(`/safety?${query.toString()}`);
+    if (reservationType === "SELF_SERVICE" && selfWork) {
+      query.set("workId", selfWork.id);
+      query.set("workTitle", selfWork.title);
+      router.push(`/safety?${query.toString()}`);
+      return;
+    }
+
+    if (reservationType === "SHOP_SERVICE" && selectedPackage) {
+      query.set("packageId", selectedPackage.id);
+      query.set("workTitle", selectedPackage.name);
+      query.set("packageMinutes", String(selectedPackage.durationMinutes));
+      router.push(`/payment?${query.toString()}`);
+    }
   }
 
   return (
     <section className="pb-24">
       <header className="mb-4 flex items-center gap-2">
-        <Link
-          href={`/partner/${garage.id}/work`}
-          className="text-2xl text-zinc-700"
-          aria-label="뒤로가기"
-        >
+        <Link href={`/partner/${resolvedGarage.id}/work?mode=${reservationType}`} className="text-2xl text-zinc-700" aria-label="뒤로가기">
           ←
         </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900">
-          시간 / 베이 선택
-        </h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">시간 선택</h1>
       </header>
 
-      <div className="mb-4 flex items-center justify-between px-1">
-        <button
-          type="button"
-          className="text-xl text-zinc-500"
-          onClick={() => handleWeekShift(-7)}
-        >
-          ‹
-        </button>
-        <button
-          type="button"
-          className="text-2xl font-semibold text-zinc-900"
-          onClick={() => setIsMonthPickerOpen((prev) => !prev)}
-        >
-          {formatMonthLabel(selectedDate)}
-        </button>
-        <button
-          type="button"
-          className="text-xl text-zinc-500"
-          onClick={() => handleWeekShift(7)}
-        >
-          ›
-        </button>
+      <div className="mb-4 rounded-3xl bg-zinc-100 p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+          {reservationType === "SELF_SERVICE" ? "Self Service" : "Shop Service"}
+        </p>
+        <p className="mt-2 text-2xl font-semibold text-zinc-900">{getReservationTypeLabel(reservationType)}</p>
+        <p className="mt-2 text-sm text-zinc-600">
+          {reservationType === "SELF_SERVICE"
+            ? "기본 1시간부터 예약하며 30분 단위로 늘어납니다."
+            : "패키지 시간만큼 자동으로 예약 시간이 블록됩니다."}
+        </p>
       </div>
-
-      {isMonthPickerOpen ? (
-        <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-3">
-          <label className="mb-1 block text-sm text-zinc-600">월 선택</label>
-          <input
-            type="month"
-            value={formatMonthValue(selectedDate)}
-            onChange={(event) => handleMonthChange(event.target.value)}
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => setIsMonthPickerOpen(false)}
-            className="mt-2 w-full rounded-xl bg-zinc-100 py-2 text-sm font-medium text-zinc-700"
-          >
-            닫기
-          </button>
-        </div>
-      ) : null}
 
       <div className="mb-6 grid grid-cols-7 gap-2">
         {weekDates.map((date) => {
@@ -421,63 +241,70 @@ export default function PartnerSchedulePage() {
         })}
       </div>
 
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-zinc-900">베이 선택</h2>
-        <span className="text-sm text-zinc-500">베이마다 가능 시간이 다름</span>
-      </div>
+      {reservationType === "SELF_SERVICE" ? (
+        <>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-2xl font-semibold text-zinc-900">베이 선택</h2>
+            <span className="text-sm text-zinc-500">베이마다 예약 가능 시간이 다릅니다.</span>
+          </div>
 
-      <div className="grid grid-cols-6 gap-2">
-        {Array.from({ length: garage.bayCount }).map((_, index) => {
-          const bayNumber = index + 1;
-          const active = bayNumber === selectedBay;
+          <div className="grid grid-cols-6 gap-2">
+            {Array.from({ length: resolvedGarage.bayCount }).map((_, index) => {
+              const bayNumber = index + 1;
+              const active = bayNumber === selectedBay;
 
-          return (
-            <button
-              key={bayNumber}
-              type="button"
-              onClick={() => handleBayChange(bayNumber)}
-              className={`rounded-xl px-2 py-3 text-lg font-medium ${
-                active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-800"
-              }`}
-            >
-              {bayNumber}번
-            </button>
-          );
-        })}
-      </div>
+              return (
+                <button
+                  key={bayNumber}
+                  type="button"
+                  onClick={() => {
+                    setSelectedBay(bayNumber);
+                    setSelectedStartIdx(null);
+                    setSelectedEndIdx(null);
+                  }}
+                  className={`rounded-xl px-2 py-3 text-lg font-medium ${
+                    active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-800"
+                  }`}
+                >
+                  {bayNumber}번
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="mb-4 rounded-3xl bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-800">배정 베이는 업장에서 내부 배정합니다.</p>
+          <p className="mt-2 text-sm text-zinc-700">
+            고객은 시작 시간을 선택하고, 시스템은 패키지 소요 시간을 30분 단위로 올림해 예약을 막습니다.
+          </p>
+        </div>
+      )}
 
-      <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
+      <div className="mt-6 rounded-3xl bg-zinc-100 p-4">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-zinc-900">시간 선택</h2>
+          <h2 className="text-2xl font-semibold text-zinc-900">시작 시간 선택</h2>
           <span className="text-sm text-zinc-500">30분 단위</span>
         </div>
 
-        <div
-          className={`grid grid-cols-4 gap-2 ${isDragging ? "touch-none select-none" : ""}`}
-          onPointerUp={stopDragging}
-          onPointerLeave={stopDragging}
-        >
+        <div className="grid grid-cols-4 gap-2">
           {Array.from({ length: blockCount }).map((_, idx) => {
             const reserved = isReservedBlock(idx, selectedBay);
             const selected =
-              hasSelection && idx >= selectedStartIdx && idx < selectedEndIdx;
-            const label = `${timeBoundaries[idx]}~${timeBoundaries[idx + 1]}`;
+              selectedStartIdx !== null &&
+              selectedEndIdx !== null &&
+              idx >= selectedStartIdx &&
+              idx < selectedEndIdx;
 
             return (
               <button
                 key={`block-${idx}`}
                 type="button"
                 disabled={reserved}
-                onPointerDown={() => handleBlockPointerDown(idx)}
-                onPointerEnter={() => handleBlockPointerEnter(idx)}
+                onClick={() => selectRange(idx, selectedBay)}
                 className={`rounded-xl px-2 py-3 text-xs font-medium ${
-                  reserved
-                    ? "bg-zinc-300 text-zinc-500"
-                    : selected
-                      ? "bg-amber-400 text-white"
-                      : "bg-white text-zinc-700"
+                  reserved ? "bg-zinc-300 text-zinc-500" : selected ? "bg-amber-400 text-white" : "bg-white text-zinc-700"
                 }`}
-                title={label}
               >
                 {timeBoundaries[idx]}
               </button>
@@ -485,66 +312,68 @@ export default function PartnerSchedulePage() {
           })}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">
-            선택
-          </span>
-          <span className="rounded-full bg-zinc-200 px-3 py-1 text-zinc-600">
-            예약됨/미선택
-          </span>
-        </div>
-
-        <p className="mt-3 text-sm text-zinc-600">
-          예약시간: {startTime ?? "-"} ~ {endTime ?? "-"}
+        <p className="mt-4 text-sm text-zinc-600">
+          예약 시간: {startTime ?? "-"} ~ {endTime ?? "-"}
         </p>
-
-        {!meetsMinimum && hasSelection ? (
-          <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            최소 예약 시간은 1시간입니다 (연속 2칸 이상 선택).
-          </p>
-        ) : null}
       </div>
 
-      <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
-        <h3 className="mb-3 text-2xl font-semibold text-zinc-900">요금 요약</h3>
-        <div className="space-y-1 text-lg text-zinc-700">
-          <div className="flex items-center justify-between">
-            <span>기본 1시간</span>
-            <span>{garage.hourlyPrice.toLocaleString("ko-KR")}원</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>추가 30분 단가</span>
-            <span>{halfHourPrice.toLocaleString("ko-KR")}원</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>선택 시간</span>
-            <span>{((selectedBlocks * 30) / 60).toFixed(1)}시간</span>
-          </div>
-          <div className="my-2 border-t border-zinc-300" />
-          <div className="flex items-center justify-between text-2xl font-semibold text-zinc-900">
-            <span>합계</span>
-            <span className="text-blue-600">
-              {totalPrice.toLocaleString("ko-KR")}원
-            </span>
-          </div>
+      <div className="mt-6 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-zinc-200">
+        <h3 className="text-2xl font-semibold text-zinc-900">예약 요약</h3>
+        <div className="mt-3 space-y-2 text-base text-zinc-700">
+          <p className="flex justify-between">
+            <span>예약 방식</span>
+            <span>{getReservationTypeLabel(reservationType)}</span>
+          </p>
+          <p className="flex justify-between">
+            <span>작업</span>
+            <span>{reservationType === "SELF_SERVICE" ? selfWork?.title : selectedPackage?.name}</span>
+          </p>
+          <p className="flex justify-between">
+            <span>차량</span>
+            <span>{carLabel}</span>
+          </p>
+          {reservationType === "SELF_SERVICE" ? (
+            <p className="flex justify-between">
+              <span>베이</span>
+              <span>{selectedBay}번 베이</span>
+            </p>
+          ) : null}
+          <p className="flex justify-between">
+            <span>블록 시간</span>
+            <span>{formatMinutesLabel(selectedBlocks * 30)}</span>
+          </p>
+          {reservationType === "SHOP_SERVICE" && selectedPackage ? (
+            <p className="flex justify-between text-sm text-zinc-500">
+              <span>패키지 실소요</span>
+              <span>{formatMinutesLabel(selectedPackage.durationMinutes)}</span>
+            </p>
+          ) : null}
+          <div className="my-2 border-t border-zinc-200" />
+          <p className="flex justify-between text-xl font-semibold text-zinc-900">
+            <span>결제 금액</span>
+            <span className="text-blue-600">{totalPrice.toLocaleString("ko-KR")}원</span>
+          </p>
         </div>
       </div>
-
-      <p className="mt-4 text-sm text-zinc-500">
-        선택됨: {formatMonthLabel(selectedDate)} {selectedDate.getDate()}일 ·{" "}
-        {startTime ?? "-"} ~ {endTime ?? "-"} · {selectedBay}번 베이 · {workId}
-      </p>
 
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
-          onClick={goSafetyPage}
+          onClick={goNext}
           disabled={!canProceed}
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
         >
-          안전 동의
+          {reservationType === "SELF_SERVICE" ? "안전 동의로 이동" : "결제로 이동"}
         </button>
       </div>
     </section>
+  );
+}
+
+export default function PartnerSchedulePage() {
+  return (
+    <Suspense fallback={<section className="pb-24" />}>
+      <PartnerSchedulePageContent />
+    </Suspense>
   );
 }

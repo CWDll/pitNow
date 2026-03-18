@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { supabase } from "@/src/lib/supabase";
-import { getGarageById, workOptions } from "../../_data/mock-garages";
+import {
+  formatMinutesLabel,
+  getGarageById,
+  getGarageShopPackages,
+  selfWorkOptions,
+} from "@/app/(user)/_data/mock-garages";
+import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 interface PartnerDetailPageProps {
   params: Promise<{ id: string }>;
@@ -15,12 +20,6 @@ interface ReviewRow {
   created_at: string;
 }
 
-function levelClass(level: "초급" | "중급"): string {
-  return level === "초급"
-    ? "bg-blue-50 text-blue-600"
-    : "bg-amber-50 text-amber-600";
-}
-
 function formatPrice(price: number): string {
   return `${price.toLocaleString("ko-KR")}원`;
 }
@@ -30,49 +29,25 @@ function renderStars(rating: number): string {
   return "★".repeat(safe) + "☆".repeat(5 - safe);
 }
 
-function formatDate(iso: string): string {
-  const parsed = new Date(iso);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "날짜 정보 없음";
+async function getReviewsByBayId(bayId: string) {
+  if (!hasSupabaseEnv) {
+    return [] as ReviewRow[];
   }
 
-  return parsed.toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-}
-
-async function getReviewsByBayId(bayId: string) {
-  const { data: reservations, error: reservationError } = await supabase
+  const { data: reservations } = await supabase
     .from("reservations")
     .select("id")
     .eq("bay_id", bayId)
     .limit(200)
     .returns<Array<{ id: string }>>();
 
-  if (reservationError) {
-    console.error("RESERVATION LOOKUP ERROR:", reservationError);
-    return { reviews: [] as ReviewRow[], totalCount: 0 };
-  }
-
   const reservationIds = (reservations ?? []).map((item) => item.id);
 
   if (reservationIds.length === 0) {
-    return { reviews: [] as ReviewRow[], totalCount: 0 };
+    return [] as ReviewRow[];
   }
 
-  const { count, error: countError } = await supabase
-    .from("reviews")
-    .select("id", { count: "exact", head: true })
-    .in("reservation_id", reservationIds);
-
-  if (countError) {
-    console.error("REVIEW COUNT ERROR:", countError);
-  }
-
-  const { data: reviewRows, error: reviewError } = await supabase
+  const { data: reviewRows } = await supabase
     .from("reviews")
     .select("id, rating, comment, created_at")
     .in("reservation_id", reservationIds)
@@ -80,15 +55,7 @@ async function getReviewsByBayId(bayId: string) {
     .limit(3)
     .returns<ReviewRow[]>();
 
-  if (reviewError) {
-    console.error("REVIEW LOOKUP ERROR:", reviewError);
-    return { reviews: [] as ReviewRow[], totalCount: count ?? 0 };
-  }
-
-  return {
-    reviews: reviewRows ?? [],
-    totalCount: count ?? reviewRows?.length ?? 0,
-  };
+  return reviewRows ?? [];
 }
 
 export default async function PartnerDetailPage({ params }: PartnerDetailPageProps) {
@@ -99,84 +66,111 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
     notFound();
   }
 
-  const { reviews, totalCount } = await getReviewsByBayId(garage.bayId);
+  const reviews = await getReviewsByBayId(garage.bayId);
+  const packages = getGarageShopPackages(garage.id);
   const averageRating =
     reviews.length > 0
       ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
       : garage.rating;
 
   return (
-    <section className="pb-24">
-      <div className="-mx-4 mb-4 flex h-44 items-center justify-center bg-blue-100 text-zinc-500">
-        정비소 이미지
-      </div>
+    <section className="pb-28">
+      <div className="-mx-4 mb-4 h-48 rounded-b-[2rem] bg-[linear-gradient(135deg,#dbeafe_0%,#f8fafc_45%,#fde68a_100%)]" />
 
       <div className="space-y-2">
         <h1 className="text-4xl font-semibold text-zinc-900">{garage.name}</h1>
         <p className="text-lg text-zinc-700">
-          ★ {averageRating.toFixed(1)} ({totalCount || garage.reviewCount}개 후기)
+          {averageRating.toFixed(1)} · 리뷰 {garage.reviewCount}개
         </p>
-        <p className="text-lg text-zinc-700">📍 {garage.address}</p>
-        <p className="text-lg text-zinc-700">🕒 {garage.hours}</p>
-        <p className="text-lg text-zinc-700">🚗 베이 {garage.bayCount}개 · 주차 가능</p>
-        <p className="text-lg text-zinc-700">📞 {garage.phone}</p>
+        <p className="text-lg text-zinc-700">{garage.address}</p>
+        <p className="text-lg text-zinc-700">운영시간 {garage.hours}</p>
+        <p className="text-lg text-zinc-700">베이 {garage.bayCount}개 · {garage.phone}</p>
       </div>
 
-      <div className="mt-6 space-y-3">
-        <h2 className="text-2xl font-semibold text-zinc-900">추천 패키지</h2>
-        {workOptions.slice(0, 3).map((option) => (
-          <article key={option.id} className="rounded-2xl bg-zinc-100 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-2xl font-medium text-zinc-900">{option.title}</p>
-                <p className="mt-1 text-lg text-zinc-600">{option.durationLabel}</p>
-              </div>
-              <span className="text-xl font-semibold text-blue-600">{formatPrice(garage.hourlyPrice)}</span>
+      <div className="mt-6 grid gap-4">
+        <article className="rounded-3xl bg-blue-50 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Self Service</p>
+              <h2 className="mt-2 text-2xl font-semibold text-zinc-900">시간대 예약 후 직접 정비</h2>
             </div>
-            <div className="mt-2 flex gap-2">
-              <span className={`rounded-full px-2 py-1 text-xs font-medium ${levelClass(option.level)}`}>
-                {option.level}
+            <span className="rounded-full bg-white px-3 py-1 text-sm font-medium text-blue-700">
+              {formatPrice(garage.hourlyPrice)}/시간
+            </span>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-zinc-700">
+            기본 1시간부터 시작하고, 추가 예약은 30분 단위로 이어집니다.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2 text-sm">
+            {selfWorkOptions.slice(0, 3).map((option) => (
+              <span key={option.id} className="rounded-full bg-white px-3 py-1 text-zinc-700">
+                {option.title}
               </span>
-              {option.helperRequired ? (
-                <span className="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-600">
-                  헬퍼 필수
-                </span>
-              ) : null}
+            ))}
+          </div>
+          <Link
+            href={`/partner/${garage.id}/work?mode=SELF_SERVICE`}
+            className="mt-5 flex h-12 items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
+          >
+            셀프 정비 예약
+          </Link>
+        </article>
+
+        <article className="rounded-3xl bg-amber-50 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Shop Service</p>
+              <h2 className="mt-2 text-2xl font-semibold text-zinc-900">패키지 선택 후 전문가에게 맡기기</h2>
             </div>
-          </article>
-        ))}
+            <span className="rounded-full bg-white px-3 py-1 text-sm font-medium text-amber-700">
+              업체별 가격 공개
+            </span>
+          </div>
+          <div className="mt-4 space-y-3">
+            {packages.map((item) => (
+              <div key={item.id} className="rounded-2xl bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold text-zinc-900">{item.name}</p>
+                    <p className="mt-1 text-sm text-zinc-600">{item.summary}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-semibold text-zinc-900">{formatPrice(item.price)}</p>
+                    <p className="text-xs text-zinc-500">소요 {formatMinutesLabel(item.durationMinutes)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Link
+            href={`/partner/${garage.id}/work?mode=SHOP_SERVICE`}
+            className="mt-5 flex h-12 items-center justify-center rounded-2xl bg-zinc-900 text-lg font-semibold text-white"
+          >
+            전문가 맡기기 예약
+          </Link>
+        </article>
       </div>
 
-      <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
+      <div className="mt-6 rounded-3xl bg-zinc-100 p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-2xl font-semibold text-zinc-900">후기</h3>
+          <h3 className="text-2xl font-semibold text-zinc-900">최근 리뷰</h3>
           <Link href={`/partner/${garage.id}/reviews`} className="text-sm font-semibold text-blue-600">
             전체보기
           </Link>
         </div>
 
         {reviews.length === 0 ? (
-          <p className="text-base text-zinc-600">아직 등록된 후기가 없습니다.</p>
+          <p className="text-base text-zinc-600">아직 등록된 리뷰가 없습니다.</p>
         ) : (
           <div className="space-y-3">
             {reviews.map((review) => (
-              <article key={review.id} className="rounded-xl bg-white p-3">
+              <article key={review.id} className="rounded-2xl bg-white p-4">
                 <p className="text-lg text-amber-500">{renderStars(review.rating)}</p>
-                <p className="mt-1 text-sm text-zinc-500">{formatDate(review.created_at)}</p>
-                <p className="mt-2 text-base text-zinc-700">{review.comment || "코멘트 없음"}</p>
+                <p className="mt-2 text-sm text-zinc-700">{review.comment || "코멘트 없음"}</p>
               </article>
             ))}
           </div>
         )}
-      </div>
-
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
-        <Link
-          href={`/partner/${garage.id}/work`}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
-        >
-          예약하기
-        </Link>
       </div>
     </section>
   );

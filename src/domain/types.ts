@@ -5,12 +5,18 @@ export type ReservationStatus =
   | "COMPLETED"
   | "CANCELLED";
 
+export type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
+
 export interface Reservation {
   id: string;
   userId: string;
+  partnerId: string;
   bayId: string;
+  reservationType: ReservationType;
+  packageId: string | null;
   startTime: string;
   endTime: string;
+  reservedEndTime: string;
   status: ReservationStatus;
   totalPrice: number;
   createdAt: string;
@@ -43,11 +49,20 @@ export interface Review {
   createdAt: string;
 }
 
-export interface CreateReservationPayload {
-  bayId: string;
-  startTime: string;
-  endTime: string;
-}
+export type CreateReservationPayload =
+  | {
+      reservationType: "SELF_SERVICE";
+      partnerId: string;
+      bayId: string;
+      startTime: string;
+      durationMinutes: number;
+    }
+  | {
+      reservationType: "SHOP_SERVICE";
+      partnerId: string;
+      packageId: string;
+      startTime: string;
+    };
 
 export interface CheckInPayload {
   reservationId: string;

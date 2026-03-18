@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
-import type { CreateReservationPayload } from "@/src/domain/types";
+import { formatMinutesLabel, getReservationTypeLabel } from "@/app/(user)/_data/mock-garages";
+import type { CreateReservationPayload, ReservationType } from "@/src/domain/types";
 
 const paymentMethods = ["신용/체크카드", "카카오페이", "네이버페이", "토스페이"] as const;
 
@@ -13,18 +14,18 @@ function parseReservationId(payload: unknown): string | null {
     return typeof id === "string" ? id : null;
   }
 
-  if (Array.isArray(payload) && payload[0] && typeof payload[0] === "object") {
-    const id = (payload[0] as { id?: unknown }).id;
-    return typeof id === "string" ? id : null;
-  }
-
   return null;
 }
 
-export default function PaymentPage() {
+function parseMode(value: string | null): ReservationType {
+  return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
+}
+
+function PaymentPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const reservationType = parseMode(searchParams.get("reservationType"));
   const [method, setMethod] = useState<(typeof paymentMethods)[number]>("신용/체크카드");
   const [isPaying, setIsPaying] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
@@ -32,39 +33,67 @@ export default function PaymentPage() {
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
-  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
-  const workId = searchParams.get("workId") ?? "engine-oil";
-  const dateLabel = searchParams.get("dateLabel") ?? "2/28(금) 14:00 - 15:00";
+  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
+  const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
+  const packageId = searchParams.get("packageId") ?? "";
+  const dateLabel = searchParams.get("dateLabel") ?? "";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
   const bayId = searchParams.get("bayId") ?? "00000000-0000-0000-0000-000000000001";
   const startTime = searchParams.get("startTime") ?? "";
   const endTime = searchParams.get("endTime") ?? "";
+  const blockedMinutes = Number(searchParams.get("blockedMinutes") ?? "60");
+  const packageMinutes = Number(searchParams.get("packageMinutes") ?? String(blockedMinutes));
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
 
-  const workTitle = useMemo(() => {
-    if (workId === "brake-pad") return "브레이크 패드 교환";
-    if (workId === "tire-rotation") return "타이어 로테이션";
-    if (workId === "air-filter") return "에어필터 교환";
-    if (workId === "wiper") return "와이퍼 블레이드 교체";
-    return "엔진오일 교환";
-  }, [workId]);
+  const summaryRows = useMemo(() => {
+    if (reservationType === "SELF_SERVICE") {
+      return [
+        ["예약 방식", getReservationTypeLabel(reservationType)],
+        ["작업", workTitle],
+        ["업장", garageName],
+        ["일시", dateLabel],
+        ["베이", bayLabel],
+        ["차량", carLabel],
+      ] as const;
+    }
+
+    return [
+      ["예약 방식", getReservationTypeLabel(reservationType)],
+      ["패키지", workTitle],
+      ["업장", garageName],
+      ["일시", dateLabel],
+      ["실소요", formatMinutesLabel(packageMinutes)],
+      ["블록 시간", formatMinutesLabel(blockedMinutes)],
+      ["차량", carLabel],
+    ] as const;
+  }, [bayLabel, blockedMinutes, carLabel, dateLabel, garageName, packageMinutes, reservationType, workTitle]);
 
   async function handlePay() {
     setError("");
 
-    if (!startTime || !endTime) {
-      setError("시간 정보가 누락되어 결제를 진행할 수 없습니다.");
+    if (!startTime) {
+      setError("예약 시간이 누락되었습니다.");
       return;
     }
 
     setIsPaying(true);
 
     try {
-      const body: CreateReservationPayload = {
-        bayId,
-        startTime,
-        endTime,
-      };
+      const body: CreateReservationPayload =
+        reservationType === "SELF_SERVICE"
+          ? {
+              reservationType,
+              partnerId,
+              bayId,
+              startTime,
+              durationMinutes: blockedMinutes,
+            }
+          : {
+              reservationType,
+              partnerId,
+              packageId,
+              startTime,
+            };
 
       const response = await fetch("/api/reservations", {
         method: "POST",
@@ -79,8 +108,8 @@ export default function PaymentPage() {
       if (!response.ok) {
         const message =
           data && typeof data === "object" && "error" in data && typeof (data as { error?: unknown }).error === "string"
-            ? ((data as { error: string }).error)
-            : "결제 처리 중 예약 생성에 실패했습니다.";
+            ? (data as { error: string }).error
+            : "예약 생성에 실패했습니다.";
         setError(message);
         return;
       }
@@ -93,6 +122,7 @@ export default function PaymentPage() {
 
       const query = new URLSearchParams({
         reservationId,
+        reservationType,
         partnerId,
         carId,
         carLabel,
@@ -103,10 +133,17 @@ export default function PaymentPage() {
         totalPrice: String(totalPrice),
         startTime,
         endTime,
+        blockedMinutes: String(blockedMinutes),
       });
+
+      if (packageId) {
+        query.set("packageId", packageId);
+        query.set("packageMinutes", String(packageMinutes));
+      }
+
       router.push(`/reservation-complete?${query.toString()}`);
     } catch {
-      setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      setError("결제 처리 중 오류가 발생했습니다.");
     } finally {
       setIsPaying(false);
     }
@@ -121,14 +158,15 @@ export default function PaymentPage() {
         <h1 className="text-3xl font-semibold text-zinc-900">결제</h1>
       </header>
 
-      <div className="rounded-2xl bg-zinc-100 p-4">
+      <div className="rounded-3xl bg-zinc-100 p-4">
         <h2 className="mb-3 text-xl font-semibold">주문 요약</h2>
         <div className="space-y-2 text-base text-zinc-700">
-          <p className="flex justify-between"><span>작업</span><span>{workTitle}</span></p>
-          <p className="flex justify-between"><span>지점</span><span>{garageName}</span></p>
-          <p className="flex justify-between"><span>날짜/시간</span><span>{dateLabel}</span></p>
-          <p className="flex justify-between"><span>베이</span><span>{bayLabel}</span></p>
-          <p className="flex justify-between"><span>차량</span><span>{carLabel}</span></p>
+          {summaryRows.map(([label, value]) => (
+            <p key={label} className="flex justify-between gap-4">
+              <span>{label}</span>
+              <span className="text-right">{value}</span>
+            </p>
+          ))}
         </div>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-2xl font-semibold">
@@ -158,11 +196,11 @@ export default function PaymentPage() {
       </div>
 
       <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">
-        <p className="font-semibold">취소/노쇼 규정</p>
+        <p className="font-semibold">취소/환불 규정</p>
         <ul className="mt-2 list-disc pl-5">
-          <li>이용 24시간 전: 전액 환불</li>
-          <li>이용 2시간 전: 50% 환불</li>
-          <li>노쇼: 환불 불가 + 패널티 부과</li>
+          <li>이용 24시간 전 전액 환불</li>
+          <li>이용 2시간 전 50% 환불</li>
+          <li>패키지 예약은 업장 정책에 따라 일정이 조정될 수 있습니다.</li>
         </ul>
       </div>
 
@@ -179,5 +217,13 @@ export default function PaymentPage() {
         </button>
       </div>
     </section>
+  );
+}
+
+export default function PaymentPage() {
+  return (
+    <Suspense fallback={<section className="pb-24" />}>
+      <PaymentPageContent />
+    </Suspense>
   );
 }

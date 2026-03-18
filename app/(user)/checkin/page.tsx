@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import type { CheckInPayload } from "@/src/domain/types";
+import { extractApiErrorMessage } from "@/src/lib/api-error";
 
 type PhotoField = "frontImg" | "rearImg" | "leftImg" | "rightImg";
 
@@ -14,65 +15,37 @@ const photoLabels: Record<PhotoField, string> = {
   rightImg: "우측",
 };
 
-interface ApiErrorShape {
-  error?: string | { message?: string };
-}
-
-function extractErrorMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const typed = payload as ApiErrorShape;
-
-  if (typeof typed.error === "string" && typed.error) {
-    return typed.error;
-  }
-
-  if (typed.error && typeof typed.error === "object" && typeof typed.error.message === "string") {
-    return typed.error.message;
-  }
-
-  return null;
-}
-
 function buildMockUrl(reservationId: string, field: PhotoField, file: File): string {
   return `mock://checkin/${reservationId}/${field}/${encodeURIComponent(file.name)}`;
 }
 
-export default function CheckinPage() {
+function CheckinPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId")?.trim() ?? "";
+  const reservationType = searchParams.get("reservationType") ?? "SELF_SERVICE";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
-  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
+  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
   const startTime = searchParams.get("startTime") ?? "";
   const endTime = searchParams.get("endTime") ?? "";
   const totalPrice = searchParams.get("totalPrice") ?? "15000";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
+  const blockedMinutes = searchParams.get("blockedMinutes") ?? "60";
 
-  const [qrScanned, setQrScanned] = useState<boolean>(false);
+  const [qrScanned, setQrScanned] = useState(false);
   const [frontImgFile, setFrontImgFile] = useState<File | null>(null);
   const [rearImgFile, setRearImgFile] = useState<File | null>(null);
   const [leftImgFile, setLeftImgFile] = useState<File | null>(null);
   const [rightImgFile, setRightImgFile] = useState<File | null>(null);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const [error, setError] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-
-  const missingReservationId = reservationId.length === 0;
-
-  const allPhotosSelected =
-    frontImgFile !== null &&
-    rearImgFile !== null &&
-    leftImgFile !== null &&
-    rightImgFile !== null;
-
-  const canSubmit = qrScanned && allPhotosSelected && !missingReservationId;
+  const allPhotosSelected = !!frontImgFile && !!rearImgFile && !!leftImgFile && !!rightImgFile;
+  const canSubmit = qrScanned && allPhotosSelected && !!reservationId;
 
   const tiles: Array<{ field: PhotoField; file: File | null }> = useMemo(
     () => [
@@ -83,6 +56,15 @@ export default function CheckinPage() {
     ],
     [frontImgFile, leftImgFile, rearImgFile, rightImgFile],
   );
+
+  function handlePhotoChange(field: PhotoField, event: ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0] ?? null;
+
+    if (field === "frontImg") setFrontImgFile(selected);
+    if (field === "rearImg") setRearImgFile(selected);
+    if (field === "leftImg") setLeftImgFile(selected);
+    if (field === "rightImg") setRightImgFile(selected);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,12 +96,13 @@ export default function CheckinPage() {
       const data: unknown = await response.json();
 
       if (!response.ok) {
-        setError(extractErrorMessage(data) ?? "체크인 처리에 실패했습니다.");
+        setError(extractApiErrorMessage(data, "체크인 처리에 실패했습니다."));
         return;
       }
 
       const query = new URLSearchParams({
         reservationId,
+        reservationType,
         partnerId,
         carId,
         carLabel,
@@ -129,10 +112,12 @@ export default function CheckinPage() {
         endTime,
         totalPrice,
         workTitle,
+        blockedMinutes,
       });
+
       router.push(`/in-use?${query.toString()}`);
     } catch {
-      setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      setError("체크인 처리 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
     }
@@ -147,12 +132,6 @@ export default function CheckinPage() {
         <h1 className="text-3xl font-semibold text-zinc-900">체크인</h1>
       </header>
 
-      {missingReservationId ? (
-        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-          reservationId가 누락되었습니다.
-        </p>
-      ) : null}
-
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
           <h2 className="mb-2 text-xl font-semibold">QR 스캔</h2>
@@ -163,12 +142,12 @@ export default function CheckinPage() {
               qrScanned ? "border-emerald-500 bg-emerald-50 text-emerald-600" : "border-zinc-300 bg-zinc-100 text-zinc-500"
             }`}
           >
-            {qrScanned ? "스캔 완료" : "탭하여 QR 스캔"}
+            {qrScanned ? "스캔 완료" : "탭해서 QR 스캔"}
           </button>
         </div>
 
         <div>
-          <h2 className="mb-2 text-xl font-semibold">차량 사진 촬영 (4방향)</h2>
+          <h2 className="mb-2 text-xl font-semibold">차량 사진 4장</h2>
           <div className="grid grid-cols-2 gap-3">
             {tiles.map((tile) => (
               <label
@@ -177,34 +156,20 @@ export default function CheckinPage() {
                   tile.file ? "border-emerald-500 bg-emerald-50 text-emerald-600" : "border-zinc-300 bg-zinc-100 text-zinc-500"
                 }`}
               >
-                <span>{tile.file ? "✓" : "📷"}</span>
-                <span className="mt-1">{tile.file ? `${photoLabels[tile.field]} 완료` : photoLabels[tile.field]}</span>
+                <span>{tile.file ? "업로드 완료" : "사진 등록"}</span>
+                <span className="mt-1">{photoLabels[tile.field]}</span>
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(event) => {
-                    const selected = event.target.files?.[0] ?? null;
-                    if (tile.field === "frontImg") setFrontImgFile(selected);
-                    if (tile.field === "rearImg") setRearImgFile(selected);
-                    if (tile.field === "leftImg") setLeftImgFile(selected);
-                    if (tile.field === "rightImg") setRightImgFile(selected);
-                  }}
+                  onChange={(event) => handlePhotoChange(tile.field, event)}
                 />
               </label>
             ))}
           </div>
         </div>
 
-        {!canSubmit ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            ⚠ 사진 4장 없으면 시작 불가
-          </p>
-        ) : null}
-
-        {error ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
-        ) : null}
+        {error ? <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p> : null}
 
         <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
           <button
@@ -212,10 +177,18 @@ export default function CheckinPage() {
             disabled={!canSubmit || isLoading}
             className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
           >
-            {isLoading ? "처리 중..." : "체크인 완료 (타이머 시작)"}
+            {isLoading ? "처리 중..." : "체크인 완료"}
           </button>
         </div>
       </form>
     </section>
+  );
+}
+
+export default function CheckinPage() {
+  return (
+    <Suspense fallback={<section className="pb-24" />}>
+      <CheckinPageContent />
+    </Suspense>
   );
 }

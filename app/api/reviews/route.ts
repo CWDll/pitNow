@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { supabase } from "@/src/lib/supabase";
+import { getSupabaseEnvErrorResponse, hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -88,6 +88,10 @@ function parsePayload(payload: unknown): CreateReviewPayload | null {
 }
 
 export async function POST(req: Request) {
+  if (!hasSupabaseEnv) {
+    return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
+  }
+
   let payload: unknown;
 
   try {

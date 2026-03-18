@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { supabase } from "@/src/lib/supabase";
+import { getSupabaseEnvErrorResponse, hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 type ReservationStatus =
   | "CONFIRMED"
@@ -9,6 +9,8 @@ type ReservationStatus =
   | "COMPLETED"
   | "CANCELLED";
 
+type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
+
 interface CheckoutRequestBody {
   reservationId: string;
 }
@@ -16,8 +18,10 @@ interface CheckoutRequestBody {
 interface ReservationRow {
   id: string;
   status: ReservationStatus;
+  reservation_type?: ReservationType;
   start_time: string;
   end_time: string;
+  reserved_end_time?: string | null;
   total_price: number | string;
 }
 
@@ -78,8 +82,7 @@ function parseIsoDate(dateText: string): Date | null {
 }
 
 function toFiniteNumber(value: number | string): number | null {
-  const parsedValue =
-    typeof value === "number" ? value : Number.parseFloat(String(value));
+  const parsedValue = typeof value === "number" ? value : Number.parseFloat(String(value));
 
   if (!Number.isFinite(parsedValue)) {
     return null;
@@ -139,6 +142,10 @@ async function rollbackCheckoutInsert(reservationId: string): Promise<void> {
 }
 
 export async function POST(req: Request) {
+  if (!hasSupabaseEnv) {
+    return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
+  }
+
   let payload: unknown;
 
   try {
@@ -157,7 +164,7 @@ export async function POST(req: Request) {
 
   const { data: reservation, error: reservationError } = await supabase
     .from("reservations")
-    .select("id, status, start_time, end_time, total_price")
+    .select("id, status, reservation_type, start_time, end_time, reserved_end_time, total_price")
     .eq("id", reservationId)
     .maybeSingle<ReservationRow>();
 
@@ -170,12 +177,14 @@ export async function POST(req: Request) {
     return errorResponse(404, "RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다.");
   }
 
-  if (reservation.status !== "CHECKED_IN" && reservation.status !== "IN_USE") {
-    return errorResponse(
-      400,
-      "INVALID_RESERVATION_STATUS",
-      "CHECKED_IN 또는 IN_USE 상태의 예약만 체크아웃할 수 있습니다.",
-    );
+  const reservationType = reservation.reservation_type ?? "SELF_SERVICE";
+  const validStatuses =
+    reservationType === "SHOP_SERVICE"
+      ? ["CONFIRMED", "IN_USE"]
+      : ["CHECKED_IN", "IN_USE"];
+
+  if (!validStatuses.includes(reservation.status)) {
+    return errorResponse(400, "INVALID_RESERVATION_STATUS", "현재 예약 상태에서는 체크아웃을 진행할 수 없습니다.");
   }
 
   const { data: existingCheckout, error: checkoutLookupError } = await supabase
@@ -194,7 +203,7 @@ export async function POST(req: Request) {
   }
 
   const startTime = parseIsoDate(reservation.start_time);
-  const endTime = parseIsoDate(reservation.end_time);
+  const endTime = parseIsoDate(reservation.reserved_end_time ?? reservation.end_time);
   const totalPrice = toFiniteNumber(reservation.total_price);
 
   if (!startTime || !endTime || totalPrice === null) {
@@ -202,12 +211,15 @@ export async function POST(req: Request) {
   }
 
   const now = new Date();
-  const extraFee = calculateExtraFee({
-    now,
-    startTime,
-    endTime,
-    totalPrice,
-  });
+  const extraFee =
+    reservationType === "SHOP_SERVICE"
+      ? 0
+      : calculateExtraFee({
+          now,
+          startTime,
+          endTime,
+          totalPrice,
+        });
 
   if (extraFee === null) {
     return errorResponse(500, "FEE_CALCULATION_ERROR", "초과요금 계산 중 오류가 발생했습니다.");
@@ -232,7 +244,7 @@ export async function POST(req: Request) {
     .from("reservations")
     .update({ status: "COMPLETED" })
     .eq("id", reservationId)
-    .in("status", ["CHECKED_IN", "IN_USE"])
+    .in("status", validStatuses)
     .select("id")
     .maybeSingle<{ id: string }>();
 
@@ -244,11 +256,7 @@ export async function POST(req: Request) {
 
   if (!updatedReservation) {
     await rollbackCheckoutInsert(reservationId);
-    return errorResponse(
-      409,
-      "STATUS_CONFLICT",
-      "예약 상태가 변경되어 체크아웃을 완료할 수 없습니다.",
-    );
+    return errorResponse(409, "STATUS_CONFLICT", "예약 상태가 변경되어 체크아웃을 완료할 수 없습니다.");
   }
 
   return NextResponse.json({
@@ -264,7 +272,7 @@ function methodNotAllowed() {
       success: false,
       error: {
         code: "METHOD_NOT_ALLOWED",
-        message: "POST 메서드만 허용됩니다.",
+        message: "POST 메서드만 사용할 수 있습니다.",
       },
     },
     {
