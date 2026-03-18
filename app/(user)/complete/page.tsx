@@ -2,17 +2,23 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import type { CreateReviewPayload } from "@/src/domain/types";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
+
+interface ExistingReview {
+  id: string;
+  rating: number;
+  comment: string | null;
+}
 
 function CompletePageContent() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId") ?? "";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
-  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
   const extraFee = Number(searchParams.get("extraFee") ?? "0");
@@ -22,8 +28,50 @@ function CompletePageContent() {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [reviewSaved, setReviewSaved] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [hasExistingReview, setHasExistingReview] = useState(false);
+  const [isLoadingReview, setIsLoadingReview] = useState(true);
 
   const total = totalPrice + extraFee;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadReview() {
+      if (!reservationId) {
+        if (isMounted) {
+          setIsLoadingReview(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/reviews?reservationId=${encodeURIComponent(reservationId)}`);
+        const data = (await response.json()) as { review?: ExistingReview | null };
+
+        if (!response.ok) {
+          return;
+        }
+
+        if (isMounted && data.review) {
+          setRating(data.review.rating);
+          setReviewText(data.review.comment ?? "");
+          setHasExistingReview(true);
+        }
+      } catch {
+        return;
+      } finally {
+        if (isMounted) {
+          setIsLoadingReview(false);
+        }
+      }
+    }
+
+    void loadReview();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [reservationId]);
 
   async function handleSubmitReview() {
     setReviewError("");
@@ -47,7 +95,7 @@ function CompletePageContent() {
       };
 
       const response = await fetch("/api/reviews", {
-        method: "POST",
+        method: hasExistingReview ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
@@ -61,6 +109,7 @@ function CompletePageContent() {
         return;
       }
 
+      setHasExistingReview(true);
       setReviewSaved(true);
     } catch {
       setReviewError("리뷰 저장 중 오류가 발생했습니다.");
@@ -107,7 +156,6 @@ function CompletePageContent() {
                 onClick={() => setRating(starNumber)}
                 className={`text-4xl leading-none ${active ? "text-amber-400" : "text-zinc-300"}`}
                 aria-label={`${starNumber}점 선택`}
-                disabled={reviewSaved}
               >
                 ★
               </button>
@@ -120,19 +168,46 @@ function CompletePageContent() {
           placeholder="서비스 리뷰를 남겨주세요."
           value={reviewText}
           onChange={(event) => setReviewText(event.target.value)}
-          disabled={reviewSaved}
         />
 
-        {reviewError ? <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{reviewError}</p> : null}
-        {reviewSaved ? <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">리뷰 저장이 완료되었습니다.</p> : null}
+        {isLoadingReview ? (
+          <p className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500">
+            기존 리뷰를 확인하는 중입니다.
+          </p>
+        ) : null}
+        {hasExistingReview && !reviewSaved ? (
+          <p className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            이미 작성한 리뷰입니다. 수정 후 저장할 수 있습니다.
+          </p>
+        ) : null}
+        {reviewError ? (
+          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            {reviewError}
+          </p>
+        ) : null}
+        {reviewSaved ? (
+          <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            리뷰 저장이 완료되었습니다.
+          </p>
+        ) : null}
 
         <button
           type="button"
           onClick={handleSubmitReview}
-          disabled={isSubmittingReview || reviewSaved}
+          disabled={isSubmittingReview || isLoadingReview}
           className="mt-3 h-11 w-full rounded-xl bg-zinc-900 text-base font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-500"
         >
-          {reviewSaved ? "리뷰 제출 완료" : isSubmittingReview ? "제출 중..." : "리뷰 제출"}
+          {isLoadingReview
+            ? "리뷰 확인 중.."
+            : reviewSaved
+              ? "리뷰 저장 완료"
+              : isSubmittingReview
+                ? hasExistingReview
+                  ? "수정 중.."
+                  : "제출 중.."
+                : hasExistingReview
+                  ? "리뷰 수정"
+                  : "리뷰 제출"}
         </button>
       </div>
 
