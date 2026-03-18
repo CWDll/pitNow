@@ -1,20 +1,37 @@
 # User Flow (MVP)
 
-## Primary Flow
+## Self Service Flow
 
 ```mermaid
 flowchart TD
 A[Home] --> B[Partner Detail]
-B --> C[Select Work]
+B --> C[Choose Self Service]
 C --> D[Select Date/Time]
-D --> E[Select Bay]
-E --> F[Payment]
-F --> G[Reservation Confirmed]
-G --> H[QR Check-in]
-H --> I[Upload 4 Photos]
-I --> J[Timer Start]
-J --> K[In Use]
-K --> L[Checkout]
-L --> M[Settlement]
-M --> N[Review]
+D --> E[Select Duration]
+E --> F[Select Bay]
+F --> G[Payment]
+G --> H[Reservation Confirmed]
+H --> I[QR Check-in]
+I --> J[Upload 4 Photos]
+J --> K[Timer Start]
+K --> L[In Use]
+L --> M[Checkout]
+M --> N[Settlement]
+N --> O[Review]
+```
+
+## Shop Service Flow
+
+```mermaid
+flowchart TD
+A[Home] --> B[Partner Detail]
+B --> C[Choose Shop Service]
+C --> D[Select Package]
+D --> E[Show Duration and Price]
+E --> F[System Rounds Duration to 30m Blocks]
+F --> G[Payment]
+G --> H[Reservation Confirmed]
+H --> I[Shop Executes Work]
+I --> J[Completion]
+J --> K[Review]
 ```

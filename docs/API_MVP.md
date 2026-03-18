@@ -1,170 +1,236 @@
-구조:
-• Next.js App Router
-• Route Handler 사용
-• Supabase DB
-• Mock user_id 사용
+# API MVP
 
-모든 응답은 JSON.
-모든 상태 전환은 명시적이어야 한다.
+## Principles
 
-⸻
+- Next.js App Router
+- Route Handler based API
+- Supabase DB
+- Mock `user_id` allowed in MVP
+- All responses are JSON
+- All status transitions must be explicit
+- Reservation conflicts must be rejected by the DB layer
 
-1. POST /api/reservations
+---
 
-⸻
+## 1. POST /api/reservations
 
-기능:
-예약 생성
+Create reservation for either `SELF_SERVICE` or `SHOP_SERVICE`.
 
-입력:
+### Request
+
+```json
 {
-bayId: string,
-startTime: string (ISO),
-endTime: string (ISO)
+  "reservationType": "SELF_SERVICE",
+  "partnerId": "uuid",
+  "bayId": "uuid",
+  "startTime": "2026-03-18T10:00:00Z",
+  "durationMinutes": 90
 }
+```
 
-로직:
-• startTime < endTime 검증
-• 최소 1시간 이상 검증
-• user_id는 MOCK_USER_ID 사용
-• status = CONFIRMED
-• total_price 계산 후 저장
-• 겹침은 DB에서 자동 차단
-
-에러:
-• 시간 겹침
-• 잘못된 시간 범위
-• bay 없음
-
-성공 응답:
+```json
 {
-id: reservation_id,
-status: “CONFIRMED”
+  "reservationType": "SHOP_SERVICE",
+  "partnerId": "uuid",
+  "packageId": "uuid",
+  "startTime": "2026-03-18T10:00:00Z"
 }
+```
 
-⸻
+### Rules
 
-2. POST /api/checkin
+#### SELF_SERVICE
 
-⸻
+- `bayId` required
+- `durationMinutes` required
+- minimum `60 minutes`
+- must be aligned to `30-minute` units
+- `endTime = startTime + durationMinutes`
+- `reservedEndTime = endTime`
+- time-based price calculation
 
-기능:
-체크인 + 사용 시작
+#### SHOP_SERVICE
 
-입력:
+- `packageId` required
+- package price comes from partner-published package pricing
+- package duration comes from package catalog
+- `reservedEndTime` is computed by rounding package duration up to 30-minute units
+- example: package duration `40` => reserved block `60`
+- bay/resource can be auto-assigned internally before final insert
+
+### Response
+
+```json
 {
-reservationId: string,
-frontImg: string,
-rearImg: string,
-leftImg: string,
-rightImg: string
+  "id": "reservation_uuid",
+  "status": "CONFIRMED",
+  "reservationType": "SHOP_SERVICE",
+  "blockedMinutes": 60,
+  "totalPrice": 50000
 }
+```
 
-검증:
-• 이미지 4장 필수
-• reservation 존재
-• status = CONFIRMED
-•이미 체크인된 경우 불가
+---
 
-로직:
-• checkins insert
-• reservations.status → CHECKED_IN
+## 2. POST /api/checkin
 
-성공 응답:
+Self-service check-in and timer start.
+
+### Request
+
+```json
 {
-status: “CHECKED_IN”
+  "reservationId": "uuid",
+  "frontImg": "url",
+  "rearImg": "url",
+  "leftImg": "url",
+  "rightImg": "url"
 }
+```
 
-⸻
+### Validation
 
-3. POST /api/checkout
+- Reservation exists
+- Reservation type must be `SELF_SERVICE`
+- Reservation status must be `CONFIRMED`
+- Four images required
+- Duplicate check-in forbidden
 
-⸻
+### Response
 
-기능:
-사용 종료 + 초과요금 계산
-
-입력:
+```json
 {
-reservationId: string
+  "status": "CHECKED_IN"
 }
+```
 
-로직:
-• reservation 조회
-• 현재 서버시간과 end_time 비교
-• 초과 시간 계산
-• 30분 단위 올림
-• extra_fee 계산
-• checkouts insert
-• reservations.status → COMPLETED
+---
 
-초과요금 계산 방식:
+## 3. POST /api/checkout
 
-diff = now - end_time
-diff <= 0 → 0
-else → ceil(diff / 30분) \* (시간요금 / 2)
+Complete reservation and calculate extra fee where applicable.
 
-성공 응답:
+### Request
+
+```json
 {
-status: “COMPLETED”,
-extraFee: number
+  "reservationId": "uuid"
 }
+```
 
-⸻
+### Logic
 
-4. POST /api/reviews
+- Load reservation
+- Compare server time with `reserved_end_time`
+- For self-service late finish, calculate extra fee by `30-minute` ceiling unit
+- Insert checkout record
+- Update reservation status to `COMPLETED`
 
-⸻
+### Extra Fee
 
-기능:
-이용 완료 후 매장 후기 작성
+```text
+diff = now - reserved_end_time
+if diff <= 0 => 0
+else => ceil(diff / 30min) * (hourly_price / 2)
+```
 
-입력:
+### Response
+
+```json
 {
-reservationId: string,
-partnerId: string,
-rating: number (1~5),
-comment?: string
+  "status": "COMPLETED",
+  "extraFee": 0
 }
+```
 
-검증:
-• reservation 존재
-• reservation.status = COMPLETED
-• reservation의 bay가 partnerId와 일치
-• 이미 작성한 reservation 후기 중복 불가
-• rating은 1~5 정수
+---
 
-로직:
-• reviews insert
+## 4. POST /api/reservations/:id/takeover
 
-성공 응답:
+Record professional takeover for work that the shop determines cannot finish within reserved time.
+
+### Request
+
+```json
 {
-success: true,
-reviewId: string
+  "reason": "cannot_finish_within_reserved_time"
 }
+```
 
-⸻
+### Rules
 
-상태 전환 규칙
+- Only valid for `SHOP_SERVICE`
+- Reservation must be active
+- Sets `professionalTakeover = true`
+- Full labor charge remains unchanged regardless of prior progress
 
-허용:
+### Response
 
-CONFIRMED → CHECKED_IN
-CHECKED_IN → IN_USE (프론트 계산용)
-IN_USE → COMPLETED
-CONFIRMED → CANCELLED
+```json
+{
+  "success": true,
+  "professionalTakeover": true
+}
+```
 
-허용되지 않는 전환은 400 반환.
+---
 
-⸻
+## 5. POST /api/reviews
 
-중요 원칙 1. 예약 겹침은 반드시 DB 레벨. 2. 체크인은 4장 사진 필수. 3. 타이머는 서버 시간 기준. 4. 초과요금은 서버에서 계산. 5. 프론트 상태만 믿지 않는다.
+Create review after completed reservation.
 
-⸻
+### Request
 
-MVP 제외
-• 결제 API
-• 환불
-• 헬퍼 모드
-• 관리자 API
-• 노쇼 자동 취소
+```json
+{
+  "reservationId": "uuid",
+  "partnerId": "uuid",
+  "rating": 5,
+  "comment": "Fast and clear"
+}
+```
+
+### Validation
+
+- Reservation exists
+- Reservation status is `COMPLETED`
+- Reservation belongs to the partner
+- One review per reservation
+- Rating must be `1..5`
+
+### Response
+
+```json
+{
+  "success": true,
+  "reviewId": "uuid"
+}
+```
+
+---
+
+## Status Transitions
+
+### SELF_SERVICE
+
+`CONFIRMED -> CHECKED_IN -> IN_USE -> COMPLETED`
+
+### SHOP_SERVICE
+
+`CONFIRMED -> IN_USE -> COMPLETED`
+
+### Common
+
+`CONFIRMED -> CANCELLED`
+
+Invalid transitions return `400`.
+
+---
+
+## Excluded from MVP
+
+- External payment gateway integration detail
+- Automatic reassignment optimization
+- Multi-resource workshop scheduling beyond bay-based blocking
+- Separate helper mode
+- Full admin API surface
