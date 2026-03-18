@@ -18,14 +18,16 @@ interface CheckoutRequestBody {
 interface ReservationRow {
   id: string;
   status: ReservationStatus;
-  reservation_type?: ReservationType;
   start_time: string;
   end_time: string;
-  reserved_end_time?: string | null;
   total_price: number | string;
 }
 
 interface CheckoutRow {
+  id: string;
+}
+
+interface CheckinRow {
   id: string;
 }
 
@@ -164,7 +166,7 @@ export async function POST(req: Request) {
 
   const { data: reservation, error: reservationError } = await supabase
     .from("reservations")
-    .select("id, status, reservation_type, start_time, end_time, reserved_end_time, total_price")
+    .select("id, status, start_time, end_time, total_price")
     .eq("id", reservationId)
     .maybeSingle<ReservationRow>();
 
@@ -177,7 +179,18 @@ export async function POST(req: Request) {
     return errorResponse(404, "RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다.");
   }
 
-  const reservationType = reservation.reservation_type ?? "SELF_SERVICE";
+  const { data: existingCheckin, error: checkinLookupError } = await supabase
+    .from("checkins")
+    .select("id")
+    .eq("reservation_id", reservationId)
+    .maybeSingle<CheckinRow>();
+
+  if (checkinLookupError) {
+    console.error("CHECKIN LOOKUP ERROR:", checkinLookupError);
+    return errorResponse(500, "DB_ERROR", "체크인 정보 조회 중 오류가 발생했습니다.");
+  }
+
+  const reservationType: ReservationType = existingCheckin ? "SELF_SERVICE" : "SHOP_SERVICE";
   const validStatuses =
     reservationType === "SHOP_SERVICE"
       ? ["CONFIRMED", "IN_USE"]
@@ -203,7 +216,7 @@ export async function POST(req: Request) {
   }
 
   const startTime = parseIsoDate(reservation.start_time);
-  const endTime = parseIsoDate(reservation.reserved_end_time ?? reservation.end_time);
+  const endTime = parseIsoDate(reservation.end_time);
   const totalPrice = toFiniteNumber(reservation.total_price);
 
   if (!startTime || !endTime || totalPrice === null) {

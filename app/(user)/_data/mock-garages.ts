@@ -3,6 +3,7 @@ import type { ReservationType } from "@/src/domain/types";
 export interface GarageSummary {
   id: string;
   bayId: string;
+  bayIds: string[];
   name: string;
   distanceKm: number;
   bayCount: number;
@@ -32,13 +33,33 @@ export interface ShopPackage {
   priceByGarageId: Record<string, number>;
 }
 
+const gangnamPartnerId = "11111111-1111-1111-1111-111111111111";
+const seochoPartnerId = "a5b54d03-3625-424c-8374-90911e9850f5";
+
+const gangnamBayIds = [
+  "00000000-0000-0000-0000-000000000001",
+  "00000000-0000-0000-0000-000000000011",
+  "00000000-0000-0000-0000-000000000012",
+  "00000000-0000-0000-0000-000000000013",
+  "00000000-0000-0000-0000-000000000014",
+  "00000000-0000-0000-0000-000000000015",
+] as const;
+
+const seochoBayIds = [
+  "4707f91f-fe36-49d1-9687-6e67cc46784f",
+  "00000000-0000-0000-0000-000000000021",
+  "00000000-0000-0000-0000-000000000022",
+  "00000000-0000-0000-0000-000000000023",
+] as const;
+
 export const garageList: GarageSummary[] = [
   {
-    id: "gangnam-self",
-    bayId: "00000000-0000-0000-0000-000000000001",
+    id: gangnamPartnerId,
+    bayId: gangnamBayIds[0],
+    bayIds: [...gangnamBayIds],
     name: "강남 셀프정비소",
     distanceKm: 1.2,
-    bayCount: 6,
+    bayCount: gangnamBayIds.length,
     rating: 4.8,
     reviewCount: 128,
     hourlyPrice: 15000,
@@ -48,11 +69,12 @@ export const garageList: GarageSummary[] = [
     phone: "02-1234-5678",
   },
   {
-    id: "seocho-diy",
-    bayId: "00000000-0000-0000-0000-000000000002",
-    name: "서초 DIY 카센터",
+    id: seochoPartnerId,
+    bayId: seochoBayIds[0],
+    bayIds: [...seochoBayIds],
+    name: "서초 DIY 개러지",
     distanceKm: 2.5,
-    bayCount: 4,
+    bayCount: seochoBayIds.length,
     rating: 4.5,
     reviewCount: 87,
     hourlyPrice: 12000,
@@ -82,14 +104,14 @@ export const selfWorkOptions: SelfWorkOption[] = [
     id: "tire-rotation",
     title: "타이어 위치 교환",
     level: "Beginner",
-    description: "4개 타이어를 교차 배치해 마모를 균등화합니다.",
+    description: "4개 타이어를 교차 배치해 마모를 고르게 맞춥니다.",
     recommendedMinutes: 60,
   },
   {
     id: "air-filter",
     title: "에어필터 교체",
     level: "Beginner",
-    description: "흡기 필터 교체와 장착 상태를 확인합니다.",
+    description: "흡기 필터를 교체하고 하우징 상태를 확인합니다.",
     recommendedMinutes: 30,
   },
 ];
@@ -98,40 +120,53 @@ export const shopPackages: ShopPackage[] = [
   {
     id: "pkg-engine-oil",
     name: "엔진오일 패키지",
-    summary: "전문가가 오일 교환과 기본 점검을 수행합니다.",
+    summary: "전문가가 오일 교환과 기본 점검을 함께 진행합니다.",
     includes: ["엔진오일 교환", "오일 필터 확인", "누유 점검"],
     durationMinutes: 40,
     priceByGarageId: {
-      "gangnam-self": 49000,
-      "seocho-diy": 45000,
+      [gangnamPartnerId]: 49000,
+      [seochoPartnerId]: 45000,
     },
   },
   {
     id: "pkg-season-care",
     name: "시즌 케어 패키지",
-    summary: "와이퍼, 워셔액, 공기압 등 시즌 필수 항목을 점검합니다.",
+    summary: "와이퍼, 워셔액, 공기압까지 시즌 필수 항목을 점검합니다.",
     includes: ["와이퍼 점검", "워셔액 보충", "공기압 체크"],
     durationMinutes: 30,
     priceByGarageId: {
-      "gangnam-self": 29000,
-      "seocho-diy": 25000,
+      [gangnamPartnerId]: 29000,
+      [seochoPartnerId]: 25000,
     },
   },
   {
     id: "pkg-brake-check",
     name: "브레이크 케어 패키지",
-    summary: "브레이크 상태 확인과 소모품 진단을 진행합니다.",
+    summary: "브레이크 상태 확인과 마모도 진단을 진행합니다.",
     includes: ["패드 잔량 점검", "디스크 상태 점검", "기본 정비 리포트"],
     durationMinutes: 70,
     priceByGarageId: {
-      "gangnam-self": 69000,
-      "seocho-diy": 64000,
+      [gangnamPartnerId]: 69000,
+      [seochoPartnerId]: 64000,
     },
   },
 ];
 
 export function getGarageById(id: string): GarageSummary | null {
   return garageList.find((garage) => garage.id === id) ?? null;
+}
+
+export function getGarageBayIdByNumber(garageId: string, bayNumber: number): string | null {
+  const garage = getGarageById(garageId);
+  if (!garage) {
+    return null;
+  }
+
+  return garage.bayIds[bayNumber - 1] ?? null;
+}
+
+export function getGaragePrimaryBayId(garageId: string): string | null {
+  return getGarageById(garageId)?.bayId ?? null;
 }
 
 export function getSelfWorkById(id: string): SelfWorkOption | null {

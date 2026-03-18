@@ -26,7 +26,7 @@ type ParsedReservation =
   | {
       reservationType: "SHOP_SERVICE";
       partnerId: string;
-      bayId: string;
+      bayId: null;
       startTime: string;
       durationMinutes: number;
       endTime: string;
@@ -35,6 +35,11 @@ type ParsedReservation =
       packageId: string;
       blockedMinutes: number;
     };
+
+interface BayRow {
+  id: string;
+  partner_id: string;
+}
 
 function isIsoDateString(value: string): boolean {
   const date = new Date(value);
@@ -141,7 +146,7 @@ function parseBody(payload: unknown): ParsedReservation | null {
     return {
       reservationType: "SHOP_SERVICE",
       partnerId: garage.id,
-      bayId: garage.bayId,
+      bayId: null,
       startTime: record.startTime.trim(),
       durationMinutes: selectedPackage.durationMinutes,
       endTime: addMinutes(record.startTime, selectedPackage.durationMinutes),
@@ -153,6 +158,26 @@ function parseBody(payload: unknown): ParsedReservation | null {
   }
 
   return null;
+}
+
+async function insertReservation(params: {
+  bayId: string;
+  body: ParsedReservation;
+}) {
+  const { bayId, body } = params;
+
+  return supabase
+    .from("reservations")
+    .insert({
+      user_id: MOCK_USER_ID,
+      bay_id: bayId,
+      start_time: body.startTime,
+      end_time: body.endTime,
+      status: "CONFIRMED",
+      total_price: body.totalPrice,
+    })
+    .select("id, status")
+    .single<{ id: string; status: string }>();
 }
 
 export async function POST(req: Request) {
@@ -168,56 +193,94 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "예약 요청 형식이 올바르지 않습니다." }, { status: 400 });
     }
 
-    const { data: bay, error: bayError } = await supabase
-      .from("bays")
-      .select("id")
-      .eq("id", body.bayId)
-      .maybeSingle<{ id: string }>();
-
-    if (bayError) {
-      console.error("BAY LOOKUP ERROR:", bayError);
-      return NextResponse.json({ error: "베이 조회 중 오류가 발생했습니다." }, { status: 500 });
+    const garage = getGarageById(body.partnerId);
+    if (!garage) {
+      return NextResponse.json({ error: "정비소 정보를 찾을 수 없습니다." }, { status: 400 });
     }
 
-    if (!bay) {
-      return NextResponse.json({ error: "유효한 베이 정보를 찾을 수 없습니다." }, { status: 400 });
-    }
+    if (body.reservationType === "SELF_SERVICE") {
+      const { data: bay, error: bayError } = await supabase
+        .from("bays")
+        .select("id, partner_id")
+        .eq("id", body.bayId)
+        .maybeSingle<BayRow>();
 
-    const insertPayload = {
-      user_id: MOCK_USER_ID,
-      partner_id: body.partnerId,
-      bay_id: body.bayId,
-      reservation_type: body.reservationType,
-      package_id: body.packageId,
-      start_time: body.startTime,
-      end_time: body.endTime,
-      reserved_end_time: body.reservedEndTime,
-      status: "CONFIRMED",
-      total_price: body.totalPrice,
-    };
-
-    const { data, error } = await supabase
-      .from("reservations")
-      .insert(insertPayload)
-      .select("id, status")
-      .single<{ id: string; status: string }>();
-
-    if (error) {
-      console.error("SUPABASE ERROR:", error);
-
-      if (error.code === "23P01") {
-        return NextResponse.json({ error: "이미 예약된 시간입니다." }, { status: 400 });
+      if (bayError) {
+        console.error("BAY LOOKUP ERROR:", bayError);
+        return NextResponse.json({ error: "베이 조회 중 오류가 발생했습니다." }, { status: 500 });
       }
 
-      return NextResponse.json({ error: "예약 생성에 실패했습니다." }, { status: 400 });
+      if (!bay || bay.partner_id !== body.partnerId || !garage.bayIds.includes(bay.id)) {
+        return NextResponse.json({ error: "선택한 정비소와 베이 정보가 일치하지 않습니다." }, { status: 400 });
+      }
+
+      const { data, error } = await insertReservation({
+        bayId: body.bayId,
+        body,
+      });
+
+      if (error) {
+        console.error("SUPABASE ERROR:", error);
+
+        if (error.code === "23P01") {
+          return NextResponse.json({ error: "이미 예약된 시간입니다." }, { status: 400 });
+        }
+
+        return NextResponse.json({ error: "예약 생성에 실패했습니다." }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        ...data,
+        reservationType: body.reservationType,
+        blockedMinutes: body.blockedMinutes,
+        totalPrice: body.totalPrice,
+        bayId: body.bayId,
+      });
     }
 
-    return NextResponse.json({
-      ...data,
-      reservationType: body.reservationType,
-      blockedMinutes: body.blockedMinutes,
-      totalPrice: body.totalPrice,
-    });
+    const { data: partnerBays, error: baysError } = await supabase
+      .from("bays")
+      .select("id, partner_id")
+      .eq("partner_id", body.partnerId)
+      .eq("is_active", true)
+      .returns<BayRow[]>();
+
+    if (baysError) {
+      console.error("PARTNER BAYS LOOKUP ERROR:", baysError);
+      return NextResponse.json({ error: "업장 베이 조회 중 오류가 발생했습니다." }, { status: 500 });
+    }
+
+    const candidateBayIds = (partnerBays ?? [])
+      .map((bay) => bay.id)
+      .filter((bayId) => garage.bayIds.includes(bayId));
+
+    if (candidateBayIds.length === 0) {
+      return NextResponse.json({ error: "예약 가능한 베이가 없습니다." }, { status: 400 });
+    }
+
+    for (const candidateBayId of candidateBayIds) {
+      const { data, error } = await insertReservation({
+        bayId: candidateBayId,
+        body,
+      });
+
+      if (!error) {
+        return NextResponse.json({
+          ...data,
+          reservationType: body.reservationType,
+          blockedMinutes: body.blockedMinutes,
+          totalPrice: body.totalPrice,
+          bayId: candidateBayId,
+        });
+      }
+
+      if (error.code !== "23P01") {
+        console.error("SUPABASE ERROR:", error);
+        return NextResponse.json({ error: "예약 생성에 실패했습니다." }, { status: 400 });
+      }
+    }
+
+    return NextResponse.json({ error: "선택한 시간에 예약 가능한 베이가 없습니다." }, { status: 400 });
   } catch (error: unknown) {
     console.error("SERVER ERROR:", error);
     return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });

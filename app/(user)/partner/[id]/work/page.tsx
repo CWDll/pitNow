@@ -6,6 +6,7 @@ import { Suspense, useMemo, useState } from "react";
 
 import {
   formatMinutesLabel,
+  getGarageBayIdByNumber,
   getGarageById,
   getGarageShopPackages,
   getReservationTypeLabel,
@@ -44,7 +45,7 @@ const timeBoundaries = [
 
 const blockCount = timeBoundaries.length - 1;
 const selfServiceTitle = "셀프 정비";
-const selfRequiredBlocks = 2;
+const minimumSelfBlocks = 2;
 
 const mockReservedRangesByBay: Record<number, Array<{ start: string; end: string }>> = {
   1: [
@@ -91,8 +92,8 @@ function boundaryIndex(time: string): number {
   return timeBoundaries.findIndex((value) => value === time);
 }
 
-function isReservedBlock(blockIdx: number, bay: number): boolean {
-  const ranges = mockReservedRangesByBay[bay] ?? [];
+function isReservedBlock(blockIdx: number, bayNumber: number): boolean {
+  const ranges = mockReservedRangesByBay[bayNumber] ?? [];
 
   return ranges.some((range) => {
     const startIdx = boundaryIndex(range.start);
@@ -106,13 +107,13 @@ function toIsoByDateAndTime(date: Date, time: string): string {
   return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0)).toISOString();
 }
 
-function canReserveRange(startIdx: number, endExclusive: number, bay: number): boolean {
+function canReserveRange(startIdx: number, endExclusive: number, bayNumber: number): boolean {
   if (startIdx < 0 || endExclusive > blockCount || startIdx >= endExclusive) {
     return false;
   }
 
   for (let idx = startIdx; idx < endExclusive; idx += 1) {
-    if (isReservedBlock(idx, bay)) {
+    if (isReservedBlock(idx, bayNumber)) {
       return false;
     }
   }
@@ -132,9 +133,9 @@ function PartnerWorkPageContent() {
   const [selectedCarId, setSelectedCarId] = useState<string>(() =>
     getInitialActiveCarId(loadMockCarsFromStorage() ?? initialMockCars),
   );
-  const [isCarPickerOpen, setIsCarPickerOpen] = useState<boolean>(false);
+  const [isCarPickerOpen, setIsCarPickerOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(stripTime(new Date()));
-  const [selectedBay, setSelectedBay] = useState<number>(3);
+  const [selectedBayNumber, setSelectedBayNumber] = useState(1);
   const [selectedStartIdx, setSelectedStartIdx] = useState<number | null>(null);
   const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
 
@@ -153,16 +154,22 @@ function PartnerWorkPageContent() {
     () => Array.from({ length: 7 }, (_, index) => addDays(selectedDate, index - 3)),
     [selectedDate],
   );
+  const selectedBayId = garage ? getGarageBayIdByNumber(garage.id, selectedBayNumber) : null;
   const startTime = selectedStartIdx !== null ? timeBoundaries[selectedStartIdx] : null;
   const endTime = selectedEndIdx !== null ? timeBoundaries[selectedEndIdx] : null;
   const selectedBlocks =
     selectedStartIdx !== null && selectedEndIdx !== null ? selectedEndIdx - selectedStartIdx : 0;
   const selfTotalPrice =
     garage?.hourlyPrice !== undefined
-      ? garage.hourlyPrice + Math.max(0, selectedBlocks - 2) * Math.floor(garage.hourlyPrice / 2)
+      ? garage.hourlyPrice + Math.max(0, selectedBlocks - minimumSelfBlocks) * Math.floor(garage.hourlyPrice / 2)
       : 0;
   const canProceedSelf =
-    !!garage && !!selectedCar && selectedStartIdx !== null && selectedEndIdx !== null && selectedBlocks >= selfRequiredBlocks;
+    !!garage &&
+    !!selectedCar &&
+    !!selectedBayId &&
+    selectedStartIdx !== null &&
+    selectedEndIdx !== null &&
+    selectedBlocks >= minimumSelfBlocks;
   const canProceedShop = !!garage && !!selectedCar && !!selectedPackage;
 
   if (!garage) {
@@ -176,10 +183,10 @@ function PartnerWorkPageContent() {
     );
   }
 
-  function selectRange(idx: number, bay: number) {
+  function selectRange(idx: number, bayNumber: number) {
     if (selectedStartIdx === null || selectedEndIdx === null) {
-      const defaultEndExclusive = idx + selfRequiredBlocks;
-      if (!canReserveRange(idx, defaultEndExclusive, bay)) {
+      const defaultEndExclusive = idx + minimumSelfBlocks;
+      if (!canReserveRange(idx, defaultEndExclusive, bayNumber)) {
         return;
       }
 
@@ -188,18 +195,18 @@ function PartnerWorkPageContent() {
       return;
     }
 
-    if (idx === selectedEndIdx && canReserveRange(selectedStartIdx, selectedEndIdx + 1, bay)) {
+    if (idx === selectedEndIdx && canReserveRange(selectedStartIdx, selectedEndIdx + 1, bayNumber)) {
       setSelectedEndIdx(selectedEndIdx + 1);
       return;
     }
 
-    if (idx === selectedStartIdx - 1 && canReserveRange(selectedStartIdx - 1, selectedEndIdx, bay)) {
+    if (idx === selectedStartIdx - 1 && canReserveRange(selectedStartIdx - 1, selectedEndIdx, bayNumber)) {
       setSelectedStartIdx(selectedStartIdx - 1);
       return;
     }
 
-    const defaultEndExclusive = idx + selfRequiredBlocks;
-    if (!canReserveRange(idx, defaultEndExclusive, bay)) {
+    const defaultEndExclusive = idx + minimumSelfBlocks;
+    if (!canReserveRange(idx, defaultEndExclusive, bayNumber)) {
       return;
     }
 
@@ -213,7 +220,7 @@ function PartnerWorkPageContent() {
     }
 
     if (reservationType === "SELF_SERVICE") {
-      if (!canProceedSelf || !startTime || !endTime) {
+      if (!canProceedSelf || !startTime || !endTime || !selectedBayId) {
         return;
       }
 
@@ -229,8 +236,8 @@ function PartnerWorkPageContent() {
         endTime: toIsoByDateAndTime(selectedDate, endTime),
         totalPrice: String(selfTotalPrice),
         blockedMinutes: String(selectedBlocks * 30),
-        bayId: garage.bayId,
-        bayLabel: `${selectedBay}번 베이`,
+        bayId: selectedBayId,
+        bayLabel: `${selectedBayNumber}번 베이`,
         workTitle: selfServiceTitle,
       });
 
@@ -307,7 +314,7 @@ function PartnerWorkPageContent() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Self Service</p>
             <p className="mt-2 text-2xl font-semibold text-zinc-900">{selfServiceTitle}</p>
             <p className="mt-2 text-sm text-zinc-600">
-              기존처럼 시간과 베이를 바로 선택합니다. 기본 1시간을 예약하고, 필요 시 30분 단위로 연장할 수 있습니다.
+              기존처럼 시간과 베이를 바로 선택합니다. 기본 1시간을 예약하고, 이어 붙은 시간대를 눌러 30분씩 연장할 수 있습니다.
             </p>
           </div>
 
@@ -335,17 +342,17 @@ function PartnerWorkPageContent() {
             <span className="text-sm text-zinc-500">베이마다 예약 가능한 시간이 다릅니다.</span>
           </div>
 
-          <div className="grid grid-cols-6 gap-2">
+          <div className={`grid gap-2 ${garage.bayCount > 4 ? "grid-cols-6" : "grid-cols-4"}`}>
             {Array.from({ length: garage.bayCount }).map((_, index) => {
               const bayNumber = index + 1;
-              const active = bayNumber === selectedBay;
+              const active = bayNumber === selectedBayNumber;
 
               return (
                 <button
                   key={bayNumber}
                   type="button"
                   onClick={() => {
-                    setSelectedBay(bayNumber);
+                    setSelectedBayNumber(bayNumber);
                     setSelectedStartIdx(null);
                     setSelectedEndIdx(null);
                   }}
@@ -365,12 +372,12 @@ function PartnerWorkPageContent() {
               <span className="text-sm text-zinc-500">30분 단위</span>
             </div>
             <p className="mb-3 text-sm text-zinc-500">
-              처음 선택 시 기본 1시간이 예약되고, 바로 붙은 시간대를 누르면 30분씩 연장됩니다.
+              처음 선택 시 기본 1시간이 예약되고, 선택된 구간 양옆의 시간대를 누르면 30분씩 연장됩니다.
             </p>
 
             <div className="grid grid-cols-4 gap-2">
               {Array.from({ length: blockCount }).map((_, idx) => {
-                const reserved = isReservedBlock(idx, selectedBay);
+                const reserved = isReservedBlock(idx, selectedBayNumber);
                 const selected =
                   selectedStartIdx !== null &&
                   selectedEndIdx !== null &&
@@ -382,7 +389,7 @@ function PartnerWorkPageContent() {
                     key={`block-${idx}`}
                     type="button"
                     disabled={reserved}
-                    onClick={() => selectRange(idx, selectedBay)}
+                    onClick={() => selectRange(idx, selectedBayNumber)}
                     className={`rounded-xl px-2 py-3 text-xs font-medium ${
                       reserved
                         ? "bg-zinc-300 text-zinc-500"
@@ -419,7 +426,7 @@ function PartnerWorkPageContent() {
               </p>
               <p className="flex justify-between">
                 <span>베이</span>
-                <span>{selectedBay}번 베이</span>
+                <span>{selectedBayNumber}번 베이</span>
               </p>
               <p className="flex justify-between">
                 <span>블록 시간</span>

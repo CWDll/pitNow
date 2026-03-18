@@ -29,33 +29,25 @@ function renderStars(rating: number): string {
   return "★".repeat(safe) + "☆".repeat(5 - safe);
 }
 
-async function getReviewsByBayId(bayId: string) {
+async function getRecentReviewsByPartnerId(partnerId: string): Promise<ReviewRow[]> {
   if (!hasSupabaseEnv) {
-    return [] as ReviewRow[];
+    return [];
   }
 
-  const { data: reservations } = await supabase
-    .from("reservations")
-    .select("id")
-    .eq("bay_id", bayId)
-    .limit(200)
-    .returns<Array<{ id: string }>>();
-
-  const reservationIds = (reservations ?? []).map((item) => item.id);
-
-  if (reservationIds.length === 0) {
-    return [] as ReviewRow[];
-  }
-
-  const { data: reviewRows } = await supabase
+  const { data, error } = await supabase
     .from("reviews")
     .select("id, rating, comment, created_at")
-    .in("reservation_id", reservationIds)
+    .eq("partner_id", partnerId)
     .order("created_at", { ascending: false })
     .limit(3)
     .returns<ReviewRow[]>();
 
-  return reviewRows ?? [];
+  if (error) {
+    console.error("REVIEW LOOKUP ERROR:", error);
+    return [];
+  }
+
+  return data ?? [];
 }
 
 export default async function PartnerDetailPage({ params }: PartnerDetailPageProps) {
@@ -66,7 +58,7 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
     notFound();
   }
 
-  const reviews = await getReviewsByBayId(garage.bayId);
+  const reviews = await getRecentReviewsByPartnerId(garage.id);
   const packages = getGarageShopPackages(garage.id);
   const averageRating =
     reviews.length > 0
@@ -80,7 +72,7 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
       <div className="space-y-2">
         <h1 className="text-4xl font-semibold text-zinc-900">{garage.name}</h1>
         <p className="text-lg text-zinc-700">
-          {averageRating.toFixed(1)} · 리뷰 {garage.reviewCount}개
+          {averageRating.toFixed(1)} · 리뷰 {reviews.length > 0 ? reviews.length : garage.reviewCount}개
         </p>
         <p className="text-lg text-zinc-700">{garage.address}</p>
         <p className="text-lg text-zinc-700">운영시간 {garage.hours}</p>
@@ -92,7 +84,7 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Self Service</p>
-              <h2 className="mt-2 text-2xl font-semibold text-zinc-900">시간대 예약 후 직접 정비</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-zinc-900">시간 예약 후 직접 정비</h2>
             </div>
             <span className="rounded-full bg-white px-3 py-1 text-sm font-medium text-blue-700">
               {formatPrice(garage.hourlyPrice)}/시간
