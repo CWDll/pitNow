@@ -35,6 +35,8 @@ export interface ShopPackage {
 
 const gangnamPartnerId = "11111111-1111-1111-1111-111111111111";
 const seochoPartnerId = "a5b54d03-3625-424c-8374-90911e9850f5";
+const jamsilPartnerId = "22222222-2222-2222-2222-222222222222";
+const mapoPartnerId = "33333333-3333-3333-3333-333333333333";
 
 const gangnamBayIds = [
   "00000000-0000-0000-0000-000000000001",
@@ -50,6 +52,20 @@ const seochoBayIds = [
   "00000000-0000-0000-0000-000000000021",
   "00000000-0000-0000-0000-000000000022",
   "00000000-0000-0000-0000-000000000023",
+] as const;
+
+const jamsilBayIds = [
+  "00000000-0000-0000-0000-000000000031",
+  "00000000-0000-0000-0000-000000000032",
+  "00000000-0000-0000-0000-000000000033",
+  "00000000-0000-0000-0000-000000000034",
+  "00000000-0000-0000-0000-000000000035",
+] as const;
+
+const mapoBayIds = [
+  "00000000-0000-0000-0000-000000000041",
+  "00000000-0000-0000-0000-000000000042",
+  "00000000-0000-0000-0000-000000000043",
 ] as const;
 
 export const garageList: GarageSummary[] = [
@@ -82,6 +98,36 @@ export const garageList: GarageSummary[] = [
     address: "서울 서초구 반포대로 42",
     hours: "10:00 - 20:00",
     phone: "02-9876-5432",
+  },
+  {
+    id: jamsilPartnerId,
+    bayId: jamsilBayIds[0],
+    bayIds: [...jamsilBayIds],
+    name: "잠실 모빌리티 팩토리",
+    distanceKm: 4.1,
+    bayCount: jamsilBayIds.length,
+    rating: 4.7,
+    reviewCount: 64,
+    hourlyPrice: 17000,
+    nextSlot: "오늘 17:00",
+    address: "서울 송파구 올림픽로 221",
+    hours: "09:00 - 22:00",
+    phone: "02-5555-1200",
+  },
+  {
+    id: mapoPartnerId,
+    bayId: mapoBayIds[0],
+    bayIds: [...mapoBayIds],
+    name: "마포 퀵핏 개러지",
+    distanceKm: 5.3,
+    bayCount: mapoBayIds.length,
+    rating: 4.4,
+    reviewCount: 41,
+    hourlyPrice: 13000,
+    nextSlot: "오늘 18:30",
+    address: "서울 마포구 월드컵북로 58",
+    hours: "10:00 - 21:00",
+    phone: "02-3141-8899",
   },
 ];
 
@@ -126,6 +172,8 @@ export const shopPackages: ShopPackage[] = [
     priceByGarageId: {
       [gangnamPartnerId]: 49000,
       [seochoPartnerId]: 45000,
+      [jamsilPartnerId]: 53000,
+      [mapoPartnerId]: 47000,
     },
   },
   {
@@ -137,6 +185,8 @@ export const shopPackages: ShopPackage[] = [
     priceByGarageId: {
       [gangnamPartnerId]: 29000,
       [seochoPartnerId]: 25000,
+      [jamsilPartnerId]: 32000,
+      [mapoPartnerId]: 27000,
     },
   },
   {
@@ -148,6 +198,8 @@ export const shopPackages: ShopPackage[] = [
     priceByGarageId: {
       [gangnamPartnerId]: 69000,
       [seochoPartnerId]: 64000,
+      [jamsilPartnerId]: 72000,
+      [mapoPartnerId]: 66000,
     },
   },
 ];

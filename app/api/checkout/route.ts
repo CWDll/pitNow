@@ -18,16 +18,14 @@ interface CheckoutRequestBody {
 interface ReservationRow {
   id: string;
   status: ReservationStatus;
+  reservation_type: ReservationType;
   start_time: string;
   end_time: string;
+  reserved_end_time: string;
   total_price: number | string;
 }
 
 interface CheckoutRow {
-  id: string;
-}
-
-interface CheckinRow {
   id: string;
 }
 
@@ -96,12 +94,12 @@ function toFiniteNumber(value: number | string): number | null {
 function calculateExtraFee(params: {
   now: Date;
   startTime: Date;
-  endTime: Date;
+  reservedEndTime: Date;
   totalPrice: number;
 }): number | null {
-  const { now, startTime, endTime, totalPrice } = params;
+  const { now, startTime, reservedEndTime, totalPrice } = params;
 
-  const totalDurationMs = endTime.getTime() - startTime.getTime();
+  const totalDurationMs = reservedEndTime.getTime() - startTime.getTime();
 
   if (totalDurationMs <= 0) {
     return null;
@@ -114,7 +112,7 @@ function calculateExtraFee(params: {
     return null;
   }
 
-  const diffMs = now.getTime() - endTime.getTime();
+  const diffMs = now.getTime() - reservedEndTime.getTime();
 
   if (diffMs <= 0) {
     return 0;
@@ -166,7 +164,7 @@ export async function POST(req: Request) {
 
   const { data: reservation, error: reservationError } = await supabase
     .from("reservations")
-    .select("id, status, start_time, end_time, total_price")
+    .select("id, status, reservation_type, start_time, end_time, reserved_end_time, total_price")
     .eq("id", reservationId)
     .maybeSingle<ReservationRow>();
 
@@ -179,20 +177,8 @@ export async function POST(req: Request) {
     return errorResponse(404, "RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다.");
   }
 
-  const { data: existingCheckin, error: checkinLookupError } = await supabase
-    .from("checkins")
-    .select("id")
-    .eq("reservation_id", reservationId)
-    .maybeSingle<CheckinRow>();
-
-  if (checkinLookupError) {
-    console.error("CHECKIN LOOKUP ERROR:", checkinLookupError);
-    return errorResponse(500, "DB_ERROR", "체크인 정보 조회 중 오류가 발생했습니다.");
-  }
-
-  const reservationType: ReservationType = existingCheckin ? "SELF_SERVICE" : "SHOP_SERVICE";
   const validStatuses =
-    reservationType === "SHOP_SERVICE"
+    reservation.reservation_type === "SHOP_SERVICE"
       ? ["CONFIRMED", "IN_USE"]
       : ["CHECKED_IN", "IN_USE"];
 
@@ -217,20 +203,21 @@ export async function POST(req: Request) {
 
   const startTime = parseIsoDate(reservation.start_time);
   const endTime = parseIsoDate(reservation.end_time);
+  const reservedEndTime = parseIsoDate(reservation.reserved_end_time);
   const totalPrice = toFiniteNumber(reservation.total_price);
 
-  if (!startTime || !endTime || totalPrice === null) {
+  if (!startTime || !endTime || !reservedEndTime || totalPrice === null) {
     return errorResponse(500, "INVALID_RESERVATION_DATA", "예약 데이터가 올바르지 않습니다.");
   }
 
   const now = new Date();
   const extraFee =
-    reservationType === "SHOP_SERVICE"
+    reservation.reservation_type === "SHOP_SERVICE"
       ? 0
       : calculateExtraFee({
           now,
           startTime,
-          endTime,
+          reservedEndTime,
           totalPrice,
         });
 

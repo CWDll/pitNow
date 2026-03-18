@@ -170,14 +170,19 @@ async function insertReservation(params: {
     .from("reservations")
     .insert({
       user_id: MOCK_USER_ID,
+      partner_id: body.partnerId,
       bay_id: bayId,
+      reservation_type: body.reservationType,
+      package_id: body.packageId,
       start_time: body.startTime,
       end_time: body.endTime,
+      reserved_end_time: body.reservedEndTime,
+      duration_minutes: body.durationMinutes,
       status: "CONFIRMED",
       total_price: body.totalPrice,
     })
-    .select("id, status")
-    .single<{ id: string; status: string }>();
+    .select("id, status, bay_id")
+    .single<{ id: string; status: string; bay_id: string }>();
 }
 
 export async function POST(req: Request) {
@@ -230,11 +235,12 @@ export async function POST(req: Request) {
       }
 
       return NextResponse.json({
-        ...data,
+        id: data.id,
+        status: data.status,
         reservationType: body.reservationType,
         blockedMinutes: body.blockedMinutes,
         totalPrice: body.totalPrice,
-        bayId: body.bayId,
+        bayId: data.bay_id,
       });
     }
 
@@ -266,11 +272,12 @@ export async function POST(req: Request) {
 
       if (!error) {
         return NextResponse.json({
-          ...data,
+          id: data.id,
+          status: data.status,
           reservationType: body.reservationType,
           blockedMinutes: body.blockedMinutes,
           totalPrice: body.totalPrice,
-          bayId: candidateBayId,
+          bayId: data.bay_id,
         });
       }
 
