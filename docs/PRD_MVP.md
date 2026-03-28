@@ -15,7 +15,7 @@ MVP scope:
 7. Checkout with auto settlement
 8. Review
 
-Helper mode excluded.
+Package mode 유지, Self 정비 플로우만 변경.
 
 ---
 
@@ -37,10 +37,13 @@ Helper mode excluded.
 
 ### Reservation
 
-- Select date
-- Select 30min slot
+- Select legal self-maintenance tasks only
+- Confirm declaration: "Only selected tasks will be performed"
+- Capture consent via checkbox/signature
+- Select start time + work duration (1 hour unit)
+- System blocks bay for work duration + additional 1 hour buffer
 - Select bay
-- Price auto calculation
+- Price auto calculation (time + optional helper verification)
 - Payment required before confirmation
 
 ### Check-in
@@ -55,6 +58,7 @@ Helper mode excluded.
 - Extend time
 - SOS button (simple contact)
 - 15-minute warning
+- Extension unit is 1 hour
 
 ### Checkout
 
@@ -63,6 +67,7 @@ Helper mode excluded.
 - Waste check
 - Checkout photo
 - Auto extra fee calculation
+- Optional helper verification request (default +5,000 + per-task additional fee)
 
 ---
 
@@ -71,3 +76,6 @@ Helper mode excluded.
 - Reservation conflict must be DB enforced.
 - All photo URLs must be stored.
 - All status changes logged.
+- Self-maintenance task selection must be restricted to legal allowlist.
+- User declaration/consent evidence must be stored.
+- Buffer blocking (work end +1h) must be reflected in conflict checks.

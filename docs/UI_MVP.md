@@ -58,9 +58,12 @@ User and Admin must not share layout wrappers.
 ### Reservation
 
 - Date picker
-- 30min slots
+- Start time picker + duration selector (1 hour unit)
 - Bay selection required
+- Legal self-maintenance task checklist
+- Required consent UI (checkbox or signature)
 - Show total price
+- Show helper verification surcharge rule
 
 ### Check-in
 
@@ -72,10 +75,16 @@ User and Admin must not share layout wrappers.
 - Timer visible
 - Extend button
 - Warning at -15min
+- Extend in 1-hour unit only
+
+### Checkout
+
+- Optional checkbox: helper verification request
+- Price preview: 5,000 base + per-selected-task additional fee
 
 ---
 
 ## Differences from original PRD
 
-- [ ] Any change?
-- [ ] Slot UX different?
+- [x] Reservation slot model changed: 30min slot -> 1h duration unit
+- [x] Added legal task selection + required consent UI for self-maintenance

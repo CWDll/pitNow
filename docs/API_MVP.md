@@ -19,27 +19,44 @@
 입력:
 {
 bayId: string,
+taskIds: string[],
+agreeOnlySelectedTasks: boolean,
+consentMethod: 'CHECKBOX' | 'SIGNATURE',
+signatureImageUrl?: string,
+helperVerifyRequested: boolean,
 startTime: string (ISO),
 endTime: string (ISO)
 }
 
 로직:
 • startTime < endTime 검증
-• 최소 1시간 이상 검증
+• 작업 시간은 1시간 이상 + 1시간 단위 검증
+• taskIds는 self_maintenance_tasks.is_legal=true 만 허용
+• taskIds 최소 1개 필수
+• agreeOnlySelectedTasks=true 필수
+• consentMethod 검증 (SIGNATURE면 signatureImageUrl 필수)
+• blockedUntil = endTime + 1시간
+• helperVerifyRequested=true 이면 helperVerifyFee 계산
+	(기본 5,000 + 선택 작업별 단가 합산)
 • user_id는 MOCK_USER_ID 사용
 • status = CONFIRMED
-• total_price 계산 후 저장
+• total_price 계산 후 저장 (시간요금 + helperVerifyFee)
+• reservation_tasks / self_task_agreements 저장
 • 겹침은 DB에서 자동 차단
 
 에러:
 • 시간 겹침
 • 잘못된 시간 범위
 • bay 없음
+• 법적 허용 외 작업 선택
+• 서약/동의 누락
 
 성공 응답:
 {
 id: reservation_id,
-status: “CONFIRMED”
+status: “CONFIRMED”,
+blockedUntil: string,
+helperVerifyFee: number
 }
 
 ⸻
@@ -86,15 +103,18 @@ status: “CHECKED_IN”
 
 입력:
 {
-reservationId: string
+reservationId: string,
+helperVerifyRequested?: boolean
 }
 
 로직:
 • reservation 조회
 • 현재 서버시간과 end_time 비교
 • 초과 시간 계산
-• 30분 단위 올림
+• 1시간 단위 올림
 • extra_fee 계산
+• helperVerifyRequested=true 이고 예약 시 미선택이면
+	helperVerifyFee 재계산 후 정산 반영
 • checkouts insert
 • reservations.status → COMPLETED
 
@@ -102,12 +122,14 @@ reservationId: string
 
 diff = now - end_time
 diff <= 0 → 0
-else → ceil(diff / 30분) \* (시간요금 / 2)
+else → ceil(diff / 1시간) * (시간요금)
 
 성공 응답:
 {
 status: “COMPLETED”,
-extraFee: number
+extraFee: number,
+helperVerifyFee: number,
+totalSettlement: number
 }
 
 ⸻
@@ -160,11 +182,16 @@ CONFIRMED → CANCELLED
 
 중요 원칙 1. 예약 겹침은 반드시 DB 레벨. 2. 체크인은 4장 사진 필수. 3. 타이머는 서버 시간 기준. 4. 초과요금은 서버에서 계산. 5. 프론트 상태만 믿지 않는다.
 
+추가 원칙
+6. Self 정비는 법적 허용 작업만 선택 가능.
+7. 선택 작업 외 작업 금지 동의(체크박스/서명) 증적을 저장.
+8. 베이 점유 충돌은 start_time ~ blocked_until(end+1h) 기준으로 판단.
+
 ⸻
 
 MVP 제외
 • 결제 API
 • 환불
-• 헬퍼 모드
+• 헬퍼 대행 작업 모드
 • 관리자 API
 • 노쇼 자동 취소
