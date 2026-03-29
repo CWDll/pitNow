@@ -255,8 +255,8 @@ export async function POST(req: Request) {
 
     const reservationTypeCandidates =
       bookingMode === "SELF"
-        ? ["SELF", "SELF_MAINTENANCE", "SELF_SERVICE", "TIME"]
-        : ["PACKAGE", "PACKAGE_SERVICE", "PKG"];
+        ? ["SELF_SERVICE", "SELF", "SELF_MAINTENANCE", "TIME"]
+        : ["SHOP_SERVICE", "PACKAGE", "PACKAGE_SERVICE", "PKG"];
 
     for (const reservationTypeCandidate of reservationTypeCandidates) {
       const insertPayload: Record<string, unknown> = {

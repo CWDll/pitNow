@@ -72,13 +72,20 @@ function toIsoByDateAndTime(date: Date, time: string): string {
 
 function parseDurationHours(durationLabel: string): number {
   const matched = durationLabel.match(/([0-9]+(?:\.[0-9]+)?)/);
+
   if (!matched) {
     return 1;
   }
 
   const value = Number.parseFloat(matched[1]);
+
   if (!Number.isFinite(value) || value <= 0) {
     return 1;
+  }
+
+  if (durationLabel.includes("분")) {
+    const minutes = Math.ceil(value);
+    return Math.max(1, Math.ceil(minutes / 60));
   }
 
   return Math.max(1, Math.ceil(value));
