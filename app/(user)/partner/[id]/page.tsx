@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 import {
   formatMinutesLabel,
   getGarageById,
-  getGarageShopPackages,
   selfWorkOptions,
 } from "@/app/(user)/_data/mock-garages";
+import { getPartnerShopPackages } from "@/src/lib/partner-packages";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 interface PartnerDetailPageProps {
@@ -83,7 +83,7 @@ export default async function PartnerDetailPage({
   }
 
   const reviews = await getRecentReviewsByPartnerId(garage.id);
-  const packages = getGarageShopPackages(garage.id);
+  const { packages } = await getPartnerShopPackages(garage.id);
   const averageRating =
     reviews.length > 0
       ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length

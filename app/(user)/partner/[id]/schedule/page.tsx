@@ -7,7 +7,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import {
   getGarageById,
   selfMaintenanceTaskOptions,
-  workOptions,
 } from "../../../_data/mock-garages";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
@@ -52,10 +51,6 @@ function addDays(date: Date, days: number): Date {
   return stripTime(next);
 }
 
-function boundaryIndex(time: string): number {
-  return timeBoundaries.findIndex((value) => value === time);
-}
-
 function toIsoByDateAndTime(date: Date, time: string): string {
   const [hour, minute] = time.split(":").map((value) => Number(value));
   return new Date(
@@ -71,24 +66,18 @@ function toIsoByDateAndTime(date: Date, time: string): string {
   ).toISOString();
 }
 
-function parseDurationMinutes(durationLabel: string): number {
-  const matched = durationLabel.match(/([0-9]+(?:\.[0-9]+)?)/);
-
-  if (!matched) {
-    return 60;
+function parsePositiveNumber(value: string | null, fallback: number): number {
+  if (!value) {
+    return fallback;
   }
 
-  const value = Number.parseFloat(matched[1]);
+  const parsed = Number(value);
 
-  if (!Number.isFinite(value) || value <= 0) {
-    return 60;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
   }
 
-  if (durationLabel.includes("분")) {
-    return Math.max(1, Math.ceil(value));
-  }
-
-  return Math.max(60, Math.ceil(value * 60));
+  return parsed;
 }
 
 function formatMonthLabel(date: Date): string {
@@ -145,6 +134,8 @@ function PartnerSchedulePageContent() {
   const taskLabels = searchParams.get("taskLabels") ?? "선택 작업 없음";
   const packageId = searchParams.get("packageId") ?? "";
   const packageTitle = searchParams.get("packageTitle") ?? "패키지";
+  const packageMinutes = parsePositiveNumber(searchParams.get("packageMinutes"), 60);
+  const packagePrice = parsePositiveNumber(searchParams.get("packagePrice"), 0);
   const carId = searchParams.get("carId") ?? "";
   const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7";
 
@@ -286,19 +277,14 @@ function PartnerSchedulePageContent() {
     ? timeBoundaries[selectedEndIdx + 1]
     : null;
 
-  const totalPrice = selectedBlocks * garage.hourlyPrice;
+  const totalPrice =
+    bookingMode === "PACKAGE"
+      ? packagePrice
+      : selectedBlocks * garage.hourlyPrice;
 
-  const selectedPackage =
-    workOptions.find((option) => option.id === packageId) ?? null;
   const packageDurationBlocks =
     bookingMode === "PACKAGE"
-      ? Math.max(
-          1,
-          Math.ceil(
-            parseDurationMinutes(selectedPackage?.durationLabel ?? "1시간") /
-              60,
-          ),
-        )
+      ? Math.max(1, Math.ceil(packageMinutes / 60))
       : 0;
 
   const selectedSelfTasks = selfMaintenanceTaskOptions.filter((option) =>

@@ -8,15 +8,15 @@ import {
   formatMinutesLabel,
   getGarageById,
   getGarageBayIdByNumber,
-  getGarageShopPackages,
   selfMaintenanceTaskOptions,
-  workOptions,
+  getGarageShopPackages,
 } from "../../../_data/mock-garages";
 import {
   getInitialActiveCarId,
   initialMockCars,
   loadMockCarsFromStorage,
 } from "@/app/(user)/_data/mock-cars";
+import type { PartnerShopPackage } from "@/src/domain/shop-package";
 import type { ReservationType } from "@/src/domain/types";
 
 function levelClass(level: "초급" | "중급"): string {
@@ -53,6 +53,11 @@ const timeBoundaries = [
 const blockCount = timeBoundaries.length - 1;
 const selfServiceTitle = "셀프 정비";
 const minimumSelfBlocks = 2;
+
+interface PartnerPackagesResponse {
+  success: boolean;
+  packages?: PartnerShopPackage[];
+}
 
 const mockReservedRangesByBay: Record<
   number,
@@ -171,9 +176,17 @@ function PartnerWorkPageContent() {
   const [selectedBayNumber, setSelectedBayNumber] = useState(1);
   const [selectedStartIdx, setSelectedStartIdx] = useState<number | null>(null);
   const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
+  const [packages, setPackages] = useState<PartnerShopPackage[]>(() =>
+    getGarageShopPackages(params.id).map((item) => ({
+      id: item.id,
+      name: item.name,
+      summary: item.summary,
+      durationMinutes: item.durationMinutes,
+      price: item.price,
+    })),
+  );
 
   const garage = useMemo(() => getGarageById(params.id), [params.id]);
-  const packages = useMemo(() => getGarageShopPackages(params.id), [params.id]);
   const selectedCar = useMemo(
     () => cars.find((car) => car.id === selectedCarId) ?? cars[0],
     [cars, selectedCarId],
@@ -194,6 +207,46 @@ function PartnerWorkPageContent() {
       setSelectedPackageId(packages[0].id);
     }
   }, [packages, selectedPackageId]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadPackages() {
+      if (!garage?.id) {
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/partner-packages?partnerId=${encodeURIComponent(garage.id)}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok || isCancelled) {
+          return;
+        }
+
+        const payload = (await response.json()) as PartnerPackagesResponse;
+
+        if (!payload.success || !Array.isArray(payload.packages) || isCancelled) {
+          return;
+        }
+
+        setPackages(payload.packages);
+      } catch (error) {
+        console.error("WORK PACKAGE LOAD ERROR:", error);
+      }
+    }
+
+    void loadPackages();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [garage?.id]);
 
   const weekDates = useMemo(
     () =>
@@ -430,45 +483,51 @@ function PartnerWorkPageContent() {
                 </button>
               );
             })
-          : packages.map((item) => {
-              const selected = selectedPackageId === item.id;
+          : packages.length === 0
+            ? (
+              <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-base text-zinc-600">
+                현재 노출 가능한 패키지가 없습니다.
+              </p>
+            )
+            : packages.map((item) => {
+                const selected = selectedPackageId === item.id;
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelectedPackageId(item.id)}
-                  className={`w-full rounded-2xl border p-4 text-left transition ${
-                    selected
-                      ? "border-blue-500 bg-blue-50/40"
-                      : "border-zinc-200 bg-white"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-2xl font-medium text-zinc-900">
-                        {item.name}
-                      </p>
-                      <p className="mt-1 text-base text-zinc-600">
-                        {item.summary}
-                      </p>
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedPackageId(item.id)}
+                    className={`w-full rounded-2xl border p-4 text-left transition ${
+                      selected
+                        ? "border-blue-500 bg-blue-50/40"
+                        : "border-zinc-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-2xl font-medium text-zinc-900">
+                          {item.name}
+                        </p>
+                        <p className="mt-1 text-base text-zinc-600">
+                          {item.summary}
+                        </p>
+                      </div>
+                      {selected ? (
+                        <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
+                          선택됨
+                        </span>
+                      ) : null}
                     </div>
-                    {selected ? (
-                      <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
-                        선택됨
-                      </span>
-                    ) : null}
-                  </div>
 
-                  <p className="mt-2 text-base text-zinc-500">
-                    ◷ 소요 {formatMinutesLabel(item.durationMinutes)}
-                  </p>
-                  <p className="mt-1 text-lg font-semibold text-zinc-900">
-                    {item.price.toLocaleString("ko-KR")}원
-                  </p>
-                </button>
-              );
-            })}
+                    <p className="mt-2 text-base text-zinc-500">
+                      ◷ 소요 {formatMinutesLabel(item.durationMinutes)}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-zinc-900">
+                      {item.price.toLocaleString("ko-KR")}원
+                    </p>
+                  </button>
+                );
+              })}
       </div>
 
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
@@ -492,6 +551,16 @@ function PartnerWorkPageContent() {
                   )}&packageId=${encodeURIComponent(selectedPackageId)}&packageTitle=${encodeURIComponent(
                     packages.find((item) => item.id === selectedPackageId)
                       ?.name ?? "패키지",
+                  )}&packageMinutes=${encodeURIComponent(
+                    String(
+                      packages.find((item) => item.id === selectedPackageId)
+                        ?.durationMinutes ?? 60,
+                    ),
+                  )}&packagePrice=${encodeURIComponent(
+                    String(
+                      packages.find((item) => item.id === selectedPackageId)
+                        ?.price ?? 0,
+                    ),
                   )}&carId=${selectedCar.id}&carLabel=${encodeURIComponent(`${selectedCar.model} (${selectedCar.year})`)}`,
                 )
               : null
