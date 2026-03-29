@@ -91,7 +91,9 @@ async function getReviewsByBayId(bayId: string) {
   };
 }
 
-export default async function PartnerDetailPage({ params }: PartnerDetailPageProps) {
+export default async function PartnerDetailPage({
+  params,
+}: PartnerDetailPageProps) {
   const { id } = await params;
   const garage = getGarageById(id);
 
@@ -114,11 +116,14 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
       <div className="space-y-2">
         <h1 className="text-4xl font-semibold text-zinc-900">{garage.name}</h1>
         <p className="text-lg text-zinc-700">
-          ★ {averageRating.toFixed(1)} ({totalCount || garage.reviewCount}개 후기)
+          ★ {averageRating.toFixed(1)} ({totalCount || garage.reviewCount}개
+          후기)
         </p>
         <p className="text-lg text-zinc-700">📍 {garage.address}</p>
         <p className="text-lg text-zinc-700">🕒 {garage.hours}</p>
-        <p className="text-lg text-zinc-700">🚗 베이 {garage.bayCount}개 · 주차 가능</p>
+        <p className="text-lg text-zinc-700">
+          🚗 베이 {garage.bayCount}개 · 주차 가능
+        </p>
         <p className="text-lg text-zinc-700">📞 {garage.phone}</p>
       </div>
 
@@ -128,13 +133,21 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
           <article key={option.id} className="rounded-2xl bg-zinc-100 p-4">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-2xl font-medium text-zinc-900">{option.title}</p>
-                <p className="mt-1 text-lg text-zinc-600">{option.durationLabel}</p>
+                <p className="text-2xl font-medium text-zinc-900">
+                  {option.title}
+                </p>
+                <p className="mt-1 text-lg text-zinc-600">
+                  {option.durationLabel}
+                </p>
               </div>
-              <span className="text-xl font-semibold text-blue-600">{formatPrice(garage.hourlyPrice)}</span>
+              <span className="text-xl font-semibold text-blue-600">
+                {formatPrice(garage.hourlyPrice)}
+              </span>
             </div>
             <div className="mt-2 flex gap-2">
-              <span className={`rounded-full px-2 py-1 text-xs font-medium ${levelClass(option.level)}`}>
+              <span
+                className={`rounded-full px-2 py-1 text-xs font-medium ${levelClass(option.level)}`}
+              >
                 {option.level}
               </span>
               {option.helperRequired ? (
@@ -150,20 +163,31 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-2xl font-semibold text-zinc-900">후기</h3>
-          <Link href={`/partner/${garage.id}/reviews`} className="text-sm font-semibold text-blue-600">
+          <Link
+            href={`/partner/${garage.id}/reviews`}
+            className="text-sm font-semibold text-blue-600"
+          >
             전체보기
           </Link>
         </div>
 
         {reviews.length === 0 ? (
-          <p className="text-base text-zinc-600">아직 등록된 후기가 없습니다.</p>
+          <p className="text-base text-zinc-600">
+            아직 등록된 후기가 없습니다.
+          </p>
         ) : (
           <div className="space-y-3">
             {reviews.map((review) => (
               <article key={review.id} className="rounded-xl bg-white p-3">
-                <p className="text-lg text-amber-500">{renderStars(review.rating)}</p>
-                <p className="mt-1 text-sm text-zinc-500">{formatDate(review.created_at)}</p>
-                <p className="mt-2 text-base text-zinc-700">{review.comment || "코멘트 없음"}</p>
+                <p className="text-lg text-amber-500">
+                  {renderStars(review.rating)}
+                </p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  {formatDate(review.created_at)}
+                </p>
+                <p className="mt-2 text-base text-zinc-700">
+                  {review.comment || "코멘트 없음"}
+                </p>
               </article>
             ))}
           </div>

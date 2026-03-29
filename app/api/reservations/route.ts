@@ -51,7 +51,8 @@ function parseBody(payload: unknown): ReservationRequestBody | null {
     typeof bayId !== "string" ||
     (typeof helperVerifyRequested !== "undefined" &&
       typeof helperVerifyRequested !== "boolean") ||
-    (typeof helperVerifyFee !== "undefined" && typeof helperVerifyFee !== "number") ||
+    (typeof helperVerifyFee !== "undefined" &&
+      typeof helperVerifyFee !== "number") ||
     typeof startTime !== "string" ||
     typeof endTime !== "string"
   ) {
@@ -79,7 +80,10 @@ function parseBody(payload: unknown): ReservationRequestBody | null {
       return null;
     }
 
-    if (typeof agreeOnlySelectedTasks !== "boolean" || !agreeOnlySelectedTasks) {
+    if (
+      typeof agreeOnlySelectedTasks !== "boolean" ||
+      !agreeOnlySelectedTasks
+    ) {
       return null;
     }
 
@@ -210,7 +214,9 @@ export async function POST(req: Request) {
     const durationMinutes = Math.floor(durationMs / (60 * 1000));
     const baseTimePrice = durationHours * DEFAULT_HOURLY_PRICE;
     const selfHelperVerifyFee =
-      bookingMode === "SELF" && helperVerifyRequested ? Math.max(0, helperVerifyFee ?? 0) : 0;
+      bookingMode === "SELF" && helperVerifyRequested
+        ? Math.max(0, helperVerifyFee ?? 0)
+        : 0;
     const totalPrice = baseTimePrice + selfHelperVerifyFee;
 
     const reservationPayload = {
@@ -309,7 +315,10 @@ export async function POST(req: Request) {
       if (error.code === "23514") {
         if (error.message?.includes("reservations_reservation_type_check")) {
           return NextResponse.json(
-            { error: "현재 DB의 예약 유형 정책과 앱 값이 맞지 않습니다. 예약 유형 스키마 확인이 필요합니다." },
+            {
+              error:
+                "현재 DB의 예약 유형 정책과 앱 값이 맞지 않습니다. 예약 유형 스키마 확인이 필요합니다.",
+            },
             { status: 400 },
           );
         }
@@ -372,7 +381,10 @@ export async function POST(req: Request) {
 
         if (error.message?.includes('"partner_id"')) {
           return NextResponse.json(
-            { error: "매장 정보(partner_id)가 누락되었습니다. 베이 정보를 확인해 주세요." },
+            {
+              error:
+                "매장 정보(partner_id)가 누락되었습니다. 베이 정보를 확인해 주세요.",
+            },
             { status: 400 },
           );
         }
@@ -385,21 +397,30 @@ export async function POST(req: Request) {
 
       if (error.code === "42703") {
         return NextResponse.json(
-          { error: "DB 스키마가 최신이 아닙니다. 마이그레이션 적용이 필요합니다." },
+          {
+            error:
+              "DB 스키마가 최신이 아닙니다. 마이그레이션 적용이 필요합니다.",
+          },
           { status: 500 },
         );
       }
 
       if (error.code === "PGRST204") {
         return NextResponse.json(
-          { error: "DB 스키마 캐시가 최신이 아닙니다. 잠시 후 다시 시도해 주세요." },
+          {
+            error:
+              "DB 스키마 캐시가 최신이 아닙니다. 잠시 후 다시 시도해 주세요.",
+          },
           { status: 500 },
         );
       }
 
       if (error.code === "42P01") {
         return NextResponse.json(
-          { error: "필수 테이블이 없습니다. DB 마이그레이션을 먼저 적용해 주세요." },
+          {
+            error:
+              "필수 테이블이 없습니다. DB 마이그레이션을 먼저 적용해 주세요.",
+          },
           { status: 500 },
         );
       }
@@ -417,18 +438,19 @@ export async function POST(req: Request) {
     const reservationId = data.id;
 
     if (bookingMode === "SELF") {
-      const { data: legalTaskRows, error: legalTaskLookupError } = await supabase
-        .from("self_maintenance_tasks")
-        .select("id, code, is_legal, is_active")
-        .in("code", taskIds ?? [])
-        .returns<
-          Array<{
-            id: string;
-            code: string;
-            is_legal: boolean;
-            is_active: boolean;
-          }>
-        >();
+      const { data: legalTaskRows, error: legalTaskLookupError } =
+        await supabase
+          .from("self_maintenance_tasks")
+          .select("id, code, is_legal, is_active")
+          .in("code", taskIds ?? [])
+          .returns<
+            Array<{
+              id: string;
+              code: string;
+              is_legal: boolean;
+              is_active: boolean;
+            }>
+          >();
 
       if (legalTaskLookupError) {
         console.error("LEGAL TASK LOOKUP ERROR:", legalTaskLookupError);

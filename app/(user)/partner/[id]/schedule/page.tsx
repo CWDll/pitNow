@@ -32,7 +32,10 @@ const timeBoundaries = [
 
 const blockCount = timeBoundaries.length - 1;
 
-const mockReservedRangesByBay: Record<number, Array<{ start: string; end: string }>> = {
+const mockReservedRangesByBay: Record<
+  number,
+  Array<{ start: string; end: string }>
+> = {
   1: [
     { start: "10:00", end: "12:00" },
     { start: "16:00", end: "18:00" },
@@ -85,7 +88,12 @@ function monthValueToDate(monthValue: string, prevDate: Date): Date | null {
   const year = Number(yearRaw);
   const month = Number(monthRaw);
 
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
     return null;
   }
 
@@ -163,7 +171,8 @@ export default function PartnerSchedulePage() {
   const [carMasterVerifyRequested, setCarMasterVerifyRequested] =
     useState<boolean>(false);
 
-  const bookingMode = searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
+  const bookingMode =
+    searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
   const taskIds = searchParams.get("taskIds") ?? "";
   const taskLabels = searchParams.get("taskLabels") ?? "선택 작업 없음";
   const packageId = searchParams.get("packageId") ?? "";
@@ -174,7 +183,9 @@ export default function PartnerSchedulePage() {
   if (!garage) {
     return (
       <section className="space-y-4">
-        <h1 className="text-3xl font-semibold text-zinc-900">시간 / 베이 선택</h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">
+          시간 / 베이 선택
+        </h1>
         <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
           정비소 정보를 찾을 수 없습니다.
         </p>
@@ -192,11 +203,14 @@ export default function PartnerSchedulePage() {
   const selectedBlocks = hasSelection ? selectedEndIdx - selectedStartIdx : 0;
   const startTime = hasSelection ? timeBoundaries[selectedStartIdx] : null;
   const endTime = hasSelection ? timeBoundaries[selectedEndIdx] : null;
-  const blockedUntilTime = hasSelection ? timeBoundaries[selectedEndIdx + 1] : null;
+  const blockedUntilTime = hasSelection
+    ? timeBoundaries[selectedEndIdx + 1]
+    : null;
 
   const totalPrice = selectedBlocks * garage.hourlyPrice;
 
-  const selectedPackage = workOptions.find((option) => option.id === packageId) ?? null;
+  const selectedPackage =
+    workOptions.find((option) => option.id === packageId) ?? null;
   const packageDurationBlocks =
     bookingMode === "PACKAGE"
       ? parseDurationHours(selectedPackage?.durationLabel ?? "1시간")
@@ -262,7 +276,11 @@ export default function PartnerSchedulePage() {
     endExclusiveIdx: number,
     bay: number,
   ): boolean {
-    if (startIdx < 0 || endExclusiveIdx > blockCount || startIdx >= endExclusiveIdx) {
+    if (
+      startIdx < 0 ||
+      endExclusiveIdx > blockCount ||
+      startIdx >= endExclusiveIdx
+    ) {
       return false;
     }
 
@@ -442,14 +460,20 @@ export default function PartnerSchedulePage() {
         >
           ←
         </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900">시간 / 베이 선택</h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">
+          시간 / 베이 선택
+        </h1>
       </header>
 
       <div className="mb-4 rounded-2xl bg-zinc-100 p-4 text-sm text-zinc-700">
         <p className="font-semibold text-zinc-900">예약 방식</p>
-        <p className="mt-1">{bookingMode === "PACKAGE" ? "패키지 예약" : "시간제 예약"}</p>
+        <p className="mt-1">
+          {bookingMode === "PACKAGE" ? "패키지 예약" : "시간제 예약"}
+        </p>
         <p className="mt-2 font-semibold text-zinc-900">선택 항목</p>
-        <p className="mt-1">{bookingMode === "PACKAGE" ? packageTitle : taskLabels}</p>
+        <p className="mt-1">
+          {bookingMode === "PACKAGE" ? packageTitle : taskLabels}
+        </p>
       </div>
 
       <div className="mb-4 flex items-center justify-between px-1">
@@ -516,7 +540,9 @@ export default function PartnerSchedulePage() {
 
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-zinc-900">베이 선택</h2>
-        <span className="text-sm text-zinc-500">버퍼 포함 가능 시간만 선택</span>
+        <span className="text-sm text-zinc-500">
+          버퍼 포함 가능 시간만 선택
+        </span>
       </div>
 
       <div className="grid grid-cols-6 gap-2">
@@ -542,7 +568,9 @@ export default function PartnerSchedulePage() {
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-2xl font-semibold text-zinc-900">시간 선택</h2>
-          <span className="text-sm text-zinc-500">블록 연속 선택 + 종료 후 1시간 버퍼</span>
+          <span className="text-sm text-zinc-500">
+            블록 연속 선택 + 종료 후 1시간 버퍼
+          </span>
         </div>
 
         <div
@@ -554,7 +582,11 @@ export default function PartnerSchedulePage() {
             const reserved = isReservedBlock(idx, selectedBay);
             const selectable =
               bookingMode === "PACKAGE"
-                ? isRangeSelectable(idx, idx + packageDurationBlocks, selectedBay)
+                ? isRangeSelectable(
+                    idx,
+                    idx + packageDurationBlocks,
+                    selectedBay,
+                  )
                 : !reserved;
             const selected =
               hasSelection && idx >= selectedStartIdx && idx < selectedEndIdx;
@@ -630,7 +662,9 @@ export default function PartnerSchedulePage() {
           <div className="my-2 border-t border-zinc-300" />
           <div className="flex items-center justify-between text-2xl font-semibold text-zinc-900">
             <span>합계</span>
-            <span className="text-blue-600">{totalPriceWithVerify.toLocaleString("ko-KR")}원</span>
+            <span className="text-blue-600">
+              {totalPriceWithVerify.toLocaleString("ko-KR")}원
+            </span>
           </div>
         </div>
       </div>

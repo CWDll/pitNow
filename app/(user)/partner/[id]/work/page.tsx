@@ -29,7 +29,9 @@ export default function PartnerWorkPage() {
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([
     selfMaintenanceTaskOptions[0].id,
   ]);
-  const [selectedPackageId, setSelectedPackageId] = useState<string>(workOptions[0].id);
+  const [selectedPackageId, setSelectedPackageId] = useState<string>(
+    workOptions[0].id,
+  );
   const [selectedCarId, setSelectedCarId] = useState<string>(() =>
     getInitialActiveCarId(loadMockCarsFromStorage() ?? initialMockCars),
   );
@@ -63,9 +65,7 @@ export default function PartnerWorkPage() {
         >
           ←
         </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900">
-          작업 선택
-        </h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">작업 선택</h1>
       </header>
 
       <div className="mb-4 grid grid-cols-2 gap-2">
@@ -155,7 +155,8 @@ export default function PartnerWorkPage() {
                       {option.level}
                     </span>
                     <span className="rounded-full bg-zinc-100 px-2 py-1 font-medium text-zinc-600">
-                      검수 가산 {option.helperVerifyUnitFee.toLocaleString("ko-KR")}원
+                      검수 가산{" "}
+                      {option.helperVerifyUnitFee.toLocaleString("ko-KR")}원
                     </span>
                   </div>
 
@@ -180,7 +181,9 @@ export default function PartnerWorkPage() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-2xl font-medium text-zinc-900">{option.title}</p>
+                    <p className="text-2xl font-medium text-zinc-900">
+                      {option.title}
+                    </p>
                     {selected ? (
                       <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
                         선택됨
@@ -201,8 +204,12 @@ export default function PartnerWorkPage() {
                     ) : null}
                   </div>
 
-                  <p className="mt-2 text-base text-zinc-600">{option.description}</p>
-                  <p className="mt-1 text-base text-zinc-500">◷ {option.durationLabel}</p>
+                  <p className="mt-2 text-base text-zinc-600">
+                    {option.description}
+                  </p>
+                  <p className="mt-1 text-base text-zinc-500">
+                    ◷ {option.durationLabel}
+                  </p>
                 </button>
               );
             })}
@@ -227,8 +234,9 @@ export default function PartnerWorkPage() {
                       .map((task) => task.title)
                       .join(", "),
                   )}&packageId=${encodeURIComponent(selectedPackageId)}&packageTitle=${encodeURIComponent(
-                    workOptions.find((option) => option.id === selectedPackageId)
-                      ?.title ?? "패키지",
+                    workOptions.find(
+                      (option) => option.id === selectedPackageId,
+                    )?.title ?? "패키지",
                   )}&carId=${selectedCar.id}&carLabel=${encodeURIComponent(`${selectedCar.model} (${selectedCar.year})`)}`,
                 )
               : null

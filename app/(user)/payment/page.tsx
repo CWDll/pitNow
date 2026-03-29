@@ -91,7 +91,11 @@ export default function PaymentPage() {
       return;
     }
 
-    if (bookingMode === "SELF" && consentMethod === "SIGNATURE" && !signatureImageUrl) {
+    if (
+      bookingMode === "SELF" &&
+      consentMethod === "SIGNATURE" &&
+      !signatureImageUrl
+    ) {
       setError("서명 동의 정보가 누락되었습니다.");
       return;
     }
@@ -203,7 +207,9 @@ export default function PaymentPage() {
           {bookingMode === "SELF" ? (
             <p className="flex justify-between">
               <span>카 마스터 검수</span>
-              <span>{Math.max(0, helperVerifyFee).toLocaleString("ko-KR")}원</span>
+              <span>
+                {Math.max(0, helperVerifyFee).toLocaleString("ko-KR")}원
+              </span>
             </p>
           ) : null}
           <p className="flex justify-between">
