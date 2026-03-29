@@ -74,8 +74,8 @@ created_at timestamptz default now()
 alter table reservations
 add constraint chk_reservation_hour_unit
 check (
-	extract(epoch from (end_time - start_time)) >= 3600
-	and mod(extract(epoch from (end_time - start_time))::int, 3600) = 0
+extract(epoch from (end_time - start_time)) >= 3600
+and mod(extract(epoch from (end_time - start_time))::int, 3600) = 0
 );
 
 alter table reservations
@@ -85,8 +85,8 @@ check (blocked_until = end_time + interval '1 hour');
 alter table reservations
 add constraint chk_helper_verify_fee
 check (
-	(helper_verify_requested = false and helper_verify_fee = 0)
-	or (helper_verify_requested = true and helper_verify_fee >= 5000)
+(helper_verify_requested = false and helper_verify_fee = 0)
+or (helper_verify_requested = true and helper_verify_fee >= 5000)
 );
 
 create index idx_reservations_bay on reservations(bay_id);
@@ -144,8 +144,8 @@ consent_method text not null check (consent_method in ('CHECKBOX', 'SIGNATURE'))
 signature_image_url text,
 agreed_at timestamptz not null default now(),
 check (
-	(consent_method = 'CHECKBOX' and signature_image_url is null)
-	or (consent_method = 'SIGNATURE' and signature_image_url is not null)
+(consent_method = 'CHECKBOX' and signature_image_url is null)
+or (consent_method = 'SIGNATURE' and signature_image_url is not null)
 )
 );
 

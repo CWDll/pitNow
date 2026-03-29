@@ -44,7 +44,14 @@ export interface Review {
 }
 
 export interface CreateReservationPayload {
+  bookingMode: "SELF" | "PACKAGE";
   bayId: string;
+  taskIds?: string[];
+  agreeOnlySelectedTasks?: boolean;
+  consentMethod?: "CHECKBOX" | "SIGNATURE";
+  helperVerifyRequested?: boolean;
+  helperVerifyFee?: number;
+  signatureImageUrl?: string;
   startTime: string;
   endTime: string;
 }
@@ -59,6 +66,7 @@ export interface CheckInPayload {
 
 export interface CheckOutPayload {
   reservationId: string;
+  helperVerifyRequested?: boolean;
 }
 
 export interface CreateReviewPayload {
@@ -67,7 +75,9 @@ export interface CreateReviewPayload {
   comment?: string;
 }
 
-export type ApiSuccess<T extends Record<string, unknown> = Record<string, never>> = {
+export type ApiSuccess<
+  T extends Record<string, unknown> = Record<string, never>,
+> = {
   success: true;
 } & T;
 

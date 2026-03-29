@@ -4,67 +4,58 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { getGarageById } from "../../../_data/mock-garages";
+import {
+  getGarageById,
+  selfMaintenanceTaskOptions,
+  workOptions,
+} from "../../../_data/mock-garages";
 
-const MIN_BLOCKS = 2; // 30분 * 2 = 1시간
+const MIN_BLOCKS = 1;
 
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
-// 30분 경계값 (09:00 ~ 19:00)
 const timeBoundaries = [
   "09:00",
-  "09:30",
   "10:00",
-  "10:30",
   "11:00",
-  "11:30",
   "12:00",
-  "12:30",
   "13:00",
-  "13:30",
   "14:00",
-  "14:30",
   "15:00",
-  "15:30",
   "16:00",
-  "16:30",
   "17:00",
-  "17:30",
   "18:00",
-  "18:30",
   "19:00",
+  "20:00",
+  "21:00",
 ] as const;
 
-// block index i는 [timeBoundaries[i], timeBoundaries[i+1])
 const blockCount = timeBoundaries.length - 1;
 
-const mockReservedRangesByBay: Record<
-  number,
-  Array<{ start: string; end: string }>
-> = {
+const mockReservedRangesByBay: Record<number, Array<{ start: string; end: string }>> = {
   1: [
-    { start: "10:30", end: "12:00" },
-    { start: "15:00", end: "16:00" },
+    { start: "10:00", end: "12:00" },
+    { start: "16:00", end: "18:00" },
   ],
   2: [
-    { start: "09:30", end: "11:00" },
-    { start: "14:30", end: "15:30" },
+    { start: "09:00", end: "11:00" },
+    { start: "14:00", end: "16:00" },
   ],
   3: [
-    { start: "09:00", end: "10:30" },
-    { start: "16:30", end: "17:00" },
+    { start: "11:00", end: "13:00" },
+    { start: "17:00", end: "19:00" },
   ],
   4: [
-    { start: "11:30", end: "13:00" },
-    { start: "17:00", end: "18:00" },
+    { start: "12:00", end: "14:00" },
+    { start: "18:00", end: "20:00" },
   ],
   5: [
-    { start: "10:00", end: "11:30" },
-    { start: "15:30", end: "16:30" },
+    { start: "10:00", end: "11:00" },
+    { start: "15:00", end: "17:00" },
   ],
   6: [
-    { start: "13:00", end: "14:30" },
-    { start: "17:30", end: "18:30" },
+    { start: "13:00", end: "15:00" },
+    { start: "19:00", end: "20:00" },
   ],
 };
 
@@ -94,12 +85,7 @@ function monthValueToDate(monthValue: string, prevDate: Date): Date | null {
   const year = Number(yearRaw);
   const month = Number(monthRaw);
 
-  if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    month < 1 ||
-    month > 12
-  ) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
     return null;
   }
 
@@ -143,6 +129,22 @@ function toIsoByDateAndTime(date: Date, time: string): string {
   ).toISOString();
 }
 
+function parseDurationHours(durationLabel: string): number {
+  const matched = durationLabel.match(/([0-9]+(?:\.[0-9]+)?)/);
+
+  if (!matched) {
+    return 1;
+  }
+
+  const value = Number.parseFloat(matched[1]);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return 1;
+  }
+
+  return Math.max(1, Math.ceil(value));
+}
+
 export default function PartnerSchedulePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -158,23 +160,29 @@ export default function PartnerSchedulePage() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragMoved, setDragMoved] = useState<boolean>(false);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
+  const [carMasterVerifyRequested, setCarMasterVerifyRequested] =
+    useState<boolean>(false);
 
-  const workId = searchParams.get("workId") ?? "engine-oil";
+  const bookingMode = searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
+  const taskIds = searchParams.get("taskIds") ?? "";
+  const taskLabels = searchParams.get("taskLabels") ?? "선택 작업 없음";
+  const packageId = searchParams.get("packageId") ?? "";
+  const packageTitle = searchParams.get("packageTitle") ?? "패키지";
   const carId = searchParams.get("carId") ?? "";
   const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
 
   if (!garage) {
     return (
       <section className="space-y-4">
-        <h1 className="text-3xl font-semibold text-zinc-900">
-          시간 / 베이 선택
-        </h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">시간 / 베이 선택</h1>
         <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
           정비소 정보를 찾을 수 없습니다.
         </p>
       </section>
     );
   }
+
+  const safeGarage = garage;
 
   const weekDates = Array.from({ length: 7 }, (_, index) =>
     addDays(selectedDate, index - 3),
@@ -184,13 +192,40 @@ export default function PartnerSchedulePage() {
   const selectedBlocks = hasSelection ? selectedEndIdx - selectedStartIdx : 0;
   const startTime = hasSelection ? timeBoundaries[selectedStartIdx] : null;
   const endTime = hasSelection ? timeBoundaries[selectedEndIdx] : null;
+  const blockedUntilTime = hasSelection ? timeBoundaries[selectedEndIdx + 1] : null;
 
-  const halfHourPrice = Math.floor(garage.hourlyPrice / 2);
-  const additionalBlocks = Math.max(0, selectedBlocks - MIN_BLOCKS);
-  const totalPrice = garage.hourlyPrice + additionalBlocks * halfHourPrice;
+  const totalPrice = selectedBlocks * garage.hourlyPrice;
+
+  const selectedPackage = workOptions.find((option) => option.id === packageId) ?? null;
+  const packageDurationBlocks =
+    bookingMode === "PACKAGE"
+      ? parseDurationHours(selectedPackage?.durationLabel ?? "1시간")
+      : 0;
+
+  const selectedSelfTasks = selfMaintenanceTaskOptions.filter((option) =>
+    taskIds
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .includes(option.id),
+  );
+
+  const carMasterVerifyFee =
+    bookingMode === "SELF" && carMasterVerifyRequested
+      ? 5000 +
+        selectedSelfTasks.reduce(
+          (sum, task) => sum + task.helperVerifyUnitFee,
+          0,
+        )
+      : 0;
+
+  const totalPriceWithVerify = totalPrice + carMasterVerifyFee;
 
   const meetsMinimum = selectedBlocks >= MIN_BLOCKS;
-  const canProceed = hasSelection && meetsMinimum;
+  const canProceed =
+    bookingMode === "PACKAGE"
+      ? hasSelection && selectedBlocks === packageDurationBlocks
+      : hasSelection && meetsMinimum;
 
   function handleWeekShift(daysToMove: number) {
     setSelectedDate((prev) =>
@@ -216,21 +251,28 @@ export default function PartnerSchedulePage() {
       return;
     }
 
-    for (let i = selectedStartIdx; i < selectedEndIdx; i += 1) {
-      if (isReservedBlock(i, nextBay)) {
-        setSelectedStartIdx(null);
-        setSelectedEndIdx(null);
-        return;
-      }
+    if (!isRangeSelectable(selectedStartIdx, selectedEndIdx, nextBay)) {
+      setSelectedStartIdx(null);
+      setSelectedEndIdx(null);
     }
   }
 
-  function isRangeClear(
+  function isRangeSelectable(
     startIdx: number,
     endExclusiveIdx: number,
     bay: number,
   ): boolean {
-    for (let i = startIdx; i < endExclusiveIdx; i += 1) {
+    if (startIdx < 0 || endExclusiveIdx > blockCount || startIdx >= endExclusiveIdx) {
+      return false;
+    }
+
+    const blockedUntilIdx = endExclusiveIdx + 1;
+
+    if (blockedUntilIdx > blockCount) {
+      return false;
+    }
+
+    for (let i = startIdx; i < blockedUntilIdx; i += 1) {
       if (isReservedBlock(i, bay)) {
         return false;
       }
@@ -240,15 +282,29 @@ export default function PartnerSchedulePage() {
   }
 
   function applySingleSelection(blockIdx: number) {
+    const endExclusiveIdx =
+      bookingMode === "PACKAGE"
+        ? blockIdx + packageDurationBlocks
+        : blockIdx + 1;
+
+    if (!isRangeSelectable(blockIdx, endExclusiveIdx, selectedBay)) {
+      return;
+    }
+
     setSelectedStartIdx(blockIdx);
-    setSelectedEndIdx(blockIdx + 1);
+    setSelectedEndIdx(endExclusiveIdx);
   }
 
   function applyRangeFromStart(startIdx: number, targetIdx: number) {
+    if (bookingMode === "PACKAGE") {
+      applySingleSelection(targetIdx);
+      return;
+    }
+
     const endExclusive = targetIdx + 1;
     if (
       targetIdx >= startIdx &&
-      isRangeClear(startIdx, endExclusive, selectedBay)
+      isRangeSelectable(startIdx, endExclusive, selectedBay)
     ) {
       setSelectedStartIdx(startIdx);
       setSelectedEndIdx(endExclusive);
@@ -264,6 +320,11 @@ export default function PartnerSchedulePage() {
     }
 
     if (!hasSelection) {
+      applySingleSelection(blockIdx);
+      return;
+    }
+
+    if (bookingMode === "PACKAGE") {
       applySingleSelection(blockIdx);
       return;
     }
@@ -287,12 +348,21 @@ export default function PartnerSchedulePage() {
       return;
     }
 
+    if (bookingMode === "PACKAGE") {
+      handleBlockClick(blockIdx);
+      return;
+    }
+
     setIsDragging(true);
     setDragAnchorIdx(blockIdx);
     setDragMoved(false);
   }
 
   function handleBlockPointerEnter(blockIdx: number) {
+    if (bookingMode === "PACKAGE") {
+      return;
+    }
+
     if (!isDragging || dragAnchorIdx === null) {
       return;
     }
@@ -320,26 +390,44 @@ export default function PartnerSchedulePage() {
     setDragMoved(false);
   }
 
-  function goSafetyPage() {
-    if (!canProceed || !startTime || !endTime) {
+  function goNextPage() {
+    if (!canProceed || !startTime || !endTime || !blockedUntilTime) {
       return;
     }
 
     const selectedWeekdayLabel = weekdayLabels[selectedDate.getDay()];
 
     const query = new URLSearchParams({
-      partnerId: garage!.id,
-      garageName: garage!.name,
-      workId,
+      bookingMode,
+      partnerId: safeGarage.id,
+      garageName: safeGarage.name,
+      taskIds,
+      taskLabels,
+      selectedTaskCount: String(
+        taskIds
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean).length,
+      ),
+      packageId,
+      packageTitle,
       carId,
       carLabel,
       dateLabel: `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}(${selectedWeekdayLabel}) ${startTime} - ${endTime}`,
       bayLabel: `${selectedBay}번 베이`,
-      bayId: garage!.bayId,
+      bayId: safeGarage.bayId,
       startTime: toIsoByDateAndTime(selectedDate, startTime),
       endTime: toIsoByDateAndTime(selectedDate, endTime),
-      totalPrice: String(totalPrice),
+      blockedUntil: toIsoByDateAndTime(selectedDate, blockedUntilTime),
+      totalPrice: String(totalPriceWithVerify),
+      helperVerifyRequested: String(carMasterVerifyRequested),
+      helperVerifyFee: String(carMasterVerifyFee),
     });
+
+    if (bookingMode === "PACKAGE") {
+      router.push(`/payment?${query.toString()}`);
+      return;
+    }
 
     router.push(`/safety?${query.toString()}`);
   }
@@ -354,10 +442,15 @@ export default function PartnerSchedulePage() {
         >
           ←
         </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900">
-          시간 / 베이 선택
-        </h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">시간 / 베이 선택</h1>
       </header>
+
+      <div className="mb-4 rounded-2xl bg-zinc-100 p-4 text-sm text-zinc-700">
+        <p className="font-semibold text-zinc-900">예약 방식</p>
+        <p className="mt-1">{bookingMode === "PACKAGE" ? "패키지 예약" : "시간제 예약"}</p>
+        <p className="mt-2 font-semibold text-zinc-900">선택 항목</p>
+        <p className="mt-1">{bookingMode === "PACKAGE" ? packageTitle : taskLabels}</p>
+      </div>
 
       <div className="mb-4 flex items-center justify-between px-1">
         <button
@@ -423,7 +516,7 @@ export default function PartnerSchedulePage() {
 
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-zinc-900">베이 선택</h2>
-        <span className="text-sm text-zinc-500">베이마다 가능 시간이 다름</span>
+        <span className="text-sm text-zinc-500">버퍼 포함 가능 시간만 선택</span>
       </div>
 
       <div className="grid grid-cols-6 gap-2">
@@ -449,7 +542,7 @@ export default function PartnerSchedulePage() {
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-2xl font-semibold text-zinc-900">시간 선택</h2>
-          <span className="text-sm text-zinc-500">30분 단위</span>
+          <span className="text-sm text-zinc-500">블록 연속 선택 + 종료 후 1시간 버퍼</span>
         </div>
 
         <div
@@ -459,6 +552,10 @@ export default function PartnerSchedulePage() {
         >
           {Array.from({ length: blockCount }).map((_, idx) => {
             const reserved = isReservedBlock(idx, selectedBay);
+            const selectable =
+              bookingMode === "PACKAGE"
+                ? isRangeSelectable(idx, idx + packageDurationBlocks, selectedBay)
+                : !reserved;
             const selected =
               hasSelection && idx >= selectedStartIdx && idx < selectedEndIdx;
             const label = `${timeBoundaries[idx]}~${timeBoundaries[idx + 1]}`;
@@ -467,11 +564,11 @@ export default function PartnerSchedulePage() {
               <button
                 key={`block-${idx}`}
                 type="button"
-                disabled={reserved}
+                disabled={!selectable}
                 onPointerDown={() => handleBlockPointerDown(idx)}
                 onPointerEnter={() => handleBlockPointerEnter(idx)}
                 className={`rounded-xl px-2 py-3 text-xs font-medium ${
-                  reserved
+                  !selectable
                     ? "bg-zinc-300 text-zinc-500"
                     : selected
                       ? "bg-amber-400 text-white"
@@ -492,15 +589,23 @@ export default function PartnerSchedulePage() {
           <span className="rounded-full bg-zinc-200 px-3 py-1 text-zinc-600">
             예약됨/미선택
           </span>
+          {bookingMode === "PACKAGE" ? (
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-700">
+              패키지 고정 {packageDurationBlocks}시간
+            </span>
+          ) : null}
         </div>
 
         <p className="mt-3 text-sm text-zinc-600">
-          예약시간: {startTime ?? "-"} ~ {endTime ?? "-"}
+          작업 시간: {startTime ?? "-"} ~ {endTime ?? "-"}
+        </p>
+        <p className="mt-1 text-sm text-zinc-600">
+          버퍼 포함 블록: {startTime ?? "-"} ~ {blockedUntilTime ?? "-"}
         </p>
 
         {!meetsMinimum && hasSelection ? (
           <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            최소 예약 시간은 1시간입니다 (연속 2칸 이상 선택).
+            최소 예약 시간은 1시간입니다.
           </p>
         ) : null}
       </div>
@@ -509,40 +614,53 @@ export default function PartnerSchedulePage() {
         <h3 className="mb-3 text-2xl font-semibold text-zinc-900">요금 요약</h3>
         <div className="space-y-1 text-lg text-zinc-700">
           <div className="flex items-center justify-between">
-            <span>기본 1시간</span>
+            <span>시간당 요금</span>
             <span>{garage.hourlyPrice.toLocaleString("ko-KR")}원</span>
           </div>
           <div className="flex items-center justify-between">
-            <span>추가 30분 단가</span>
-            <span>{halfHourPrice.toLocaleString("ko-KR")}원</span>
-          </div>
-          <div className="flex items-center justify-between">
             <span>선택 시간</span>
-            <span>{((selectedBlocks * 30) / 60).toFixed(1)}시간</span>
+            <span>{selectedBlocks}시간</span>
           </div>
+          {bookingMode === "SELF" ? (
+            <div className="flex items-center justify-between">
+              <span>카 마스터 검수</span>
+              <span>{carMasterVerifyFee.toLocaleString("ko-KR")}원</span>
+            </div>
+          ) : null}
           <div className="my-2 border-t border-zinc-300" />
           <div className="flex items-center justify-between text-2xl font-semibold text-zinc-900">
             <span>합계</span>
-            <span className="text-blue-600">
-              {totalPrice.toLocaleString("ko-KR")}원
-            </span>
+            <span className="text-blue-600">{totalPriceWithVerify.toLocaleString("ko-KR")}원</span>
           </div>
         </div>
       </div>
 
-      <p className="mt-4 text-sm text-zinc-500">
-        선택됨: {formatMonthLabel(selectedDate)} {selectedDate.getDate()}일 ·{" "}
-        {startTime ?? "-"} ~ {endTime ?? "-"} · {selectedBay}번 베이 · {workId}
-      </p>
+      {bookingMode === "SELF" ? (
+        <label className="mt-4 flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-800">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5"
+            checked={carMasterVerifyRequested}
+            onChange={() => setCarMasterVerifyRequested((prev) => !prev)}
+          />
+          <span>
+            카 마스터 검수
+            <br />
+            <span className="text-sm text-zinc-500">
+              기본 5,000원 + 선택 작업 검수 가산
+            </span>
+          </span>
+        </label>
+      ) : null}
 
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
-          onClick={goSafetyPage}
+          onClick={goNextPage}
           disabled={!canProceed}
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
         >
-          안전 동의
+          {bookingMode === "PACKAGE" ? "결제로 이동" : "안전 동의"}
         </button>
       </div>
     </section>

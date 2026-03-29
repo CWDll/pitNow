@@ -170,7 +170,7 @@ export default async function PartnerDetailPage({ params }: PartnerDetailPagePro
         )}
       </div>
 
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <Link
           href={`/partner/${garage.id}/work`}
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"

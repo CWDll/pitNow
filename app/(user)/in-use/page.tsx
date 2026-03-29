@@ -33,6 +33,9 @@ export default function InUsePage() {
     searchParams.get("totalPrice") ?? String(DEFAULT_TOTAL_PRICE),
   );
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
+  const taskIds = searchParams.get("taskIds") ?? "";
+  const taskLabels = searchParams.get("taskLabels") ?? workTitle;
+  const selectedTaskCount = searchParams.get("selectedTaskCount") ?? "1";
 
   const fallback = useMemo(() => fallbackWindow(), []);
   const startTime = searchParams.get("startTime") ?? fallback.start;
@@ -67,6 +70,9 @@ export default function InUsePage() {
       startTime,
       endTime,
       totalPrice: String(totalPrice),
+      taskIds,
+      taskLabels,
+      selectedTaskCount,
       overdueMinutes: String(overdue.overdueMinutes),
       previewFee: String(overdue.previewFee),
     });
@@ -91,7 +97,7 @@ export default function InUsePage() {
           type="button"
           className="rounded-2xl bg-blue-50 py-6 text-2xl font-semibold text-blue-600"
         >
-          연장
+          1시간 연장
         </button>
         <button
           type="button"
@@ -127,7 +133,7 @@ export default function InUsePage() {
         </button>
       </div>
 
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
           onClick={goCheckout}

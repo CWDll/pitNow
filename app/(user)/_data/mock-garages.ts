@@ -23,6 +23,14 @@ export interface WorkOption {
   helperNote?: string;
 }
 
+export interface SelfMaintenanceTaskOption {
+  id: string;
+  title: string;
+  level: "초급" | "중급";
+  description: string;
+  helperVerifyUnitFee: number;
+}
+
 export const garageList: GarageSummary[] = [
   {
     id: "gangnam-self",
@@ -91,6 +99,44 @@ export const workOptions: WorkOption[] = [
     level: "초급",
     description: "기존 와이퍼 분리 → 새 블레이드 장착",
     durationLabel: "약 20분",
+  },
+];
+
+export const selfMaintenanceTaskOptions: SelfMaintenanceTaskOption[] = [
+  {
+    id: "engine-oil",
+    title: "엔진오일 교환",
+    level: "초급",
+    description: "오일 드레인 → 필터 교체 → 새 오일 주입",
+    helperVerifyUnitFee: 2000,
+  },
+  {
+    id: "brake-pad",
+    title: "브레이크 패드 교환",
+    level: "중급",
+    description: "캘리퍼 분리 → 패드 교체 → 조립",
+    helperVerifyUnitFee: 3000,
+  },
+  {
+    id: "tire-rotation",
+    title: "타이어 로테이션",
+    level: "초급",
+    description: "4개 타이어 위치 교체 (대각선 방식)",
+    helperVerifyUnitFee: 2000,
+  },
+  {
+    id: "air-filter",
+    title: "에어필터 교환",
+    level: "초급",
+    description: "에어클리너 박스 열기 → 필터 교체",
+    helperVerifyUnitFee: 1500,
+  },
+  {
+    id: "wiper",
+    title: "와이퍼 블레이드 교체",
+    level: "초급",
+    description: "기존 와이퍼 분리 → 새 블레이드 장착",
+    helperVerifyUnitFee: 1000,
   },
 ];
 

@@ -21,7 +21,11 @@ function extractErrorMessage(payload: unknown): string | null {
     return typed.error;
   }
 
-  if (typed.error && typeof typed.error === "object" && typeof typed.error.message === "string") {
+  if (
+    typed.error &&
+    typeof typed.error === "object" &&
+    typeof typed.error.message === "string"
+  ) {
     return typed.error.message;
   }
 
@@ -37,6 +41,7 @@ export default function CompletePage() {
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
   const extraFee = Number(searchParams.get("extraFee") ?? "0");
+  const helperVerifyFee = Number(searchParams.get("helperVerifyFee") ?? "0");
 
   const [rating, setRating] = useState<number>(0);
   const [reviewText, setReviewText] = useState<string>("");
@@ -44,7 +49,7 @@ export default function CompletePage() {
   const [reviewSaved, setReviewSaved] = useState<boolean>(false);
   const [reviewError, setReviewError] = useState<string>("");
 
-  const total = totalPrice + extraFee;
+  const total = totalPrice + extraFee + helperVerifyFee;
 
   async function handleSubmitReview() {
     setReviewError("");
@@ -79,13 +84,17 @@ export default function CompletePage() {
       const data: unknown = await response.json();
 
       if (!response.ok) {
-        setReviewError(extractErrorMessage(data) ?? "후기 저장에 실패했습니다.");
+        setReviewError(
+          extractErrorMessage(data) ?? "후기 저장에 실패했습니다.",
+        );
         return;
       }
 
       setReviewSaved(true);
     } catch {
-      setReviewError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      setReviewError(
+        "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     } finally {
       setIsSubmittingReview(false);
     }
@@ -101,22 +110,51 @@ export default function CompletePage() {
 
       <div className="rounded-2xl bg-zinc-100 p-4">
         <h2 className="text-xl font-semibold text-zinc-900">이용 요약</h2>
-        <p className="mt-3 flex justify-between text-base text-zinc-700"><span>작업</span><span>{workTitle}</span></p>
-        <p className="mt-2 flex justify-between text-base text-zinc-700"><span>지점</span><span>{garageName}</span></p>
-        <p className="mt-2 flex justify-between text-base text-zinc-700"><span>차량</span><span>{carLabel}</span></p>
-        <p className="mt-2 flex justify-between text-base text-zinc-700"><span>이용 시간</span><span>1시간 15분</span></p>
+        <p className="mt-3 flex justify-between text-base text-zinc-700">
+          <span>작업</span>
+          <span>{workTitle}</span>
+        </p>
+        <p className="mt-2 flex justify-between text-base text-zinc-700">
+          <span>지점</span>
+          <span>{garageName}</span>
+        </p>
+        <p className="mt-2 flex justify-between text-base text-zinc-700">
+          <span>차량</span>
+          <span>{carLabel}</span>
+        </p>
+        <p className="mt-2 flex justify-between text-base text-zinc-700">
+          <span>이용 시간</span>
+          <span>1시간 15분</span>
+        </p>
       </div>
 
       <div className="mt-4 rounded-2xl bg-zinc-100 p-4">
         <h2 className="text-xl font-semibold text-zinc-900">결제 요약</h2>
-        <p className="mt-3 flex justify-between text-base text-zinc-700"><span>기본 요금</span><span>{totalPrice.toLocaleString("ko-KR")}원</span></p>
-        <p className="mt-2 flex justify-between text-base text-zinc-700"><span>추가 요금</span><span>{extraFee.toLocaleString("ko-KR")}원</span></p>
+        <p className="mt-3 flex justify-between text-base text-zinc-700">
+          <span>기본 요금</span>
+          <span>{totalPrice.toLocaleString("ko-KR")}원</span>
+        </p>
+        <p className="mt-2 flex justify-between text-base text-zinc-700">
+          <span>추가 요금</span>
+          <span>{extraFee.toLocaleString("ko-KR")}원</span>
+        </p>
+        <p className="mt-2 flex justify-between text-base text-zinc-700">
+          <span>카 마스터 검수</span>
+          <span>{helperVerifyFee.toLocaleString("ko-KR")}원</span>
+        </p>
         <div className="my-3 border-t border-zinc-300" />
-        <p className="flex justify-between text-2xl font-semibold text-zinc-900"><span>총 결제</span><span className="text-blue-600">{total.toLocaleString("ko-KR")}원</span></p>
+        <p className="flex justify-between text-2xl font-semibold text-zinc-900">
+          <span>총 결제</span>
+          <span className="text-blue-600">
+            {total.toLocaleString("ko-KR")}원
+          </span>
+        </p>
       </div>
 
       <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
-        <h2 className="text-2xl font-semibold text-zinc-900">후기를 남겨주세요</h2>
+        <h2 className="text-2xl font-semibold text-zinc-900">
+          후기를 남겨주세요
+        </h2>
 
         <div className="mt-3 flex items-center gap-2">
           {Array.from({ length: 5 }).map((_, index) => {
@@ -164,13 +202,25 @@ export default function CompletePage() {
           disabled={isSubmittingReview || reviewSaved}
           className="mt-3 h-11 w-full rounded-xl bg-zinc-900 text-base font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-500"
         >
-          {reviewSaved ? "후기 제출 완료" : isSubmittingReview ? "제출 중..." : "후기 제출"}
+          {reviewSaved
+            ? "후기 제출 완료"
+            : isSubmittingReview
+              ? "제출 중..."
+              : "후기 제출"}
         </button>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <button type="button" className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700">영수증</button>
-        <Link href="/" className="rounded-2xl bg-blue-600 py-3 text-center text-lg font-semibold text-white">
+        <button
+          type="button"
+          className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700"
+        >
+          영수증
+        </button>
+        <Link
+          href="/"
+          className="rounded-2xl bg-blue-600 py-3 text-center text-lg font-semibold text-white"
+        >
           다시 예약
         </Link>
       </div>

@@ -37,7 +37,7 @@ endTime: string (ISO)
 • consentMethod 검증 (SIGNATURE면 signatureImageUrl 필수)
 • blockedUntil = endTime + 1시간
 • helperVerifyRequested=true 이면 helperVerifyFee 계산
-	(기본 5,000 + 선택 작업별 단가 합산)
+(기본 5,000 + 선택 작업별 단가 합산)
 • user_id는 MOCK_USER_ID 사용
 • status = CONFIRMED
 • total_price 계산 후 저장 (시간요금 + helperVerifyFee)
@@ -114,7 +114,7 @@ helperVerifyRequested?: boolean
 • 1시간 단위 올림
 • extra_fee 계산
 • helperVerifyRequested=true 이고 예약 시 미선택이면
-	helperVerifyFee 재계산 후 정산 반영
+helperVerifyFee 재계산 후 정산 반영
 • checkouts insert
 • reservations.status → COMPLETED
 
@@ -122,7 +122,7 @@ helperVerifyRequested?: boolean
 
 diff = now - end_time
 diff <= 0 → 0
-else → ceil(diff / 1시간) * (시간요금)
+else → ceil(diff / 1시간) \* (시간요금)
 
 성공 응답:
 {
@@ -182,10 +182,7 @@ CONFIRMED → CANCELLED
 
 중요 원칙 1. 예약 겹침은 반드시 DB 레벨. 2. 체크인은 4장 사진 필수. 3. 타이머는 서버 시간 기준. 4. 초과요금은 서버에서 계산. 5. 프론트 상태만 믿지 않는다.
 
-추가 원칙
-6. Self 정비는 법적 허용 작업만 선택 가능.
-7. 선택 작업 외 작업 금지 동의(체크박스/서명) 증적을 저장.
-8. 베이 점유 충돌은 start_time ~ blocked_until(end+1h) 기준으로 판단.
+추가 원칙 6. Self 정비는 법적 허용 작업만 선택 가능. 7. 선택 작업 외 작업 금지 동의(체크박스/서명) 증적을 저장. 8. 베이 점유 충돌은 start_time ~ blocked_until(end+1h) 기준으로 판단.
 
 ⸻
 

@@ -5,7 +5,12 @@ import { useMemo, useState } from "react";
 
 import type { CreateReservationPayload } from "@/src/domain/types";
 
-const paymentMethods = ["신용/체크카드", "카카오페이", "네이버페이", "토스페이"] as const;
+const paymentMethods = [
+  "신용/체크카드",
+  "카카오페이",
+  "네이버페이",
+  "토스페이",
+] as const;
 
 function parseReservationId(payload: unknown): string | null {
   if (payload && typeof payload === "object" && "id" in payload) {
@@ -25,29 +30,48 @@ export default function PaymentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [method, setMethod] = useState<(typeof paymentMethods)[number]>("신용/체크카드");
+  const [method, setMethod] =
+    useState<(typeof paymentMethods)[number]>("신용/체크카드");
   const [isPaying, setIsPaying] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
 
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
+  const bookingMode =
+    searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
   const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
-  const workId = searchParams.get("workId") ?? "engine-oil";
+  const taskIds = (searchParams.get("taskIds") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const taskLabels = searchParams.get("taskLabels") ?? "선택 작업 없음";
+  const packageId = searchParams.get("packageId") ?? "";
+  const packageTitle = searchParams.get("packageTitle") ?? "패키지";
+  const selectedTaskCount =
+    searchParams.get("selectedTaskCount") ?? String(taskIds.length);
+  const agreeOnlySelectedTasks =
+    searchParams.get("agreeOnlySelectedTasks") === "true";
+  const consentMethod =
+    searchParams.get("consentMethod") === "SIGNATURE"
+      ? "SIGNATURE"
+      : "CHECKBOX";
+  const signatureImageUrl = searchParams.get("signatureImageUrl") ?? "";
   const dateLabel = searchParams.get("dateLabel") ?? "2/28(금) 14:00 - 15:00";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
-  const bayId = searchParams.get("bayId") ?? "00000000-0000-0000-0000-000000000001";
+  const bayId =
+    searchParams.get("bayId") ?? "00000000-0000-0000-0000-000000000001";
   const startTime = searchParams.get("startTime") ?? "";
   const endTime = searchParams.get("endTime") ?? "";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
+  const helperVerifyRequested =
+    searchParams.get("helperVerifyRequested") === "true";
+  const helperVerifyFee = Number(searchParams.get("helperVerifyFee") ?? "0");
 
-  const workTitle = useMemo(() => {
-    if (workId === "brake-pad") return "브레이크 패드 교환";
-    if (workId === "tire-rotation") return "타이어 로테이션";
-    if (workId === "air-filter") return "에어필터 교환";
-    if (workId === "wiper") return "와이퍼 블레이드 교체";
-    return "엔진오일 교환";
-  }, [workId]);
+  const workTitle = useMemo(
+    () => (bookingMode === "PACKAGE" ? packageTitle : taskLabels),
+    [bookingMode, packageTitle, taskLabels],
+  );
 
   async function handlePay() {
     setError("");
@@ -57,11 +81,39 @@ export default function PaymentPage() {
       return;
     }
 
+    if (bookingMode === "SELF" && taskIds.length === 0) {
+      setError("최소 1개 이상의 셀프 정비 작업을 선택해 주세요.");
+      return;
+    }
+
+    if (bookingMode === "SELF" && !agreeOnlySelectedTasks) {
+      setError("선택한 작업만 수행한다는 동의가 필요합니다.");
+      return;
+    }
+
+    if (bookingMode === "SELF" && consentMethod === "SIGNATURE" && !signatureImageUrl) {
+      setError("서명 동의 정보가 누락되었습니다.");
+      return;
+    }
+
     setIsPaying(true);
 
     try {
       const body: CreateReservationPayload = {
+        bookingMode,
         bayId,
+        taskIds: bookingMode === "SELF" ? taskIds : undefined,
+        agreeOnlySelectedTasks:
+          bookingMode === "SELF" ? agreeOnlySelectedTasks : undefined,
+        consentMethod: bookingMode === "SELF" ? consentMethod : undefined,
+        signatureImageUrl:
+          bookingMode === "SELF" && consentMethod === "SIGNATURE"
+            ? signatureImageUrl
+            : undefined,
+        helperVerifyRequested:
+          bookingMode === "SELF" ? helperVerifyRequested : false,
+        helperVerifyFee:
+          bookingMode === "SELF" ? Math.max(0, helperVerifyFee) : 0,
         startTime,
         endTime,
       };
@@ -78,8 +130,11 @@ export default function PaymentPage() {
 
       if (!response.ok) {
         const message =
-          data && typeof data === "object" && "error" in data && typeof (data as { error?: unknown }).error === "string"
-            ? ((data as { error: string }).error)
+          data &&
+          typeof data === "object" &&
+          "error" in data &&
+          typeof (data as { error?: unknown }).error === "string"
+            ? (data as { error: string }).error
             : "결제 처리 중 예약 생성에 실패했습니다.";
         setError(message);
         return;
@@ -93,11 +148,17 @@ export default function PaymentPage() {
 
       const query = new URLSearchParams({
         reservationId,
+        bookingMode,
         partnerId,
         carId,
         carLabel,
         garageName,
         workTitle,
+        taskIds: taskIds.join(","),
+        taskLabels,
+        selectedTaskCount,
+        packageId,
+        packageTitle,
         dateLabel,
         bayLabel,
         totalPrice: String(totalPrice),
@@ -115,7 +176,12 @@ export default function PaymentPage() {
   return (
     <section className="pb-24">
       <header className="mb-4 flex items-center gap-2">
-        <button type="button" onClick={() => router.back()} className="text-2xl text-zinc-700" aria-label="뒤로가기">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="text-2xl text-zinc-700"
+          aria-label="뒤로가기"
+        >
           ←
         </button>
         <h1 className="text-3xl font-semibold text-zinc-900">결제</h1>
@@ -124,16 +190,45 @@ export default function PaymentPage() {
       <div className="rounded-2xl bg-zinc-100 p-4">
         <h2 className="mb-3 text-xl font-semibold">주문 요약</h2>
         <div className="space-y-2 text-base text-zinc-700">
-          <p className="flex justify-between"><span>작업</span><span>{workTitle}</span></p>
-          <p className="flex justify-between"><span>지점</span><span>{garageName}</span></p>
-          <p className="flex justify-between"><span>날짜/시간</span><span>{dateLabel}</span></p>
-          <p className="flex justify-between"><span>베이</span><span>{bayLabel}</span></p>
-          <p className="flex justify-between"><span>차량</span><span>{carLabel}</span></p>
+          <p className="flex justify-between">
+            <span>작업</span>
+            <span>{workTitle}</span>
+          </p>
+          {bookingMode === "SELF" ? (
+            <p className="flex justify-between">
+              <span>작업 개수</span>
+              <span>{selectedTaskCount}개</span>
+            </p>
+          ) : null}
+          {bookingMode === "SELF" ? (
+            <p className="flex justify-between">
+              <span>카 마스터 검수</span>
+              <span>{Math.max(0, helperVerifyFee).toLocaleString("ko-KR")}원</span>
+            </p>
+          ) : null}
+          <p className="flex justify-between">
+            <span>지점</span>
+            <span>{garageName}</span>
+          </p>
+          <p className="flex justify-between">
+            <span>날짜/시간</span>
+            <span>{dateLabel}</span>
+          </p>
+          <p className="flex justify-between">
+            <span>베이</span>
+            <span>{bayLabel}</span>
+          </p>
+          <p className="flex justify-between">
+            <span>차량</span>
+            <span>{carLabel}</span>
+          </p>
         </div>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-2xl font-semibold">
           <span>결제 금액</span>
-          <span className="text-blue-600">{totalPrice.toLocaleString("ko-KR")}원</span>
+          <span className="text-blue-600">
+            {totalPrice.toLocaleString("ko-KR")}원
+          </span>
         </p>
       </div>
 
@@ -147,11 +242,15 @@ export default function PaymentPage() {
               type="button"
               onClick={() => setMethod(item)}
               className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-lg ${
-                selected ? "border-blue-600 bg-blue-50" : "border-zinc-300 bg-white"
+                selected
+                  ? "border-blue-600 bg-blue-50"
+                  : "border-zinc-300 bg-white"
               }`}
             >
               <span>{item}</span>
-              <span className={`h-5 w-5 rounded-full border ${selected ? "border-blue-600 bg-blue-600" : "border-zinc-300"}`} />
+              <span
+                className={`h-5 w-5 rounded-full border ${selected ? "border-blue-600 bg-blue-600" : "border-zinc-300"}`}
+              />
             </button>
           );
         })}
@@ -166,16 +265,22 @@ export default function PaymentPage() {
         </ul>
       </div>
 
-      {error ? <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p> : null}
+      {error ? (
+        <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          {error}
+        </p>
+      ) : null}
 
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
           onClick={handlePay}
           disabled={isPaying}
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
         >
-          {isPaying ? "결제 처리 중..." : `${totalPrice.toLocaleString("ko-KR")}원 결제하기`}
+          {isPaying
+            ? "결제 처리 중..."
+            : `${totalPrice.toLocaleString("ko-KR")}원 결제하기`}
         </button>
       </div>
     </section>

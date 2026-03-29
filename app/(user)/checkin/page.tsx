@@ -29,14 +29,22 @@ function extractErrorMessage(payload: unknown): string | null {
     return typed.error;
   }
 
-  if (typed.error && typeof typed.error === "object" && typeof typed.error.message === "string") {
+  if (
+    typed.error &&
+    typeof typed.error === "object" &&
+    typeof typed.error.message === "string"
+  ) {
     return typed.error.message;
   }
 
   return null;
 }
 
-function buildMockUrl(reservationId: string, field: PhotoField, file: File): string {
+function buildMockUrl(
+  reservationId: string,
+  field: PhotoField,
+  file: File,
+): string {
   return `mock://checkin/${reservationId}/${field}/${encodeURIComponent(file.name)}`;
 }
 
@@ -45,6 +53,8 @@ export default function CheckinPage() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId")?.trim() ?? "";
+  const bookingMode =
+    searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
   const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
@@ -54,6 +64,11 @@ export default function CheckinPage() {
   const endTime = searchParams.get("endTime") ?? "";
   const totalPrice = searchParams.get("totalPrice") ?? "15000";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
+  const taskIds = searchParams.get("taskIds") ?? "";
+  const taskLabels = searchParams.get("taskLabels") ?? workTitle;
+  const selectedTaskCount = searchParams.get("selectedTaskCount") ?? "1";
+  const packageId = searchParams.get("packageId") ?? "";
+  const packageTitle = searchParams.get("packageTitle") ?? "";
 
   const [qrScanned, setQrScanned] = useState<boolean>(false);
   const [frontImgFile, setFrontImgFile] = useState<File | null>(null);
@@ -88,7 +103,13 @@ export default function CheckinPage() {
     event.preventDefault();
     setError("");
 
-    if (!canSubmit || !frontImgFile || !rearImgFile || !leftImgFile || !rightImgFile) {
+    if (
+      !canSubmit ||
+      !frontImgFile ||
+      !rearImgFile ||
+      !leftImgFile ||
+      !rightImgFile
+    ) {
       setError("QR 스캔과 차량 사진 4장을 모두 완료해 주세요.");
       return;
     }
@@ -120,6 +141,7 @@ export default function CheckinPage() {
 
       const query = new URLSearchParams({
         reservationId,
+        bookingMode,
         partnerId,
         carId,
         carLabel,
@@ -129,6 +151,11 @@ export default function CheckinPage() {
         endTime,
         totalPrice,
         workTitle,
+        taskIds,
+        taskLabels,
+        selectedTaskCount,
+        packageId,
+        packageTitle,
       });
       router.push(`/in-use?${query.toString()}`);
     } catch {
@@ -141,7 +168,12 @@ export default function CheckinPage() {
   return (
     <section className="pb-24">
       <header className="mb-4 flex items-center gap-2">
-        <button type="button" onClick={() => router.back()} className="text-2xl text-zinc-700" aria-label="뒤로가기">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="text-2xl text-zinc-700"
+          aria-label="뒤로가기"
+        >
           ←
         </button>
         <h1 className="text-3xl font-semibold text-zinc-900">체크인</h1>
@@ -160,7 +192,9 @@ export default function CheckinPage() {
             type="button"
             onClick={() => setQrScanned(true)}
             className={`flex h-36 w-full items-center justify-center rounded-2xl border-2 border-dashed text-lg ${
-              qrScanned ? "border-emerald-500 bg-emerald-50 text-emerald-600" : "border-zinc-300 bg-zinc-100 text-zinc-500"
+              qrScanned
+                ? "border-emerald-500 bg-emerald-50 text-emerald-600"
+                : "border-zinc-300 bg-zinc-100 text-zinc-500"
             }`}
           >
             {qrScanned ? "스캔 완료" : "탭하여 QR 스캔"}
@@ -174,11 +208,17 @@ export default function CheckinPage() {
               <label
                 key={tile.field}
                 className={`flex h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed text-base ${
-                  tile.file ? "border-emerald-500 bg-emerald-50 text-emerald-600" : "border-zinc-300 bg-zinc-100 text-zinc-500"
+                  tile.file
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-600"
+                    : "border-zinc-300 bg-zinc-100 text-zinc-500"
                 }`}
               >
                 <span>{tile.file ? "✓" : "📷"}</span>
-                <span className="mt-1">{tile.file ? `${photoLabels[tile.field]} 완료` : photoLabels[tile.field]}</span>
+                <span className="mt-1">
+                  {tile.file
+                    ? `${photoLabels[tile.field]} 완료`
+                    : photoLabels[tile.field]}
+                </span>
                 <input
                   type="file"
                   accept="image/*"
@@ -203,10 +243,12 @@ export default function CheckinPage() {
         ) : null}
 
         {error ? (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+          <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            {error}
+          </p>
         ) : null}
 
-        <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+        <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
           <button
             type="submit"
             disabled={!canSubmit || isLoading}

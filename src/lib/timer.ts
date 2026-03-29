@@ -52,7 +52,12 @@ export function calculateOverduePreview(
   const endDate = parseIsoDate(endTime);
   const startDate = parseIsoDate(startTime);
 
-  if (!endDate || !startDate || !Number.isFinite(totalPrice) || totalPrice < 0) {
+  if (
+    !endDate ||
+    !startDate ||
+    !Number.isFinite(totalPrice) ||
+    totalPrice < 0
+  ) {
     return {
       overdueMinutes: 0,
       previewFee: 0,
@@ -89,8 +94,8 @@ export function calculateOverduePreview(
   }
 
   const diffMinutes = Math.ceil((nowMs - endMs) / (1000 * 60));
-  const blocks = Math.ceil(diffMinutes / 30);
-  const previewFee = blocks * (hourlyPrice / 2);
+  const blocks = Math.ceil(diffMinutes / 60);
+  const previewFee = blocks * hourlyPrice;
 
   if (!Number.isFinite(previewFee) || previewFee < 0) {
     return {
