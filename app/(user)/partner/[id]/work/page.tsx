@@ -152,10 +152,13 @@ function PartnerWorkPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialMode = parseMode(searchParams.get("mode"));
-  const initialBookingMode = initialMode === "SHOP_SERVICE" ? "PACKAGE" : "SELF";
+  const initialBookingMode =
+    initialMode === "SHOP_SERVICE" ? "PACKAGE" : "SELF";
 
   const [cars] = useState(() => loadMockCarsFromStorage() ?? initialMockCars);
-  const [bookingMode, setBookingMode] = useState<"SELF" | "PACKAGE">(initialBookingMode);
+  const [bookingMode, setBookingMode] = useState<"SELF" | "PACKAGE">(
+    initialBookingMode,
+  );
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([
     selfMaintenanceTaskOptions[0].id,
   ]);
@@ -443,8 +446,12 @@ function PartnerWorkPageContent() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-2xl font-medium text-zinc-900">{item.name}</p>
-                      <p className="mt-1 text-base text-zinc-600">{item.summary}</p>
+                      <p className="text-2xl font-medium text-zinc-900">
+                        {item.name}
+                      </p>
+                      <p className="mt-1 text-base text-zinc-600">
+                        {item.summary}
+                      </p>
                     </div>
                     {selected ? (
                       <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
@@ -483,7 +490,8 @@ function PartnerWorkPageContent() {
                       .map((task) => task.title)
                       .join(", "),
                   )}&packageId=${encodeURIComponent(selectedPackageId)}&packageTitle=${encodeURIComponent(
-                    packages.find((item) => item.id === selectedPackageId)?.name ?? "패키지",
+                    packages.find((item) => item.id === selectedPackageId)
+                      ?.name ?? "패키지",
                   )}&carId=${selectedCar.id}&carLabel=${encodeURIComponent(`${selectedCar.model} (${selectedCar.year})`)}`,
                 )
               : null
