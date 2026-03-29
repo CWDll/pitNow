@@ -101,6 +101,64 @@ function CompletePageContent() {
     }
   }
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadExistingReview() {
+      if (!reservationId) {
+        if (!isCancelled) {
+          setIsLoadingReview(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/reviews?reservationId=${encodeURIComponent(reservationId)}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
+
+        const data: unknown = await response.json();
+
+        if (!response.ok || isCancelled) {
+          return;
+        }
+
+        const review =
+          data && typeof data === "object" && "review" in data
+            ? (data as { review?: { rating?: number; comment?: string | null } | null }).review
+            : null;
+
+        if (review) {
+          if (typeof review.rating === "number") {
+            setRating(review.rating);
+          }
+
+          if (typeof review.comment === "string") {
+            setReviewText(review.comment);
+          }
+
+          setHasExistingReview(true);
+        }
+      } catch {
+        setReviewError("기존 리뷰를 불러오지 못했습니다.");
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingReview(false);
+        }
+      }
+    }
+
+    void loadExistingReview();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [reservationId]);
+
   return (
     <section className="pb-24 pt-6">
       <div className="mb-4 text-center">

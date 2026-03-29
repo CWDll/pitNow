@@ -3,10 +3,6 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
-import {
-  formatMinutesLabel,
-  getReservationTypeLabel,
-} from "@/app/(user)/_data/mock-garages";
 import type { ReservationType } from "@/src/domain/types";
 
 function parseMode(value: string | null): ReservationType {

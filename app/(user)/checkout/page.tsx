@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChangeEvent, Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 interface CheckoutApiError {
   error?: string | { message?: string };
@@ -30,13 +30,6 @@ function extractError(payload: unknown): string | null {
 
 function buildMockUrl(reservationId: string, file: File, key: string): string {
   return `mock://checkout/${reservationId}/${key}/${encodeURIComponent(file.name)}`;
-}
-
-function handleFileChange(
-  event: ChangeEvent<HTMLInputElement>,
-  setter: (file: File | null) => void,
-) {
-  setter(event.target.files?.[0] ?? null);
 }
 
 function CheckoutPageContent() {

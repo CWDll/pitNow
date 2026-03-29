@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { PointerEvent, Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 
 const safetyChecklist = [
   "리프트와 장비 사용 전 주의사항을 숙지합니다.",
@@ -128,16 +128,6 @@ function SafetyPageContent() {
 
     setIsDrawing(false);
     ctx.beginPath();
-  }
-
-  function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
-    startDraw(event.clientX, event.clientY);
-  }
-
-  function handlePointerMove(event: PointerEvent<HTMLCanvasElement>) {
-    if (isDrawing) {
-      drawAt(event.clientX, event.clientY);
-    }
   }
 
   return (

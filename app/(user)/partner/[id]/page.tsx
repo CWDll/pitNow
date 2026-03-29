@@ -1,12 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import {
-  formatMinutesLabel,
-  getGarageById,
-  selfWorkOptions,
-} from "@/app/(user)/_data/mock-garages";
+import { formatMinutesLabel } from "@/app/(user)/_data/mock-garages";
 import { getPartnerShopPackages } from "@/src/lib/partner-packages";
+import { getPartnerProfileById } from "@/src/lib/partners";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 interface PartnerDetailPageProps {
@@ -20,6 +17,12 @@ interface ReviewRow {
   created_at: string;
 }
 
+interface SelfTaskRow {
+  id: string;
+  name: string;
+  helper_verify_unit_fee: number;
+}
+
 function formatPrice(price: number): string {
   return `${price.toLocaleString("ko-KR")}원`;
 }
@@ -27,12 +30,6 @@ function formatPrice(price: number): string {
 function renderStars(rating: number): string {
   const safe = Math.max(0, Math.min(5, Math.round(rating)));
   return "★".repeat(safe) + "☆".repeat(5 - safe);
-}
-
-function levelClass(level: "초급" | "중급"): string {
-  return level === "초급"
-    ? "bg-emerald-50 text-emerald-600"
-    : "bg-amber-50 text-amber-600";
 }
 
 function formatDate(iso: string): string {
@@ -47,6 +44,27 @@ function formatDate(iso: string): string {
     month: "2-digit",
     day: "2-digit",
   });
+}
+
+async function getSelfTasks(): Promise<SelfTaskRow[]> {
+  if (!hasSupabaseEnv) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("self_maintenance_tasks")
+    .select("id,name,helper_verify_unit_fee")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(3)
+    .returns<SelfTaskRow[]>();
+
+  if (error) {
+    console.error("SELF TASK LOOKUP ERROR:", error);
+    return [];
+  }
+
+  return data ?? [];
 }
 
 async function getRecentReviewsByPartnerId(
@@ -76,18 +94,19 @@ export default async function PartnerDetailPage({
   params,
 }: PartnerDetailPageProps) {
   const { id } = await params;
-  const garage = getGarageById(id);
+  const garage = await getPartnerProfileById(id);
 
   if (!garage) {
     notFound();
   }
 
   const reviews = await getRecentReviewsByPartnerId(garage.id);
+  const selfTasks = await getSelfTasks();
   const { packages } = await getPartnerShopPackages(garage.id);
   const averageRating =
     reviews.length > 0
       ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
-      : garage.rating;
+      : 0;
 
   return (
     <section className="pb-28">
@@ -96,7 +115,7 @@ export default async function PartnerDetailPage({
       <div className="space-y-2">
         <h1 className="text-4xl font-semibold text-zinc-900">{garage.name}</h1>
         <p className="text-lg text-zinc-700">
-          ★ {averageRating.toFixed(1)} ({reviews.length || garage.reviewCount}개
+          ★ {averageRating.toFixed(1)} ({reviews.length}개
           후기)
         </p>
         <p className="text-lg text-zinc-700">📍 {garage.address}</p>
@@ -111,26 +130,30 @@ export default async function PartnerDetailPage({
             셀프 정비 추천 작업
           </h2>
           <div className="mt-4 space-y-3">
-            {selfWorkOptions.slice(0, 3).map((option) => (
-              <div key={option.id} className="rounded-2xl bg-white p-4">
+            {selfTasks.map((task) => (
+              <div key={task.id} className="rounded-2xl bg-white p-4">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-lg font-semibold text-zinc-900">
-                    {option.title}
+                    {task.name}
                   </p>
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-medium ${levelClass(option.level)}`}
-                  >
-                    {option.level}
+                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-600">
+                    셀프 허용
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-zinc-600">
-                  {option.description}
+                  법적 허용 셀프 정비 작업
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  소요 {option.durationLabel}
+                  검수 가산 {Number(task.helper_verify_unit_fee).toLocaleString("ko-KR")}원
                 </p>
               </div>
             ))}
+
+            {selfTasks.length === 0 ? (
+              <p className="rounded-2xl bg-white p-4 text-sm text-zinc-600">
+                현재 등록된 셀프 정비 작업이 없습니다.
+              </p>
+            ) : null}
           </div>
           <Link
             href={`/partner/${garage.id}/work?mode=SELF_SERVICE`}

@@ -3,14 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
-import {
-  formatMinutesLabel,
-  getReservationTypeLabel,
-} from "@/app/(user)/_data/mock-garages";
-import type {
-  CreateReservationPayload,
-  ReservationType,
-} from "@/src/domain/types";
+import type { CreateReservationPayload } from "@/src/domain/types";
 
 const paymentMethods = [
   "신용/체크카드",
@@ -26,10 +19,6 @@ function parseReservationId(payload: unknown): string | null {
   }
 
   return null;
-}
-
-function parseMode(value: string | null): ReservationType {
-  return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
 }
 
 function PaymentPageContent() {

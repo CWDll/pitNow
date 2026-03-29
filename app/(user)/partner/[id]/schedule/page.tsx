@@ -4,10 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
-import {
-  getGarageById,
-  selfMaintenanceTaskOptions,
-} from "../../../_data/mock-garages";
+import { selfMaintenanceTaskOptions } from "../../../_data/mock-garages";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
@@ -39,6 +36,22 @@ interface ReservationRangeRow {
   start_time: string;
   end_time?: string | null;
   blocked_until?: string | null;
+}
+
+interface PartnerInfo {
+  id: string;
+  name: string;
+  address: string;
+  hours: string;
+  phone: string;
+  hourlyPrice: number;
+  bayIds: string[];
+  bayCount: number;
+}
+
+interface PartnerResponse {
+  success: boolean;
+  partner?: PartnerInfo;
 }
 
 function stripTime(date: Date): Date {
@@ -113,8 +126,7 @@ function PartnerSchedulePageContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  const garage = useMemo(() => getGarageById(params.id), [params.id]);
+  const [garage, setGarage] = useState<PartnerInfo | null>(null);
 
   const [selectedDate, setSelectedDate] = useState<Date>(stripTime(new Date()));
   const [selectedBay, setSelectedBay] = useState<number>(1);
@@ -134,34 +146,60 @@ function PartnerSchedulePageContent() {
   const taskLabels = searchParams.get("taskLabels") ?? "선택 작업 없음";
   const packageId = searchParams.get("packageId") ?? "";
   const packageTitle = searchParams.get("packageTitle") ?? "패키지";
-  const packageMinutes = parsePositiveNumber(searchParams.get("packageMinutes"), 60);
+  const packageMinutes = parsePositiveNumber(
+    searchParams.get("packageMinutes"),
+    60,
+  );
   const packagePrice = parsePositiveNumber(searchParams.get("packagePrice"), 0);
   const carId = searchParams.get("carId") ?? "";
   const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7";
 
-  if (!garage) {
-    return (
-      <section className="space-y-4">
-        <h1 className="text-3xl font-semibold text-zinc-900">
-          시간 / 베이 선택
-        </h1>
-        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-          정비소 정보를 찾을 수 없습니다.
-        </p>
-      </section>
-    );
-  }
+  useEffect(() => {
+    let isCancelled = false;
 
-  const safeGarage = garage;
-  const resolvedBayIds = bayIds.length > 0 ? bayIds : safeGarage.bayIds;
+    async function loadPartner() {
+      try {
+        const response = await fetch(`/api/partners/${params.id}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok || isCancelled) {
+          return;
+        }
+
+        const payload = (await response.json()) as PartnerResponse;
+
+        if (!payload.success || !payload.partner || isCancelled) {
+          return;
+        }
+
+        setGarage(payload.partner);
+      } catch (error) {
+        console.error("SCHEDULE PARTNER LOAD ERROR:", error);
+      }
+    }
+
+    void loadPartner();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [params.id]);
+
+  const safeGarage = useMemo(() => garage, [garage]);
+  const resolvedBayIds = useMemo(
+    () => (bayIds.length > 0 ? bayIds : safeGarage?.bayIds ?? []),
+    [bayIds, safeGarage?.bayIds],
+  );
   const selectedBayId =
-    resolvedBayIds[selectedBay - 1] ?? resolvedBayIds[0] ?? safeGarage.bayId;
+    resolvedBayIds[selectedBay - 1] ?? resolvedBayIds[0] ?? null;
 
   useEffect(() => {
     let isCancelled = false;
 
     async function loadBays() {
-      if (!hasSupabaseEnv) {
+      if (!hasSupabaseEnv || !safeGarage?.id) {
         return;
       }
 
@@ -190,13 +228,13 @@ function PartnerSchedulePageContent() {
     return () => {
       isCancelled = true;
     };
-  }, [safeGarage.id]);
+  }, [safeGarage?.id]);
 
   useEffect(() => {
     let isCancelled = false;
 
     async function loadRanges() {
-      if (!hasSupabaseEnv) {
+      if (!hasSupabaseEnv || !safeGarage?.id) {
         return;
       }
 
@@ -237,7 +275,7 @@ function PartnerSchedulePageContent() {
     return () => {
       isCancelled = true;
     };
-  }, [safeGarage.id, selectedDate]);
+  }, [safeGarage?.id, selectedDate]);
 
   function isReservedBlock(blockIdx: number, bayNumber: number): boolean {
     const bayId = resolvedBayIds[bayNumber - 1];
@@ -280,12 +318,10 @@ function PartnerSchedulePageContent() {
   const totalPrice =
     bookingMode === "PACKAGE"
       ? packagePrice
-      : selectedBlocks * garage.hourlyPrice;
+      : selectedBlocks * (safeGarage?.hourlyPrice ?? 0);
 
   const packageDurationBlocks =
-    bookingMode === "PACKAGE"
-      ? Math.max(1, Math.ceil(packageMinutes / 60))
-      : 0;
+    bookingMode === "PACKAGE" ? Math.max(1, Math.ceil(packageMinutes / 60)) : 0;
 
   const selectedSelfTasks = selfMaintenanceTaskOptions.filter((option) =>
     taskIds
@@ -437,8 +473,8 @@ function PartnerSchedulePageContent() {
     const selectedWeekdayLabel = weekdayLabels[selectedDate.getDay()];
     const query = new URLSearchParams({
       bookingMode,
-      partnerId: safeGarage.id,
-      garageName: safeGarage.name,
+      partnerId: safeGarage?.id ?? "",
+      garageName: safeGarage?.name ?? "",
       taskIds,
       taskLabels,
       selectedTaskCount: String(
@@ -470,11 +506,24 @@ function PartnerSchedulePageContent() {
     router.push(`/safety?${query.toString()}`);
   }
 
+  if (!safeGarage) {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold text-zinc-900">
+          시간 / 베이 선택
+        </h1>
+        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+          정비소 정보를 불러오는 중입니다.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="pb-24">
       <header className="mb-4 flex items-center gap-2">
         <Link
-          href={`/partner/${garage.id}/work`}
+          href={`/partner/${safeGarage.id}/work`}
           className="text-2xl text-zinc-700"
           aria-label="뒤로가기"
         >
@@ -648,7 +697,7 @@ function PartnerSchedulePageContent() {
         <div className="space-y-1 text-lg text-zinc-700">
           <div className="flex items-center justify-between">
             <span>시간당 요금</span>
-            <span>{garage.hourlyPrice.toLocaleString("ko-KR")}원</span>
+            <span>{safeGarage.hourlyPrice.toLocaleString("ko-KR")}원</span>
           </div>
           <div className="flex items-center justify-between">
             <span>선택 시간</span>

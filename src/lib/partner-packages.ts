@@ -1,4 +1,3 @@
-import { getGarageShopPackages } from "@/app/(user)/_data/mock-garages";
 import type { PartnerShopPackage } from "@/src/domain/shop-package";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
@@ -37,21 +36,11 @@ function normalizeServicePackage(
   return value ?? null;
 }
 
-function toMockPackages(partnerId: string): PartnerShopPackage[] {
-  return getGarageShopPackages(partnerId).map((item) => ({
-    id: item.id,
-    name: item.name,
-    summary: item.summary,
-    durationMinutes: item.durationMinutes,
-    price: item.price,
-  }));
-}
-
 export async function getPartnerShopPackages(
   partnerId: string,
 ): Promise<{ packages: PartnerShopPackage[]; source: "db" | "mock" }> {
   if (!hasSupabaseEnv) {
-    return { packages: toMockPackages(partnerId), source: "mock" };
+    return { packages: [], source: "db" };
   }
 
   const { data, error } = await supabase
@@ -65,7 +54,7 @@ export async function getPartnerShopPackages(
 
   if (error) {
     console.error("PARTNER PACKAGE LOOKUP ERROR:", error);
-    return { packages: toMockPackages(partnerId), source: "mock" };
+    return { packages: [], source: "db" };
   }
 
   const packages = (data ?? [])

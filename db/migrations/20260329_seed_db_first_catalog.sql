@@ -6,10 +6,18 @@ CREATE TABLE IF NOT EXISTS partners (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   address text NOT NULL,
+  hours text,
+  phone text,
+  hourly_price numeric,
   lat float8,
   lng float8,
   created_at timestamptz DEFAULT now()
 );
+
+ALTER TABLE partners
+  ADD COLUMN IF NOT EXISTS hours text,
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS hourly_price numeric;
 
 CREATE TABLE IF NOT EXISTS bays (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -54,12 +62,15 @@ CREATE TABLE IF NOT EXISTS self_maintenance_tasks (
   created_at timestamptz DEFAULT now()
 );
 
-INSERT INTO partners (id, name, address, lat, lng)
+INSERT INTO partners (id, name, address, hours, phone, hourly_price, lat, lng)
 VALUES
   (
     '11111111-1111-1111-1111-111111111111',
     '강남 셀프정비소',
     '서울 강남구 테헤란로 123',
+    '09:00 - 21:00',
+    '02-1234-5678',
+    15000,
     37.5000,
     127.0350
   ),
@@ -67,6 +78,9 @@ VALUES
     '22222222-2222-2222-2222-222222222222',
     '서초 DIY 개러지',
     '서울 서초구 반포대로 42',
+    '10:00 - 20:00',
+    '02-9876-5432',
+    12000,
     37.4920,
     127.0120
   ),
@@ -74,6 +88,9 @@ VALUES
     '33333333-3333-3333-3333-333333333333',
     '송파 스마트 정비소',
     '서울 송파구 올림픽로 300',
+    '09:00 - 22:00',
+    '02-3322-1100',
+    14000,
     37.5130,
     127.1020
   ),
@@ -81,6 +98,9 @@ VALUES
     '44444444-4444-4444-4444-444444444444',
     '마포 스피드 개러지',
     '서울 마포구 월드컵북로 55',
+    '10:00 - 21:00',
+    '02-4455-7788',
+    13000,
     37.5670,
     126.9010
   ),
@@ -88,6 +108,9 @@ VALUES
     '55555555-5555-5555-5555-555555555555',
     '성수 프리미엄 모터스',
     '서울 성동구 성수이로 77',
+    '08:30 - 21:30',
+    '02-9900-2244',
+    18000,
     37.5440,
     127.0550
   )
@@ -95,6 +118,9 @@ ON CONFLICT (id) DO UPDATE
 SET
   name = EXCLUDED.name,
   address = EXCLUDED.address,
+  hours = EXCLUDED.hours,
+  phone = EXCLUDED.phone,
+  hourly_price = EXCLUDED.hourly_price,
   lat = EXCLUDED.lat,
   lng = EXCLUDED.lng;
 
