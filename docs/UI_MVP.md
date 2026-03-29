@@ -1,42 +1,42 @@
 # UI Structure (Based on Team Wireframe)
 
-UI Strategy
+## UI Strategy
 
-User App
-• Mobile only layout
-• Bottom navigation (5-tab structure)
-• Full-width components
-• Designed for touch interaction
-• PWA installable
-• No desktop layout support
+### User App
 
-Viewport target: max-width 430px
+- Mobile-only layout
+- Bottom navigation (5 tabs)
+- Full-width components
+- Touch-first interaction
+- PWA installable
+- No desktop layout support
 
-⸻
+Viewport target: `max-width 430px`
 
-Admin Console
-• Desktop only
-• Separate route: /admin
-• Table-based data view
-• Focus on reservation + settlement monitoring
-• No mobile support required
+### Admin Console
 
-⸻
+- Desktop only
+- Separate route: `/admin`
+- Table-based monitoring view
+- Focus on reservation, package pricing, and settlement monitoring
 
-Layout Separation
+### Layout Separation
 
 User App:
-• / (home)
-• /partner/[id]
-• /reservation
-• /checkin
-• /in-use
-• /checkout
+
+- `/`
+- `/partner/[id]`
+- `/reservation`
+- `/checkin`
+- `/in-use`
+- `/checkout`
 
 Admin:
-• /admin
-• /admin/reservations
-• /admin/settlement
+
+- `/admin`
+- `/admin/reservations`
+- `/admin/settlement`
+- `/admin/packages`
 
 User and Admin must not share layout wrappers.
 
@@ -55,7 +55,30 @@ User and Admin must not share layout wrappers.
 
 ## Component Rules
 
+### Home
+
+- Partner card shows both `Self Service` and `Shop Service` availability when supported
+- Show fastest available option
+- Allow sorting/filtering by price
+
+### Partner Detail
+
+- Separate sections for:
+  - Self-service hourly reservation
+  - Shop-service package reservation
+- Package list must show:
+  - Package name
+  - Included work
+  - Estimated duration
+  - Partner-specific price
+
 ### Reservation
+
+- First step must be reservation mode selection:
+  - `Self Service`
+  - `Shop Service`
+
+#### Self Service
 
 - Date picker
 - Start time picker + duration selector (1 hour unit)
@@ -67,10 +90,18 @@ User and Admin must not share layout wrappers.
 
 ### Check-in
 
+#### Self Service
+
 - QR input
 - 4 photo upload mandatory
 
+#### Shop Service
+
+- No 4-photo mandatory flow in MVP unless separately required by operations
+
 ### In-use
+
+#### Self Service
 
 - Timer visible
 - Extend button

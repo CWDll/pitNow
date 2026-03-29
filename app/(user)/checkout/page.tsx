@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { ChangeEvent, Suspense, useMemo, useState } from "react";
 
 interface CheckoutApiError {
   error?: string | { message?: string };
@@ -34,14 +34,22 @@ function buildMockUrl(reservationId: string, file: File, key: string): string {
   return `mock://checkout/${reservationId}/${key}/${encodeURIComponent(file.name)}`;
 }
 
-export default function CheckoutPage() {
+function handleFileChange(
+  event: ChangeEvent<HTMLInputElement>,
+  setter: (file: File | null) => void,
+) {
+  setter(event.target.files?.[0] ?? null);
+}
+
+function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId") ?? "";
+  const reservationType = searchParams.get("reservationType") ?? "SELF_SERVICE";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
-  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
+  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
@@ -85,7 +93,7 @@ export default function CheckoutPage() {
   async function handleComplete() {
     setError("");
 
-    if (!canSubmitBase) {
+    if (!canSubmitBase || !photo1 || !photo2) {
       setError("체크리스트와 사진 2장을 모두 완료해 주세요.");
       return;
     }
@@ -126,6 +134,7 @@ export default function CheckoutPage() {
 
       const query = new URLSearchParams({
         reservationId,
+        reservationType,
         partnerId,
         carId,
         carLabel,
@@ -143,10 +152,21 @@ export default function CheckoutPage() {
 
       router.push(`/complete?${query.toString()}`);
     } catch {
-      setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      setError("체크아웃 처리 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (reservationType === "SHOP_SERVICE") {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold text-zinc-900">체크아웃</h1>
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          전문가 맡기기 예약은 이 화면을 사용하지 않습니다.
+        </p>
+      </section>
+    );
   }
 
   return (
@@ -281,5 +301,13 @@ export default function CheckoutPage() {
         </button>
       </div>
     </section>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<section className="pb-24" />}>
+      <CheckoutPageContent />
+    </Suspense>
   );
 }

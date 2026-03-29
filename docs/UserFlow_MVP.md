@@ -1,6 +1,6 @@
 # User Flow (MVP)
 
-## Primary Flow
+## Self Service Flow
 
 ```mermaid
 flowchart TD

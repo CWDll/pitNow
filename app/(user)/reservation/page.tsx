@@ -1,139 +1,104 @@
-import Link from "next/link";
+import { garageList, getShopPackageById } from "@/app/(user)/_data/mock-garages";
+import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
-interface ReservationItem {
+import ReservationListClient, { type ReservationListItem } from "./reservation-list-client";
+
+const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
+
+type ReservationStatus = "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
+type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
+
+interface ReservationRow {
   id: string;
-  garageName: string;
-  workTitle: string;
-  dateLabel: string;
-  bayLabel: string;
-  status: "예약확정" | "사용중" | "완료";
+  partner_id: string;
+  bay_id: string;
+  reservation_type: ReservationType;
+  package_id: string | null;
+  start_time: string;
+  end_time: string;
+  reserved_end_time: string;
+  status: ReservationStatus;
+  total_price: number;
 }
 
-const upcomingReservations: ReservationItem[] = [
-  {
-    id: "rsv-1",
-    garageName: "강남 셀프정비소",
-    workTitle: "엔진오일 교환",
-    dateLabel: "2/28(금) 14:00",
-    bayLabel: "3번 베이",
-    status: "예약확정",
-  },
-  {
-    id: "rsv-2",
-    garageName: "서초 DIY 카센터",
-    workTitle: "브레이크 패드 교환",
-    dateLabel: "오늘 16:30",
-    bayLabel: "2번 베이",
-    status: "사용중",
-  },
-];
+function formatDateLabel(startTime: string, endTime: string): string {
+  const start = new Date(startTime);
+  const end = new Date(endTime);
 
-const pastReservations: ReservationItem[] = [
-  {
-    id: "rsv-3",
-    garageName: "서초 DIY 카센터",
-    workTitle: "에어필터 교환",
-    dateLabel: "2/15(토) 11:00",
-    bayLabel: "4번 베이",
-    status: "완료",
-  },
-];
-
-function statusClass(status: ReservationItem["status"]): string {
-  if (status === "예약확정") {
-    return "bg-blue-50 text-blue-600";
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "예약 시간 정보 없음";
   }
 
-  if (status === "사용중") {
-    return "bg-indigo-50 text-indigo-600";
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][start.getDay()];
+  const formatTime = (date: Date) =>
+    `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+
+  return `${start.getMonth() + 1}/${start.getDate()}(${weekday}) ${formatTime(start)} - ${formatTime(end)}`;
+}
+
+async function getReservationItems(): Promise<ReservationListItem[]> {
+  if (!hasSupabaseEnv) {
+    return [];
   }
 
-  return "bg-emerald-50 text-emerald-600";
-}
+  const { data, error } = await supabase
+    .from("reservations")
+    .select("id, partner_id, bay_id, reservation_type, package_id, start_time, end_time, reserved_end_time, status, total_price")
+    .eq("user_id", MOCK_USER_ID)
+    .order("start_time", { ascending: false })
+    .returns<ReservationRow[]>();
 
-function buildReservationCompleteHref(item: ReservationItem): string {
-  const query = new URLSearchParams({
-    reservationId: item.id,
-    garageName: item.garageName,
-    dateLabel: item.dateLabel,
-    bayLabel: item.bayLabel,
-    workTitle: item.workTitle,
-    totalPrice: "15000",
+  if (error) {
+    console.error("RESERVATION LIST LOOKUP ERROR:", error);
+    return [];
+  }
+
+  return (data ?? []).map((reservation) => {
+    const garage = garageList.find((item) => item.id === reservation.partner_id);
+    const workTitle =
+      reservation.reservation_type === "SELF_SERVICE"
+        ? "셀프 정비"
+        : getShopPackageById(reservation.package_id ?? "")?.name ?? "전문가 맡기기";
+    const bayIndex = garage?.bayIds.findIndex((bayId) => bayId === reservation.bay_id) ?? -1;
+    const bayLabel =
+      reservation.reservation_type === "SELF_SERVICE" && bayIndex >= 0 ? `${bayIndex + 1}번 베이` : undefined;
+    const blockedMinutes = Math.max(
+      30,
+      Math.round(
+        (new Date(reservation.reserved_end_time).getTime() - new Date(reservation.start_time).getTime()) /
+          (1000 * 60),
+      ),
+    );
+
+    return {
+      id: reservation.id,
+      garageName: garage?.name ?? "정비소",
+      workTitle,
+      dateLabel: formatDateLabel(reservation.start_time, reservation.end_time),
+      bayLabel,
+      reservationType: reservation.reservation_type,
+      status: reservation.status,
+      totalPrice: reservation.total_price,
+      startTime: reservation.start_time,
+      endTime: reservation.end_time,
+      blockedMinutes,
+    };
   });
-
-  return `/reservation-complete?${query.toString()}`;
 }
 
-function buildInUseHref(item: ReservationItem): string {
-  const query = new URLSearchParams({
-    reservationId: item.id,
-    garageName: item.garageName,
-    bayLabel: item.bayLabel,
-    workTitle: item.workTitle,
-    totalPrice: "15000",
-  });
-
-  return `/in-use?${query.toString()}`;
-}
-
-function ReservationCard({ item }: { item: ReservationItem }) {
-  const cardBody = (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-300">
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="text-2xl font-semibold text-zinc-900">{item.garageName}</h3>
-          <p className="mt-1 text-lg text-zinc-600">{item.workTitle}</p>
-        </div>
-        <span className={`rounded-full px-3 py-1 text-sm font-medium ${statusClass(item.status)}`}>
-          {item.status}
-        </span>
-      </div>
-
-      <p className="mt-4 text-lg text-zinc-500">
-        📅 {item.dateLabel} &nbsp;&nbsp; 📍 {item.bayLabel}
-      </p>
-    </article>
+export default async function ReservationListPage() {
+  const reservations = await getReservationItems();
+  const upcomingReservations = reservations.filter((item) =>
+    ["CONFIRMED", "CHECKED_IN", "IN_USE"].includes(item.status),
+  );
+  const pastReservations = reservations.filter((item) =>
+    ["COMPLETED", "CANCELLED"].includes(item.status),
   );
 
-  if (item.status === "예약확정") {
-    return (
-      <Link href={buildReservationCompleteHref(item)} className="block">
-        {cardBody}
-      </Link>
-    );
-  }
-
-  if (item.status === "사용중") {
-    return (
-      <Link href={buildInUseHref(item)} className="block">
-        {cardBody}
-      </Link>
-    );
-  }
-
-  return cardBody;
-}
-
-export default function ReservationListPage() {
   return (
-    <section className="space-y-6 pb-4">
-      <header className="space-y-1">
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-900">내 예약</h1>
-      </header>
-
-      <section className="space-y-3">
-        <h2 className="text-2xl font-semibold text-zinc-700">다가오는 예약</h2>
-        {upcomingReservations.map((item) => (
-          <ReservationCard key={item.id} item={item} />
-        ))}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-2xl font-semibold text-zinc-700">지난 이용</h2>
-        {pastReservations.map((item) => (
-          <ReservationCard key={item.id} item={item} />
-        ))}
-      </section>
-    </section>
+    <ReservationListClient
+      upcomingReservations={upcomingReservations}
+      pastReservations={pastReservations}
+    />
   );
 }

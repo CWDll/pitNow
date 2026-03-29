@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { supabase } from "@/src/lib/supabase";
+import { getSupabaseEnvErrorResponse, hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 type ReservationStatus =
   | "CONFIRMED"
@@ -102,6 +102,10 @@ async function rollbackCheckinInsert(reservationId: string): Promise<void> {
 }
 
 export async function POST(req: Request) {
+  if (!hasSupabaseEnv) {
+    return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
+  }
+
   let payload: unknown;
 
   try {

@@ -1,15 +1,18 @@
-구조:
-• Next.js App Router
-• Route Handler 사용
-• Supabase DB
-• Mock user_id 사용
+# API MVP
 
-모든 응답은 JSON.
-모든 상태 전환은 명시적이어야 한다.
+## Principles
 
-⸻
+- Next.js App Router
+- Route Handler based API
+- Supabase DB
+- Mock `user_id` allowed in MVP
+- All responses are JSON
+- All status transitions must be explicit
+- Reservation conflicts must be rejected by the DB layer
 
-1. POST /api/reservations
+---
+
+## 1. POST /api/reservations
 
 ⸻
 

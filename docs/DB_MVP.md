@@ -17,37 +17,85 @@ Extensions
 
 create extension if not exists btree_gist;
 
-⸻
+````
 
-partners
+---
 
+## partners
+
+```sql
 create table partners (
-id uuid primary key default gen_random_uuid(),
-name text not null,
-address text not null,
-lat float8,
-lng float8,
-created_at timestamptz default now()
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  address text not null,
+  lat float8,
+  lng float8,
+  created_at timestamptz default now()
 );
+````
 
-⸻
+---
 
-bays
+## bays
 
+```sql
 create table bays (
-id uuid primary key default gen_random_uuid(),
-partner_id uuid references partners(id) on delete cascade,
-name text not null,
-is_active boolean default true,
-created_at timestamptz default now()
+  id uuid primary key default gen_random_uuid(),
+  partner_id uuid references partners(id) on delete cascade,
+  name text not null,
+  is_active boolean default true,
+  created_at timestamptz default now()
 );
 
 create index idx_bays_partner on bays(partner_id);
+```
 
-⸻
+---
 
-reservations
+## service_packages
 
+Global package catalog reused from the Figma package set.
+
+```sql
+create table service_packages (
+  id uuid primary key default gen_random_uuid(),
+  code text unique not null,
+  name text not null,
+  description text,
+  duration_minutes int not null check (duration_minutes > 0),
+  is_active boolean default true,
+  created_at timestamptz default now()
+);
+```
+
+---
+
+## partner_package_prices
+
+Partner-specific published package pricing.
+
+```sql
+create table partner_package_prices (
+  id uuid primary key default gen_random_uuid(),
+  partner_id uuid not null references partners(id) on delete cascade,
+  package_id uuid not null references service_packages(id) on delete cascade,
+  labor_price numeric not null check (labor_price >= 0),
+  is_active boolean default true,
+  created_at timestamptz default now(),
+  unique (partner_id, package_id)
+);
+
+create index idx_partner_package_prices_partner on partner_package_prices(partner_id);
+```
+
+---
+
+## reservations
+
+`reserved_end_time` is the actual blocked end time.
+For `SHOP_SERVICE`, it is computed by rounding package duration up to 30-minute units.
+
+```sql
 create table reservations (
 id uuid primary key default gen_random_uuid(),
 user_id uuid not null,
@@ -91,12 +139,17 @@ or (helper_verify_requested = true and helper_verify_fee >= 5000)
 
 create index idx_reservations_bay on reservations(bay_id);
 create index idx_reservations_user on reservations(user_id);
-create index idx_reservations_time on reservations(start_time, end_time);
+create index idx_reservations_time on reservations(start_time, reserved_end_time);
+```
 
-⸻
+---
 
-예약 겹침 방지 (중요)
+## Reservation Conflict Prevention
 
+For MVP, both reservation types must still resolve to a real blocked bay/resource so overlap can be prevented.
+If `SHOP_SERVICE` bay assignment is hidden from the user, the system or partner admin must assign one before confirmation.
+
+```sql
 alter table reservations
 add constraint no_overlap
 exclude using gist (
@@ -154,38 +207,42 @@ or (consent_method = 'SIGNATURE' and signature_image_url is not null)
 checkins
 
 create table checkins (
-id uuid primary key default gen_random_uuid(),
-reservation_id uuid unique references reservations(id) on delete cascade,
-front_img text not null,
-rear_img text not null,
-left_img text not null,
-right_img text not null,
-checked_in_at timestamptz default now()
+  id uuid primary key default gen_random_uuid(),
+  reservation_id uuid unique references reservations(id) on delete cascade,
+  front_img text not null,
+  rear_img text not null,
+  left_img text not null,
+  right_img text not null,
+  checked_in_at timestamptz default now()
 );
+```
 
-⸻
+---
 
-checkouts
+## checkouts
 
+```sql
 create table checkouts (
-id uuid primary key default gen_random_uuid(),
-reservation_id uuid unique references reservations(id) on delete cascade,
-extra_fee numeric default 0,
-completed_at timestamptz default now()
+  id uuid primary key default gen_random_uuid(),
+  reservation_id uuid unique references reservations(id) on delete cascade,
+  extra_fee numeric default 0,
+  completed_at timestamptz default now()
 );
+```
 
-⸻
+---
 
-reviews
+## reviews
 
+```sql
 create table reviews (
-id uuid primary key default gen_random_uuid(),
-reservation_id uuid unique references reservations(id) on delete cascade,
-partner_id uuid references partners(id) on delete cascade,
-user_id uuid not null,
-rating int not null check (rating between 1 and 5),
-comment text,
-created_at timestamptz default now()
+  id uuid primary key default gen_random_uuid(),
+  reservation_id uuid unique references reservations(id) on delete cascade,
+  partner_id uuid references partners(id) on delete cascade,
+  user_id uuid not null,
+  rating int not null check (rating between 1 and 5),
+  comment text,
+  created_at timestamptz default now()
 );
 
 create index idx_reviews_partner on reviews(partner_id);
@@ -199,3 +256,4 @@ MVP 제외 (향후 확장용)
 • status_logs
 
 지금은 최소 스키마만 유지한다.
+```

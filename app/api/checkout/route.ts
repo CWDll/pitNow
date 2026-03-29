@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { supabase } from "@/src/lib/supabase";
+import {
+  getSupabaseEnvErrorResponse,
+  hasSupabaseEnv,
+  supabase,
+} from "@/src/lib/supabase";
 
 type ReservationStatus =
   | "CONFIRMED"
@@ -8,6 +12,8 @@ type ReservationStatus =
   | "IN_USE"
   | "COMPLETED"
   | "CANCELLED";
+
+type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 
 interface CheckoutRequestBody {
   reservationId: string;
@@ -17,8 +23,10 @@ interface CheckoutRequestBody {
 interface ReservationRow {
   id: string;
   status: ReservationStatus;
+  reservation_type: ReservationType;
   start_time: string;
   end_time: string;
+  reserved_end_time: string;
   total_price: number | string;
   selected_task_count: number | null;
   helper_verify_requested: boolean | null;
@@ -106,12 +114,12 @@ function toFiniteNumber(value: number | string): number | null {
 function calculateExtraFee(params: {
   now: Date;
   startTime: Date;
-  endTime: Date;
+  reservedEndTime: Date;
   totalPrice: number;
 }): number | null {
-  const { now, startTime, endTime, totalPrice } = params;
+  const { now, startTime, reservedEndTime, totalPrice } = params;
 
-  const totalDurationMs = endTime.getTime() - startTime.getTime();
+  const totalDurationMs = reservedEndTime.getTime() - startTime.getTime();
 
   if (totalDurationMs <= 0) {
     return null;
@@ -124,7 +132,7 @@ function calculateExtraFee(params: {
     return null;
   }
 
-  const diffMs = now.getTime() - endTime.getTime();
+  const diffMs = now.getTime() - reservedEndTime.getTime();
 
   if (diffMs <= 0) {
     return 0;
@@ -153,6 +161,10 @@ async function rollbackCheckoutInsert(reservationId: string): Promise<void> {
 }
 
 export async function POST(req: Request) {
+  if (!hasSupabaseEnv) {
+    return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
+  }
+
   let payload: unknown;
 
   try {
@@ -231,6 +243,7 @@ export async function POST(req: Request) {
 
   const startTime = parseIsoDate(reservation.start_time);
   const endTime = parseIsoDate(reservation.end_time);
+  const reservedEndTime = parseIsoDate(reservation.reserved_end_time);
   const totalPrice = toFiniteNumber(reservation.total_price);
   const persistedHelperVerifyFee =
     reservation.helper_verify_fee === null
@@ -244,7 +257,7 @@ export async function POST(req: Request) {
       : 0;
   const isHelperAlreadyRequested = reservation.helper_verify_requested === true;
 
-  if (!startTime || !endTime || totalPrice === null) {
+  if (!startTime || !endTime || !reservedEndTime || totalPrice === null) {
     return errorResponse(
       500,
       "INVALID_RESERVATION_DATA",
@@ -253,12 +266,15 @@ export async function POST(req: Request) {
   }
 
   const now = new Date();
-  const extraFee = calculateExtraFee({
-    now,
-    startTime,
-    endTime,
-    totalPrice,
-  });
+  const extraFee =
+    reservation.reservation_type === "SHOP_SERVICE"
+      ? 0
+      : calculateExtraFee({
+          now,
+          startTime,
+          reservedEndTime,
+          totalPrice,
+        });
 
   if (extraFee === null) {
     return errorResponse(
@@ -366,7 +382,7 @@ function methodNotAllowed() {
       success: false,
       error: {
         code: "METHOD_NOT_ALLOWED",
-        message: "POST 메서드만 허용됩니다.",
+        message: "POST 메서드만 사용할 수 있습니다.",
       },
     },
     {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import type { CreateReviewPayload } from "@/src/domain/types";
 
@@ -32,22 +32,24 @@ function extractErrorMessage(payload: unknown): string | null {
   return null;
 }
 
-export default function CompletePage() {
+function CompletePageContent() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId") ?? "";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
-  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
+  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
   const extraFee = Number(searchParams.get("extraFee") ?? "0");
   const helperVerifyFee = Number(searchParams.get("helperVerifyFee") ?? "0");
 
-  const [rating, setRating] = useState<number>(0);
-  const [reviewText, setReviewText] = useState<string>("");
-  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
-  const [reviewSaved, setReviewSaved] = useState<boolean>(false);
-  const [reviewError, setReviewError] = useState<string>("");
+  const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [reviewSaved, setReviewSaved] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [hasExistingReview, setHasExistingReview] = useState(false);
+  const [isLoadingReview, setIsLoadingReview] = useState(true);
 
   const total = totalPrice + extraFee + helperVerifyFee;
 
@@ -55,7 +57,7 @@ export default function CompletePage() {
     setReviewError("");
 
     if (!reservationId) {
-      setReviewError("후기 작성에 필요한 예약 정보가 누락되었습니다.");
+      setReviewError("리뷰 작성에 필요한 예약 정보가 없습니다.");
       return;
     }
 
@@ -65,7 +67,6 @@ export default function CompletePage() {
     }
 
     setIsSubmittingReview(true);
-
     try {
       const payload: CreateReviewPayload = {
         reservationId,
@@ -74,7 +75,7 @@ export default function CompletePage() {
       };
 
       const response = await fetch("/api/reviews", {
-        method: "POST",
+        method: hasExistingReview ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
@@ -90,6 +91,7 @@ export default function CompletePage() {
         return;
       }
 
+      setHasExistingReview(true);
       setReviewSaved(true);
     } catch {
       setReviewError(
@@ -104,8 +106,8 @@ export default function CompletePage() {
     <section className="pb-24 pt-6">
       <div className="mb-4 text-center">
         <p className="text-6xl text-emerald-600">✓</p>
-        <h1 className="text-4xl font-semibold text-zinc-900">이용 완료!</h1>
-        <p className="mt-2 text-lg text-zinc-500">수고하셨습니다 🚗</p>
+        <h1 className="text-4xl font-semibold text-zinc-900">이용 완료</h1>
+        <p className="mt-2 text-lg text-zinc-500">정비가 마무리되었습니다.</p>
       </div>
 
       <div className="rounded-2xl bg-zinc-100 p-4">
@@ -168,7 +170,6 @@ export default function CompletePage() {
                 onClick={() => setRating(starNumber)}
                 className={`text-4xl leading-none ${active ? "text-amber-400" : "text-zinc-300"}`}
                 aria-label={`${starNumber}점 선택`}
-                disabled={reviewSaved}
               >
                 ★
               </button>
@@ -178,28 +179,36 @@ export default function CompletePage() {
 
         <textarea
           className="mt-3 h-24 w-full rounded-xl bg-zinc-100 p-3 text-sm"
-          placeholder="한줄 후기를 남겨주세요"
+          placeholder="서비스 리뷰를 남겨주세요."
           value={reviewText}
           onChange={(event) => setReviewText(event.target.value)}
-          disabled={reviewSaved}
         />
 
+        {isLoadingReview ? (
+          <p className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500">
+            기존 리뷰를 확인하는 중입니다.
+          </p>
+        ) : null}
+        {hasExistingReview && !reviewSaved ? (
+          <p className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            이미 작성한 리뷰입니다. 수정 후 저장할 수 있습니다.
+          </p>
+        ) : null}
         {reviewError ? (
           <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
             {reviewError}
           </p>
         ) : null}
-
         {reviewSaved ? (
           <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            후기 저장이 완료되었습니다.
+            리뷰 저장이 완료되었습니다.
           </p>
         ) : null}
 
         <button
           type="button"
           onClick={handleSubmitReview}
-          disabled={isSubmittingReview || reviewSaved}
+          disabled={isSubmittingReview || isLoadingReview}
           className="mt-3 h-11 w-full rounded-xl bg-zinc-900 text-base font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-500"
         >
           {reviewSaved
@@ -225,5 +234,13 @@ export default function CompletePage() {
         </Link>
       </div>
     </section>
+  );
+}
+
+export default function CompletePage() {
+  return (
+    <Suspense fallback={<section className="pb-24" />}>
+      <CompletePageContent />
+    </Suspense>
   );
 }

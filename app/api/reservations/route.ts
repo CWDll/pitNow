@@ -1,5 +1,10 @@
-import { supabase } from "@/src/lib/supabase";
 import { NextResponse } from "next/server";
+
+import {
+  getSupabaseEnvErrorResponse,
+  hasSupabaseEnv,
+  supabase,
+} from "@/src/lib/supabase";
 
 const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
 const DEFAULT_HOURLY_PRICE = 20000;
@@ -121,12 +126,19 @@ function parseBody(payload: unknown): ReservationRequestBody | null {
 }
 
 export async function POST(req: Request) {
+  if (!hasSupabaseEnv) {
+    return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
+  }
+
   try {
     const payload: unknown = await req.json();
     const body = parseBody(payload);
 
     if (!body) {
-      return NextResponse.json({ error: "필수값 누락" }, { status: 400 });
+      return NextResponse.json(
+        { error: "예약 요청 형식이 올바르지 않습니다." },
+        { status: 400 },
+      );
     }
 
     const {

@@ -5,12 +5,18 @@ export type ReservationStatus =
   | "COMPLETED"
   | "CANCELLED";
 
+export type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
+
 export interface Reservation {
   id: string;
   userId: string;
+  partnerId: string;
   bayId: string;
+  reservationType: ReservationType;
+  packageId: string | null;
   startTime: string;
   endTime: string;
+  reservedEndTime: string;
   status: ReservationStatus;
   totalPrice: number;
   createdAt: string;

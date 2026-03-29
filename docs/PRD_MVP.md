@@ -2,17 +2,26 @@
 
 ## Objective
 
-Validate market by enabling real garage lift reservation loop.
+Validate demand for a dual-mode garage reservation service that supports both:
 
-MVP scope:
+1. `Self Service`: user books time by slot and works directly in the bay.
+2. `Shop Service`: user selects a package and leaves the work to the shop/professional.
+
+The product message is not "cheap labor only". The point is that the same service can be used for both self-maintenance and professional execution.
+
+`Helper mode` is replaced by `Shop Service`.
+
+---
+
+## MVP Scope
 
 1. Search partner
-2. Reserve bay
-3. Pay (prepaid)
-4. QR check-in
-5. 4 photo upload
-6. Timer-based usage
-7. Checkout with auto settlement
+2. View partner detail
+3. Choose reservation mode
+4. Reserve and pay
+5. QR check-in for self service
+6. Usage timer for self service
+7. Auto settlement / completion
 8. Review
 
 Package mode 유지, Self 정비 플로우만 변경.
@@ -24,18 +33,26 @@ Package mode 유지, Self 정비 플로우만 변경.
 ### Home
 
 - Map + list
-- Fastest available slot
+- Fastest available option
 - Distance / price filter
+- Mode-aware partner card messaging
 
 ### Partner Detail
 
 - Photos
 - Bay count
-- Price per hour
+- Self-service hourly price
+- Shop-service package list
+- Package duration + price by partner
 - Review summary
-- Reserve CTA
+- Reservation CTA per mode
 
 ### Reservation
+
+- User chooses `Self Service` or `Shop Service`
+- Payment required before confirmation
+
+#### Self Service Reservation
 
 - Select legal self-maintenance tasks only
 - Confirm declaration: "Only selected tasks will be performed"
@@ -48,15 +65,24 @@ Package mode 유지, Self 정비 플로우만 변경.
 
 ### Check-in
 
+#### Self Service
+
 - QR verification
 - 4-direction vehicle photo required
 - Timer starts only after photos uploaded
 
-### In-Use
+#### Shop Service
+
+- No self-work timer flow required
+- Reservation enters shop execution flow after confirmation/check-in policy defined by partner
+
+### In Use / Execution
+
+#### Self Service
 
 - Remaining time display
 - Extend time
-- SOS button (simple contact)
+- SOS button
 - 15-minute warning
 - Extension unit is 1 hour
 
@@ -71,7 +97,7 @@ Package mode 유지, Self 정비 플로우만 변경.
 
 ---
 
-## Non-Functional
+## Operational Policy
 
 - Reservation conflict must be DB enforced.
 - All photo URLs must be stored.

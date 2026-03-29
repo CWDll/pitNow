@@ -1,9 +1,16 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
-import type { CreateReservationPayload } from "@/src/domain/types";
+import {
+  formatMinutesLabel,
+  getReservationTypeLabel,
+} from "@/app/(user)/_data/mock-garages";
+import type {
+  CreateReservationPayload,
+  ReservationType,
+} from "@/src/domain/types";
 
 const paymentMethods = [
   "신용/체크카드",
@@ -18,15 +25,14 @@ function parseReservationId(payload: unknown): string | null {
     return typeof id === "string" ? id : null;
   }
 
-  if (Array.isArray(payload) && payload[0] && typeof payload[0] === "object") {
-    const id = (payload[0] as { id?: unknown }).id;
-    return typeof id === "string" ? id : null;
-  }
-
   return null;
 }
 
-export default function PaymentPage() {
+function parseMode(value: string | null): ReservationType {
+  return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
+}
+
+function PaymentPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -63,6 +69,10 @@ export default function PaymentPage() {
     searchParams.get("bayId") ?? "00000000-0000-0000-0000-000000000001";
   const startTime = searchParams.get("startTime") ?? "";
   const endTime = searchParams.get("endTime") ?? "";
+  const blockedMinutes = Number(searchParams.get("blockedMinutes") ?? "60");
+  const packageMinutes = Number(
+    searchParams.get("packageMinutes") ?? String(blockedMinutes),
+  );
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
   const helperVerifyRequested =
     searchParams.get("helperVerifyRequested") === "true";
@@ -168,10 +178,17 @@ export default function PaymentPage() {
         totalPrice: String(totalPrice),
         startTime,
         endTime,
+        blockedMinutes: String(blockedMinutes),
       });
+
+      if (packageId) {
+        query.set("packageId", packageId);
+        query.set("packageMinutes", String(packageMinutes));
+      }
+
       router.push(`/reservation-complete?${query.toString()}`);
     } catch {
-      setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      setError("결제 처리 중 오류가 발생했습니다.");
     } finally {
       setIsPaying(false);
     }
@@ -191,7 +208,7 @@ export default function PaymentPage() {
         <h1 className="text-3xl font-semibold text-zinc-900">결제</h1>
       </header>
 
-      <div className="rounded-2xl bg-zinc-100 p-4">
+      <div className="rounded-3xl bg-zinc-100 p-4">
         <h2 className="mb-3 text-xl font-semibold">주문 요약</h2>
         <div className="space-y-2 text-base text-zinc-700">
           <p className="flex justify-between">
@@ -263,11 +280,11 @@ export default function PaymentPage() {
       </div>
 
       <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">
-        <p className="font-semibold">취소/노쇼 규정</p>
+        <p className="font-semibold">취소/환불 규정</p>
         <ul className="mt-2 list-disc pl-5">
-          <li>이용 24시간 전: 전액 환불</li>
-          <li>이용 2시간 전: 50% 환불</li>
-          <li>노쇼: 환불 불가 + 패널티 부과</li>
+          <li>이용 24시간 전 전액 환불</li>
+          <li>이용 2시간 전 50% 환불</li>
+          <li>패키지 예약은 업장 정책에 따라 일정이 조정될 수 있습니다.</li>
         </ul>
       </div>
 
@@ -290,5 +307,13 @@ export default function PaymentPage() {
         </button>
       </div>
     </section>
+  );
+}
+
+export default function PaymentPage() {
+  return (
+    <Suspense fallback={<section className="pb-24" />}>
+      <PaymentPageContent />
+    </Suspense>
   );
 }

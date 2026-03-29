@@ -1,19 +1,31 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function ReservationCompletePage() {
+import {
+  formatMinutesLabel,
+  getReservationTypeLabel,
+} from "@/app/(user)/_data/mock-garages";
+import type { ReservationType } from "@/src/domain/types";
+
+function parseMode(value: string | null): ReservationType {
+  return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
+}
+
+function ReservationCompletePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const reservationType = parseMode(searchParams.get("reservationType"));
   const reservationId = searchParams.get("reservationId") ?? "";
   const bookingMode =
     searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
-  const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
+  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
-  const dateLabel = searchParams.get("dateLabel") ?? "2/28(금) 14:00 - 15:00";
+  const dateLabel = searchParams.get("dateLabel") ?? "";
   const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
   const startTime = searchParams.get("startTime") ?? "";
   const endTime = searchParams.get("endTime") ?? "";
@@ -118,12 +130,26 @@ export default function ReservationCompletePage() {
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
-          onClick={() => router.push(`/checkin?${query}`)}
+          onClick={() =>
+            router.push(
+              `/${reservationType === "SELF_SERVICE" ? "checkin" : "in-use"}?${query}`,
+            )
+          }
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
         >
-          체크인하러 가기
+          {reservationType === "SELF_SERVICE"
+            ? "체크인 하러 가기"
+            : "진행 상태 보기"}
         </button>
       </div>
     </section>
+  );
+}
+
+export default function ReservationCompletePage() {
+  return (
+    <Suspense fallback={<section className="pb-24" />}>
+      <ReservationCompletePageContent />
+    </Suspense>
   );
 }

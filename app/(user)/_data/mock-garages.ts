@@ -1,6 +1,18 @@
+import type { ReservationType } from "@/src/domain/types";
+
+const gangnamPartnerId = "11111111-1111-1111-1111-111111111111";
+const seochoPartnerId = "22222222-2222-2222-2222-222222222222";
+
+const gangnamPrimaryBayId = "00000000-0000-0000-0000-000000000001";
+const seochoPrimaryBayId = "00000000-0000-0000-0000-000000000002";
+
+const gangnamBayIds = Array.from({ length: 6 }, () => gangnamPrimaryBayId);
+const seochoBayIds = Array.from({ length: 4 }, () => seochoPrimaryBayId);
+
 export interface GarageSummary {
   id: string;
   bayId: string;
+  bayIds: string[];
   name: string;
   distanceKm: number;
   bayCount: number;
@@ -13,14 +25,25 @@ export interface GarageSummary {
   phone: string;
 }
 
-export interface WorkOption {
+export interface SelfWorkOption {
   id: string;
   title: string;
   level: "초급" | "중급";
-  helperRequired?: boolean;
   description: string;
   durationLabel: string;
+  helperRequired?: boolean;
   helperNote?: string;
+}
+
+export type WorkOption = SelfWorkOption;
+
+export interface ShopPackage {
+  id: string;
+  name: string;
+  summary: string;
+  includes: string[];
+  durationMinutes: number;
+  priceByGarageId: Record<string, number>;
 }
 
 export interface SelfMaintenanceTaskOption {
@@ -33,30 +56,32 @@ export interface SelfMaintenanceTaskOption {
 
 export const garageList: GarageSummary[] = [
   {
-    id: "gangnam-self",
-    bayId: "00000000-0000-0000-0000-000000000001",
+    id: gangnamPartnerId,
+    bayId: gangnamBayIds[0],
+    bayIds: [...gangnamBayIds],
     name: "강남 셀프정비소",
     distanceKm: 1.2,
-    bayCount: 6,
+    bayCount: gangnamBayIds.length,
     rating: 4.8,
     reviewCount: 128,
     hourlyPrice: 15000,
     nextSlot: "오늘 14:00",
-    address: "서울 강남구 역삼동 123-45",
-    hours: "09:00 - 21:00 (연중무휴)",
+    address: "서울 강남구 테헤란로 123",
+    hours: "09:00 - 21:00",
     phone: "02-1234-5678",
   },
   {
-    id: "seocho-diy",
-    bayId: "00000000-0000-0000-0000-000000000002",
-    name: "서초 DIY 카센터",
+    id: seochoPartnerId,
+    bayId: seochoBayIds[0],
+    bayIds: [...seochoBayIds],
+    name: "서초 DIY 개러지",
     distanceKm: 2.5,
-    bayCount: 4,
+    bayCount: seochoBayIds.length,
     rating: 4.5,
     reviewCount: 87,
     hourlyPrice: 12000,
     nextSlot: "오늘 15:30",
-    address: "서울 서초구 서초동 42-10",
+    address: "서울 서초구 반포대로 42",
     hours: "10:00 - 20:00",
     phone: "02-9876-5432",
   },
@@ -102,6 +127,33 @@ export const workOptions: WorkOption[] = [
   },
 ];
 
+export const selfWorkOptions: SelfWorkOption[] = [...workOptions];
+
+export const shopPackages: ShopPackage[] = [
+  {
+    id: "pkg-engine-basic",
+    name: "엔진오일 패키지",
+    summary: "엔진오일 + 필터 교체",
+    includes: ["엔진오일 교체", "오일필터 교체", "기본 점검"],
+    durationMinutes: 90,
+    priceByGarageId: {
+      [gangnamPartnerId]: 69000,
+      [seochoPartnerId]: 64000,
+    },
+  },
+  {
+    id: "pkg-brake-care",
+    name: "브레이크 케어",
+    summary: "브레이크 패드/디스크 점검 및 교체",
+    includes: ["브레이크 점검", "패드 교체", "제동 테스트"],
+    durationMinutes: 120,
+    priceByGarageId: {
+      [gangnamPartnerId]: 119000,
+      [seochoPartnerId]: 109000,
+    },
+  },
+];
+
 export const selfMaintenanceTaskOptions: SelfMaintenanceTaskOption[] = [
   {
     id: "engine-oil",
@@ -142,4 +194,62 @@ export const selfMaintenanceTaskOptions: SelfMaintenanceTaskOption[] = [
 
 export function getGarageById(id: string): GarageSummary | null {
   return garageList.find((garage) => garage.id === id) ?? null;
+}
+
+export function getGarageBayIdByNumber(
+  garageId: string,
+  bayNumber: number,
+): string | null {
+  const garage = getGarageById(garageId);
+  if (!garage) {
+    return null;
+  }
+
+  return garage.bayIds[bayNumber - 1] ?? null;
+}
+
+export function getGaragePrimaryBayId(garageId: string): string | null {
+  return getGarageById(garageId)?.bayId ?? null;
+}
+
+export function getSelfWorkById(id: string): SelfWorkOption | null {
+  return selfWorkOptions.find((option) => option.id === id) ?? null;
+}
+
+export function getShopPackageById(id: string): ShopPackage | null {
+  return shopPackages.find((item) => item.id === id) ?? null;
+}
+
+export function getGarageShopPackages(
+  garageId: string,
+): Array<ShopPackage & { price: number }> {
+  return shopPackages
+    .map((item) => ({
+      ...item,
+      price: item.priceByGarageId[garageId] ?? 0,
+    }))
+    .filter((item) => item.price > 0);
+}
+
+export function getReservationTypeLabel(type: ReservationType): string {
+  return type === "SELF_SERVICE" ? "셀프 정비" : "전문가 맡기기";
+}
+
+export function roundUpToBlockMinutes(durationMinutes: number): number {
+  return Math.ceil(durationMinutes / 30) * 30;
+}
+
+export function formatMinutesLabel(durationMinutes: number): string {
+  const hours = Math.floor(durationMinutes / 60);
+  const minutes = durationMinutes % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours}시간 ${minutes}분`;
+  }
+
+  if (hours > 0) {
+    return `${hours}시간`;
+  }
+
+  return `${minutes}분`;
 }

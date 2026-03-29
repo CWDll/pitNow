@@ -53,8 +53,6 @@ export default function CheckinPage() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId")?.trim() ?? "";
-  const bookingMode =
-    searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
   const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
@@ -64,11 +62,6 @@ export default function CheckinPage() {
   const endTime = searchParams.get("endTime") ?? "";
   const totalPrice = searchParams.get("totalPrice") ?? "15000";
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
-  const taskIds = searchParams.get("taskIds") ?? "";
-  const taskLabels = searchParams.get("taskLabels") ?? workTitle;
-  const selectedTaskCount = searchParams.get("selectedTaskCount") ?? "1";
-  const packageId = searchParams.get("packageId") ?? "";
-  const packageTitle = searchParams.get("packageTitle") ?? "";
 
   const [qrScanned, setQrScanned] = useState<boolean>(false);
   const [frontImgFile, setFrontImgFile] = useState<File | null>(null);
@@ -141,7 +134,6 @@ export default function CheckinPage() {
 
       const query = new URLSearchParams({
         reservationId,
-        bookingMode,
         partnerId,
         carId,
         carLabel,
@@ -151,11 +143,6 @@ export default function CheckinPage() {
         endTime,
         totalPrice,
         workTitle,
-        taskIds,
-        taskLabels,
-        selectedTaskCount,
-        packageId,
-        packageTitle,
       });
       router.push(`/in-use?${query.toString()}`);
     } catch {

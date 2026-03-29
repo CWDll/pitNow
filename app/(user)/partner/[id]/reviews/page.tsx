@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { supabase } from "@/src/lib/supabase";
+import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 import { getGarageById } from "../../../_data/mock-garages";
 
 interface PartnerReviewListPageProps {
@@ -34,29 +34,15 @@ function formatDate(iso: string): string {
   });
 }
 
-async function fetchAllReviewsByBayId(bayId: string): Promise<ReviewRow[]> {
-  const { data: reservations, error: reservationError } = await supabase
-    .from("reservations")
-    .select("id")
-    .eq("bay_id", bayId)
-    .limit(500)
-    .returns<Array<{ id: string }>>();
-
-  if (reservationError) {
-    console.error("RESERVATION LOOKUP ERROR:", reservationError);
-    return [];
-  }
-
-  const reservationIds = (reservations ?? []).map((item) => item.id);
-
-  if (reservationIds.length === 0) {
+async function fetchAllReviewsByPartnerId(partnerId: string): Promise<ReviewRow[]> {
+  if (!hasSupabaseEnv) {
     return [];
   }
 
   const { data, error } = await supabase
     .from("reviews")
     .select("id, rating, comment, created_at")
-    .in("reservation_id", reservationIds)
+    .eq("partner_id", partnerId)
     .order("created_at", { ascending: false })
     .returns<ReviewRow[]>();
 
@@ -76,7 +62,7 @@ export default async function PartnerReviewListPage({ params }: PartnerReviewLis
     notFound();
   }
 
-  const reviews = await fetchAllReviewsByBayId(garage.bayId);
+  const reviews = await fetchAllReviewsByPartnerId(garage.id);
   const average =
     reviews.length > 0
       ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
