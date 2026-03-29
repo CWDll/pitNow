@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
-import { getGarageById, selfMaintenanceTaskOptions, workOptions } from "../../../_data/mock-garages";
+import {
+  getGarageById,
+  selfMaintenanceTaskOptions,
+  workOptions,
+} from "../../../_data/mock-garages";
 
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
 const timeBoundaries = [
@@ -26,7 +30,10 @@ const timeBoundaries = [
 const blockCount = timeBoundaries.length - 1;
 const MIN_BLOCKS = 1;
 
-const mockReservedRangesByBay: Record<number, Array<{ start: string; end: string }>> = {
+const mockReservedRangesByBay: Record<
+  number,
+  Array<{ start: string; end: string }>
+> = {
   1: [
     { start: "10:00", end: "12:00" },
     { start: "16:00", end: "18:00" },
@@ -73,14 +80,24 @@ function isReservedBlock(blockIdx: number, bayNumber: number): boolean {
   return ranges.some((range) => {
     const startIdx = boundaryIndex(range.start);
     const endIdx = boundaryIndex(range.end);
-    return startIdx >= 0 && endIdx >= 0 && blockIdx >= startIdx && blockIdx < endIdx;
+    return (
+      startIdx >= 0 && endIdx >= 0 && blockIdx >= startIdx && blockIdx < endIdx
+    );
   });
 }
 
 function toIsoByDateAndTime(date: Date, time: string): string {
   const [hour, minute] = time.split(":").map((value) => Number(value));
   return new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0),
+    Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      hour,
+      minute,
+      0,
+      0,
+    ),
   ).toISOString();
 }
 
@@ -112,7 +129,12 @@ function monthValueToDate(monthValue: string, prevDate: Date): Date | null {
   const year = Number(yearRaw);
   const month = Number(monthRaw);
 
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
     return null;
   }
 
@@ -134,9 +156,11 @@ function PartnerSchedulePageContent() {
   const [selectedStartIdx, setSelectedStartIdx] = useState<number | null>(null);
   const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
-  const [carMasterVerifyRequested, setCarMasterVerifyRequested] = useState<boolean>(false);
+  const [carMasterVerifyRequested, setCarMasterVerifyRequested] =
+    useState<boolean>(false);
 
-  const bookingMode = searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
+  const bookingMode =
+    searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
   const taskIds = searchParams.get("taskIds") ?? "";
   const taskLabels = searchParams.get("taskLabels") ?? "선택 작업 없음";
   const packageId = searchParams.get("packageId") ?? "";
@@ -147,7 +171,9 @@ function PartnerSchedulePageContent() {
   if (!garage) {
     return (
       <section className="space-y-4">
-        <h1 className="text-3xl font-semibold text-zinc-900">시간 / 베이 선택</h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">
+          시간 / 베이 선택
+        </h1>
         <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
           정비소 정보를 찾을 수 없습니다.
         </p>
@@ -157,19 +183,26 @@ function PartnerSchedulePageContent() {
 
   const safeGarage = garage;
 
-  const weekDates = Array.from({ length: 7 }, (_, index) => addDays(selectedDate, index - 3));
+  const weekDates = Array.from({ length: 7 }, (_, index) =>
+    addDays(selectedDate, index - 3),
+  );
 
   const hasSelection = selectedStartIdx !== null && selectedEndIdx !== null;
   const selectedBlocks = hasSelection ? selectedEndIdx - selectedStartIdx : 0;
   const startTime = hasSelection ? timeBoundaries[selectedStartIdx] : null;
   const endTime = hasSelection ? timeBoundaries[selectedEndIdx] : null;
-  const blockedUntilTime = hasSelection ? timeBoundaries[selectedEndIdx + 1] : null;
+  const blockedUntilTime = hasSelection
+    ? timeBoundaries[selectedEndIdx + 1]
+    : null;
 
   const totalPrice = selectedBlocks * garage.hourlyPrice;
 
-  const selectedPackage = workOptions.find((option) => option.id === packageId) ?? null;
+  const selectedPackage =
+    workOptions.find((option) => option.id === packageId) ?? null;
   const packageDurationBlocks =
-    bookingMode === "PACKAGE" ? parseDurationHours(selectedPackage?.durationLabel ?? "1시간") : 0;
+    bookingMode === "PACKAGE"
+      ? parseDurationHours(selectedPackage?.durationLabel ?? "1시간")
+      : 0;
 
   const selectedSelfTasks = selfMaintenanceTaskOptions.filter((option) =>
     taskIds
@@ -181,7 +214,11 @@ function PartnerSchedulePageContent() {
 
   const carMasterVerifyFee =
     bookingMode === "SELF" && carMasterVerifyRequested
-      ? 5000 + selectedSelfTasks.reduce((sum, task) => sum + task.helperVerifyUnitFee, 0)
+      ? 5000 +
+        selectedSelfTasks.reduce(
+          (sum, task) => sum + task.helperVerifyUnitFee,
+          0,
+        )
       : 0;
 
   const totalPriceWithVerify = totalPrice + carMasterVerifyFee;
@@ -193,7 +230,9 @@ function PartnerSchedulePageContent() {
       : hasSelection && meetsMinimum;
 
   function handleWeekShift(daysToMove: number) {
-    setSelectedDate((prev) => addDays(prev ?? stripTime(new Date()), daysToMove));
+    setSelectedDate((prev) =>
+      addDays(prev ?? stripTime(new Date()), daysToMove),
+    );
   }
 
   function handleMonthChange(monthValue: string) {
@@ -218,8 +257,16 @@ function PartnerSchedulePageContent() {
     }
   }
 
-  function isRangeSelectable(startIdx: number, endExclusiveIdx: number, bay: number): boolean {
-    if (startIdx < 0 || endExclusiveIdx > blockCount || startIdx >= endExclusiveIdx) {
+  function isRangeSelectable(
+    startIdx: number,
+    endExclusiveIdx: number,
+    bay: number,
+  ): boolean {
+    if (
+      startIdx < 0 ||
+      endExclusiveIdx > blockCount ||
+      startIdx >= endExclusiveIdx
+    ) {
       return false;
     }
 
@@ -238,7 +285,10 @@ function PartnerSchedulePageContent() {
   }
 
   function applySingleSelection(blockIdx: number) {
-    const endExclusiveIdx = bookingMode === "PACKAGE" ? blockIdx + packageDurationBlocks : blockIdx + 1;
+    const endExclusiveIdx =
+      bookingMode === "PACKAGE"
+        ? blockIdx + packageDurationBlocks
+        : blockIdx + 1;
 
     if (!isRangeSelectable(blockIdx, endExclusiveIdx, selectedBay)) {
       return;
@@ -255,7 +305,10 @@ function PartnerSchedulePageContent() {
     }
 
     const endExclusive = targetIdx + 1;
-    if (targetIdx >= startIdx && isRangeSelectable(startIdx, endExclusive, selectedBay)) {
+    if (
+      targetIdx >= startIdx &&
+      isRangeSelectable(startIdx, endExclusive, selectedBay)
+    ) {
       setSelectedStartIdx(startIdx);
       setSelectedEndIdx(endExclusive);
       return;
@@ -305,7 +358,12 @@ function PartnerSchedulePageContent() {
       garageName: safeGarage.name,
       taskIds,
       taskLabels,
-      selectedTaskCount: String(taskIds.split(",").map((value) => value.trim()).filter(Boolean).length),
+      selectedTaskCount: String(
+        taskIds
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean).length,
+      ),
       packageId,
       packageTitle,
       carId,
@@ -332,27 +390,49 @@ function PartnerSchedulePageContent() {
   return (
     <section className="pb-24">
       <header className="mb-4 flex items-center gap-2">
-        <Link href={`/partner/${garage.id}/work`} className="text-2xl text-zinc-700" aria-label="뒤로가기">
+        <Link
+          href={`/partner/${garage.id}/work`}
+          className="text-2xl text-zinc-700"
+          aria-label="뒤로가기"
+        >
           ←
         </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900">시간 / 베이 선택</h1>
+        <h1 className="text-3xl font-semibold text-zinc-900">
+          시간 / 베이 선택
+        </h1>
       </header>
 
       <div className="mb-4 rounded-2xl bg-zinc-100 p-4 text-sm text-zinc-700">
         <p className="font-semibold text-zinc-900">예약 방식</p>
-        <p className="mt-1">{bookingMode === "PACKAGE" ? "패키지 예약" : "시간제 예약"}</p>
+        <p className="mt-1">
+          {bookingMode === "PACKAGE" ? "패키지 예약" : "시간제 예약"}
+        </p>
         <p className="mt-2 font-semibold text-zinc-900">선택 항목</p>
-        <p className="mt-1">{bookingMode === "PACKAGE" ? packageTitle : taskLabels}</p>
+        <p className="mt-1">
+          {bookingMode === "PACKAGE" ? packageTitle : taskLabels}
+        </p>
       </div>
 
       <div className="mb-4 flex items-center justify-between px-1">
-        <button type="button" className="text-xl text-zinc-500" onClick={() => handleWeekShift(-7)}>
+        <button
+          type="button"
+          className="text-xl text-zinc-500"
+          onClick={() => handleWeekShift(-7)}
+        >
           ‹
         </button>
-        <button type="button" className="text-2xl font-semibold text-zinc-900" onClick={() => setIsMonthPickerOpen((prev) => !prev)}>
+        <button
+          type="button"
+          className="text-2xl font-semibold text-zinc-900"
+          onClick={() => setIsMonthPickerOpen((prev) => !prev)}
+        >
           {formatMonthLabel(selectedDate)}
         </button>
-        <button type="button" className="text-xl text-zinc-500" onClick={() => handleWeekShift(7)}>
+        <button
+          type="button"
+          className="text-xl text-zinc-500"
+          onClick={() => handleWeekShift(7)}
+        >
           ›
         </button>
       </div>
@@ -395,7 +475,9 @@ function PartnerSchedulePageContent() {
 
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-zinc-900">베이 선택</h2>
-        <span className="text-sm text-zinc-500">버퍼 포함 가능 시간만 선택</span>
+        <span className="text-sm text-zinc-500">
+          버퍼 포함 가능 시간만 선택
+        </span>
       </div>
 
       <div className="grid grid-cols-6 gap-2">
@@ -419,7 +501,9 @@ function PartnerSchedulePageContent() {
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-2xl font-semibold text-zinc-900">시간 선택</h2>
-          <span className="text-sm text-zinc-500">블록 연속 선택 + 종료 후 1시간 버퍼</span>
+          <span className="text-sm text-zinc-500">
+            블록 연속 선택 + 종료 후 1시간 버퍼
+          </span>
         </div>
 
         <div className="grid grid-cols-4 gap-2">
@@ -427,9 +511,18 @@ function PartnerSchedulePageContent() {
             const reserved = isReservedBlock(idx, selectedBay);
             const selectable =
               bookingMode === "PACKAGE"
-                ? isRangeSelectable(idx, idx + packageDurationBlocks, selectedBay)
+                ? isRangeSelectable(
+                    idx,
+                    idx + packageDurationBlocks,
+                    selectedBay,
+                  )
                 : !reserved;
-            const selected = hasSelection && selectedStartIdx !== null && selectedEndIdx !== null && idx >= selectedStartIdx && idx < selectedEndIdx;
+            const selected =
+              hasSelection &&
+              selectedStartIdx !== null &&
+              selectedEndIdx !== null &&
+              idx >= selectedStartIdx &&
+              idx < selectedEndIdx;
 
             return (
               <button
@@ -451,8 +544,12 @@ function PartnerSchedulePageContent() {
           })}
         </div>
 
-        <p className="mt-3 text-sm text-zinc-600">작업 시간: {startTime ?? "-"} ~ {endTime ?? "-"}</p>
-        <p className="mt-1 text-sm text-zinc-600">버퍼 포함 블록: {startTime ?? "-"} ~ {blockedUntilTime ?? "-"}</p>
+        <p className="mt-3 text-sm text-zinc-600">
+          작업 시간: {startTime ?? "-"} ~ {endTime ?? "-"}
+        </p>
+        <p className="mt-1 text-sm text-zinc-600">
+          버퍼 포함 블록: {startTime ?? "-"} ~ {blockedUntilTime ?? "-"}
+        </p>
 
         {!meetsMinimum && hasSelection ? (
           <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -481,7 +578,9 @@ function PartnerSchedulePageContent() {
           <div className="my-2 border-t border-zinc-300" />
           <div className="flex items-center justify-between text-2xl font-semibold text-zinc-900">
             <span>합계</span>
-            <span className="text-blue-600">{totalPriceWithVerify.toLocaleString("ko-KR")}원</span>
+            <span className="text-blue-600">
+              {totalPriceWithVerify.toLocaleString("ko-KR")}원
+            </span>
           </div>
         </div>
       </div>
@@ -497,7 +596,9 @@ function PartnerSchedulePageContent() {
           <span>
             카 마스터 검수
             <br />
-            <span className="text-sm text-zinc-500">기본 5,000원 + 선택 작업 검수 가산</span>
+            <span className="text-sm text-zinc-500">
+              기본 5,000원 + 선택 작업 검수 가산
+            </span>
           </span>
         </label>
       ) : null}
