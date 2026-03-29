@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import {
   getGarageById,
   selfMaintenanceTaskOptions,
   workOptions,
 } from "../../../_data/mock-garages";
+import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
 const timeBoundaries = [
@@ -30,35 +31,15 @@ const timeBoundaries = [
 const blockCount = timeBoundaries.length - 1;
 const MIN_BLOCKS = 1;
 
-const mockReservedRangesByBay: Record<
-  number,
-  Array<{ start: string; end: string }>
-> = {
-  1: [
-    { start: "10:00", end: "12:00" },
-    { start: "16:00", end: "18:00" },
-  ],
-  2: [
-    { start: "09:00", end: "11:00" },
-    { start: "14:00", end: "16:00" },
-  ],
-  3: [
-    { start: "11:00", end: "13:00" },
-    { start: "17:00", end: "19:00" },
-  ],
-  4: [
-    { start: "12:00", end: "14:00" },
-    { start: "18:00", end: "20:00" },
-  ],
-  5: [
-    { start: "10:00", end: "11:00" },
-    { start: "15:00", end: "17:00" },
-  ],
-  6: [
-    { start: "13:00", end: "15:00" },
-    { start: "19:00", end: "20:00" },
-  ],
-};
+interface BayRow {
+  id: string;
+}
+
+interface ReservationRangeRow {
+  bay_id: string;
+  start_time: string;
+  blocked_until: string;
+}
 
 function stripTime(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -72,18 +53,6 @@ function addDays(date: Date, days: number): Date {
 
 function boundaryIndex(time: string): number {
   return timeBoundaries.findIndex((value) => value === time);
-}
-
-function isReservedBlock(blockIdx: number, bayNumber: number): boolean {
-  const ranges = mockReservedRangesByBay[bayNumber] ?? [];
-
-  return ranges.some((range) => {
-    const startIdx = boundaryIndex(range.start);
-    const endIdx = boundaryIndex(range.end);
-    return (
-      startIdx >= 0 && endIdx >= 0 && blockIdx >= startIdx && blockIdx < endIdx
-    );
-  });
 }
 
 function toIsoByDateAndTime(date: Date, time: string): string {
@@ -152,12 +121,16 @@ function PartnerSchedulePageContent() {
   const garage = useMemo(() => getGarageById(params.id), [params.id]);
 
   const [selectedDate, setSelectedDate] = useState<Date>(stripTime(new Date()));
-  const [selectedBay, setSelectedBay] = useState<number>(3);
+  const [selectedBay, setSelectedBay] = useState<number>(1);
   const [selectedStartIdx, setSelectedStartIdx] = useState<number | null>(null);
   const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
   const [carMasterVerifyRequested, setCarMasterVerifyRequested] =
     useState<boolean>(false);
+  const [bayIds, setBayIds] = useState<string[]>([]);
+  const [reservationRanges, setReservationRanges] = useState<
+    Array<{ bayId: string; startMs: number; endMs: number }>
+  >([]);
 
   const bookingMode =
     searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
@@ -182,6 +155,104 @@ function PartnerSchedulePageContent() {
   }
 
   const safeGarage = garage;
+  const resolvedBayIds = bayIds.length > 0 ? bayIds : safeGarage.bayIds;
+  const selectedBayId = resolvedBayIds[selectedBay - 1] ?? resolvedBayIds[0] ?? safeGarage.bayId;
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadBays() {
+      if (!hasSupabaseEnv) {
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("bays")
+        .select("id")
+        .eq("partner_id", safeGarage.id)
+        .returns<BayRow[]>();
+
+      if (error || !data || data.length === 0 || isCancelled) {
+        return;
+      }
+
+      setBayIds(data.map((row) => row.id));
+      setSelectedBay((prev) => {
+        const max = data.length;
+        if (max < 1) {
+          return 1;
+        }
+        return Math.min(Math.max(prev, 1), max);
+      });
+    }
+
+    void loadBays();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [safeGarage.id]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadRanges() {
+      if (!hasSupabaseEnv) {
+        return;
+      }
+
+      const dayStartIso = toIsoByDateAndTime(selectedDate, timeBoundaries[0]);
+      const dayEndIso = toIsoByDateAndTime(
+        selectedDate,
+        timeBoundaries[timeBoundaries.length - 1],
+      );
+
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("bay_id,start_time,blocked_until")
+        .eq("partner_id", safeGarage.id)
+        .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
+        .lt("start_time", dayEndIso)
+        .gt("blocked_until", dayStartIso)
+        .returns<ReservationRangeRow[]>();
+
+      if (error || isCancelled) {
+        return;
+      }
+
+      setReservationRanges(
+        (data ?? []).map((row) => ({
+          bayId: row.bay_id,
+          startMs: new Date(row.start_time).getTime(),
+          endMs: new Date(row.blocked_until).getTime(),
+        })),
+      );
+    }
+
+    void loadRanges();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [safeGarage.id, selectedDate]);
+
+  function isReservedBlock(blockIdx: number, bayNumber: number): boolean {
+    const bayId = resolvedBayIds[bayNumber - 1];
+
+    if (!bayId) {
+      return true;
+    }
+
+    const blockStartIso = toIsoByDateAndTime(selectedDate, timeBoundaries[blockIdx]);
+    const blockEndIso = toIsoByDateAndTime(selectedDate, timeBoundaries[blockIdx + 1]);
+    const blockStartMs = new Date(blockStartIso).getTime();
+    const blockEndMs = new Date(blockEndIso).getTime();
+
+    return reservationRanges.some(
+      (range) =>
+        range.bayId === bayId && blockStartMs < range.endMs && range.startMs < blockEndMs,
+    );
+  }
 
   const weekDates = Array.from({ length: 7 }, (_, index) =>
     addDays(selectedDate, index - 3),
@@ -370,7 +441,7 @@ function PartnerSchedulePageContent() {
       carLabel,
       dateLabel: `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}(${selectedWeekdayLabel}) ${startTime} - ${endTime}`,
       bayLabel: `${selectedBay}번 베이`,
-      bayId: safeGarage.bayId,
+      bayId: selectedBayId,
       startTime: toIsoByDateAndTime(selectedDate, startTime),
       endTime: toIsoByDateAndTime(selectedDate, endTime),
       blockedUntil: toIsoByDateAndTime(selectedDate, blockedUntilTime),
@@ -480,8 +551,8 @@ function PartnerSchedulePageContent() {
         </span>
       </div>
 
-      <div className="grid grid-cols-6 gap-2">
-        {Array.from({ length: garage.bayCount }).map((_, index) => {
+      <div className={`grid gap-2 ${resolvedBayIds.length > 4 ? "grid-cols-6" : "grid-cols-4"}`}>
+        {Array.from({ length: resolvedBayIds.length }).map((_, index) => {
           const bayNumber = index + 1;
           const active = bayNumber === selectedBay;
 

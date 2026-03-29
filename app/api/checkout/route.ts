@@ -23,10 +23,11 @@ interface CheckoutRequestBody {
 interface ReservationRow {
   id: string;
   status: ReservationStatus;
-  reservation_type: ReservationType;
+  reservation_type?: string | null;
   start_time: string;
   end_time: string;
-  reserved_end_time: string;
+  reserved_end_time?: string | null;
+  blocked_until?: string | null;
   total_price: number | string;
   selected_task_count: number | null;
   helper_verify_requested: boolean | null;
@@ -111,6 +112,14 @@ function toFiniteNumber(value: number | string): number | null {
   return parsedValue;
 }
 
+function normalizeReservationType(value: string | null | undefined): ReservationType {
+  if (value === "SHOP_SERVICE" || value === "PACKAGE" || value === "PACKAGE_SERVICE" || value === "PKG") {
+    return "SHOP_SERVICE";
+  }
+
+  return "SELF_SERVICE";
+}
+
 function calculateExtraFee(params: {
   now: Date;
   startTime: Date;
@@ -189,13 +198,31 @@ export async function POST(req: Request) {
 
   const { reservationId, helperVerifyRequested } = body;
 
-  const { data: reservation, error: reservationError } = await supabase
+  let { data: reservation, error: reservationError } = await supabase
     .from("reservations")
     .select(
-      "id, status, start_time, end_time, total_price, selected_task_count, helper_verify_requested, helper_verify_fee",
+      "id, status, reservation_type, start_time, end_time, reserved_end_time, blocked_until, total_price, selected_task_count, helper_verify_requested, helper_verify_fee",
     )
     .eq("id", reservationId)
     .maybeSingle<ReservationRow>();
+
+  if (
+    reservationError?.code === "PGRST204" &&
+    (reservationError.message?.includes("reservation_type") ||
+      reservationError.message?.includes("reserved_end_time") ||
+      reservationError.message?.includes("blocked_until"))
+  ) {
+    const fallbackResult = await supabase
+      .from("reservations")
+      .select(
+        "id, status, start_time, end_time, total_price, selected_task_count, helper_verify_requested, helper_verify_fee",
+      )
+      .eq("id", reservationId)
+      .maybeSingle<ReservationRow>();
+
+    reservation = fallbackResult.data;
+    reservationError = fallbackResult.error;
+  }
 
   if (reservationError) {
     console.error("RESERVATION SELECT ERROR:", reservationError);
@@ -243,7 +270,10 @@ export async function POST(req: Request) {
 
   const startTime = parseIsoDate(reservation.start_time);
   const endTime = parseIsoDate(reservation.end_time);
-  const reservedEndTime = parseIsoDate(reservation.reserved_end_time);
+  const reservedEndTime = parseIsoDate(
+    reservation.reserved_end_time ?? reservation.blocked_until ?? reservation.end_time,
+  );
+  const reservationType = normalizeReservationType(reservation.reservation_type);
   const totalPrice = toFiniteNumber(reservation.total_price);
   const persistedHelperVerifyFee =
     reservation.helper_verify_fee === null
@@ -267,7 +297,7 @@ export async function POST(req: Request) {
 
   const now = new Date();
   const extraFee =
-    reservation.reservation_type === "SHOP_SERVICE"
+    reservationType === "SHOP_SERVICE"
       ? 0
       : calculateExtraFee({
           now,
