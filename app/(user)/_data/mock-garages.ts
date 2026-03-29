@@ -3,11 +3,21 @@ import type { ReservationType } from "@/src/domain/types";
 const gangnamPartnerId = "11111111-1111-1111-1111-111111111111";
 const seochoPartnerId = "22222222-2222-2222-2222-222222222222";
 
-const gangnamPrimaryBayId = "00000000-0000-0000-0000-000000000001";
-const seochoPrimaryBayId = "00000000-0000-0000-0000-000000000002";
+const gangnamBayIds = [
+  "00000000-0000-0000-0000-000000000001",
+  "00000000-0000-0000-0000-000000000002",
+  "00000000-0000-0000-0000-000000000003",
+  "00000000-0000-0000-0000-000000000004",
+  "00000000-0000-0000-0000-000000000005",
+  "00000000-0000-0000-0000-000000000006",
+] as const;
 
-const gangnamBayIds = Array.from({ length: 6 }, () => gangnamPrimaryBayId);
-const seochoBayIds = Array.from({ length: 4 }, () => seochoPrimaryBayId);
+const seochoBayIds = [
+  "00000000-0000-0000-0000-000000000007",
+  "00000000-0000-0000-0000-000000000008",
+  "00000000-0000-0000-0000-000000000009",
+  "00000000-0000-0000-0000-00000000000a",
+] as const;
 
 export interface GarageSummary {
   id: string;

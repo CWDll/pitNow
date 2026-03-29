@@ -38,7 +38,8 @@ interface BayRow {
 interface ReservationRangeRow {
   bay_id: string;
   start_time: string;
-  blocked_until: string;
+  end_time?: string | null;
+  blocked_until?: string | null;
 }
 
 function stripTime(date: Date): Date {
@@ -70,25 +71,24 @@ function toIsoByDateAndTime(date: Date, time: string): string {
   ).toISOString();
 }
 
-function parseDurationHours(durationLabel: string): number {
+function parseDurationMinutes(durationLabel: string): number {
   const matched = durationLabel.match(/([0-9]+(?:\.[0-9]+)?)/);
 
   if (!matched) {
-    return 1;
+    return 60;
   }
 
   const value = Number.parseFloat(matched[1]);
 
   if (!Number.isFinite(value) || value <= 0) {
-    return 1;
+    return 60;
   }
 
   if (durationLabel.includes("분")) {
-    const minutes = Math.ceil(value);
-    return Math.max(1, Math.ceil(minutes / 60));
+    return Math.max(1, Math.ceil(value));
   }
 
-  return Math.max(1, Math.ceil(value));
+  return Math.max(60, Math.ceil(value * 60));
 }
 
 function formatMonthLabel(date: Date): string {
@@ -217,11 +217,11 @@ function PartnerSchedulePageContent() {
 
       const { data, error } = await supabase
         .from("reservations")
-        .select("bay_id,start_time,blocked_until")
+        .select("bay_id,start_time,end_time,blocked_until")
         .eq("partner_id", safeGarage.id)
         .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
         .lt("start_time", dayEndIso)
-        .gt("blocked_until", dayStartIso)
+        .gt("end_time", dayStartIso)
         .returns<ReservationRangeRow[]>();
 
       if (error || isCancelled) {
@@ -232,7 +232,11 @@ function PartnerSchedulePageContent() {
         (data ?? []).map((row) => ({
           bayId: row.bay_id,
           startMs: new Date(row.start_time).getTime(),
-          endMs: new Date(row.blocked_until).getTime(),
+          endMs: row.blocked_until
+            ? new Date(row.blocked_until).getTime()
+            : row.end_time
+              ? new Date(row.end_time).getTime() + 60 * 60 * 1000
+              : new Date(row.start_time).getTime(),
         })),
       );
     }
@@ -288,7 +292,13 @@ function PartnerSchedulePageContent() {
     workOptions.find((option) => option.id === packageId) ?? null;
   const packageDurationBlocks =
     bookingMode === "PACKAGE"
-      ? parseDurationHours(selectedPackage?.durationLabel ?? "1시간")
+      ? Math.max(
+          1,
+          Math.ceil(
+            parseDurationMinutes(selectedPackage?.durationLabel ?? "1시간") /
+              60,
+          ),
+        )
       : 0;
 
   const selectedSelfTasks = selfMaintenanceTaskOptions.filter((option) =>
