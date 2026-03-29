@@ -129,7 +129,11 @@ function CompletePageContent() {
 
         const review =
           data && typeof data === "object" && "review" in data
-            ? (data as { review?: { rating?: number; comment?: string | null } | null }).review
+            ? (
+                data as {
+                  review?: { rating?: number; comment?: string | null } | null;
+                }
+              ).review
             : null;
 
         if (review) {

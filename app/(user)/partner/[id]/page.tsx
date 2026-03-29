@@ -115,8 +115,7 @@ export default async function PartnerDetailPage({
       <div className="space-y-2">
         <h1 className="text-4xl font-semibold text-zinc-900">{garage.name}</h1>
         <p className="text-lg text-zinc-700">
-          ★ {averageRating.toFixed(1)} ({reviews.length}개
-          후기)
+          ★ {averageRating.toFixed(1)} ({reviews.length}개 후기)
         </p>
         <p className="text-lg text-zinc-700">📍 {garage.address}</p>
         <p className="text-lg text-zinc-700">🕒 {garage.hours}</p>
@@ -144,7 +143,9 @@ export default async function PartnerDetailPage({
                   법적 허용 셀프 정비 작업
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  검수 가산 {Number(task.helper_verify_unit_fee).toLocaleString("ko-KR")}원
+                  검수 가산{" "}
+                  {Number(task.helper_verify_unit_fee).toLocaleString("ko-KR")}
+                  원
                 </p>
               </div>
             ))}

@@ -189,7 +189,7 @@ function PartnerSchedulePageContent() {
 
   const safeGarage = useMemo(() => garage, [garage]);
   const resolvedBayIds = useMemo(
-    () => (bayIds.length > 0 ? bayIds : safeGarage?.bayIds ?? []),
+    () => (bayIds.length > 0 ? bayIds : (safeGarage?.bayIds ?? [])),
     [bayIds, safeGarage?.bayIds],
   );
   const selectedBayId =

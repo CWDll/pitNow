@@ -1,6 +1,10 @@
 import Link from "next/link";
 
-import { hasSupabaseEnv, missingSupabaseEnvMessage, supabase } from "@/src/lib/supabase";
+import {
+  hasSupabaseEnv,
+  missingSupabaseEnvMessage,
+  supabase,
+} from "@/src/lib/supabase";
 
 interface PartnerRow {
   id: string;
@@ -91,7 +95,10 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
     }
   }
 
-  const reviewStatsByPartner = new Map<string, { sum: number; count: number }>();
+  const reviewStatsByPartner = new Map<
+    string,
+    { sum: number; count: number }
+  >();
   for (const review of reviews ?? []) {
     const current = reviewStatsByPartner.get(review.partner_id) ?? {
       sum: 0,
@@ -160,21 +167,34 @@ export default async function HomePage() {
       </div>
 
       <div className="flex gap-2 text-sm">
-        <span className="rounded-full bg-blue-600 px-4 py-2 font-semibold text-white">가장 빠른 예약</span>
-        <span className="rounded-full border border-zinc-300 px-4 py-2 text-zinc-600">가격</span>
-        <span className="rounded-full border border-zinc-300 px-4 py-2 text-zinc-600">평점</span>
+        <span className="rounded-full bg-blue-600 px-4 py-2 font-semibold text-white">
+          가장 빠른 예약
+        </span>
+        <span className="rounded-full border border-zinc-300 px-4 py-2 text-zinc-600">
+          가격
+        </span>
+        <span className="rounded-full border border-zinc-300 px-4 py-2 text-zinc-600">
+          평점
+        </span>
       </div>
 
       <div className="space-y-3 pb-3">
         {partners.map((partner) => {
           const ratingLabel =
-            partner.averageRating === null ? "-" : partner.averageRating.toFixed(1);
+            partner.averageRating === null
+              ? "-"
+              : partner.averageRating.toFixed(1);
 
           return (
-            <article key={partner.id} className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <article
+              key={partner.id}
+              className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-2xl font-semibold text-zinc-900">{partner.name}</h2>
+                  <h2 className="text-2xl font-semibold text-zinc-900">
+                    {partner.name}
+                  </h2>
                   <p className="mt-1 text-sm text-zinc-500">
                     {partner.address} · 베이 {partner.bayCount}개
                   </p>
@@ -193,12 +213,18 @@ export default async function HomePage() {
 
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl bg-blue-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Self</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
+                    Self
+                  </p>
                   <p className="mt-2 text-sm text-zinc-600">시간대 예약</p>
-                  <p className="mt-1 text-xl font-semibold text-zinc-900">요금 정책 확인</p>
+                  <p className="mt-1 text-xl font-semibold text-zinc-900">
+                    요금 정책 확인
+                  </p>
                 </div>
                 <div className="rounded-2xl bg-amber-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Shop</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                    Shop
+                  </p>
                   <p className="mt-2 text-sm text-zinc-600">패키지 맡기기</p>
                   <p className="mt-1 text-xl font-semibold text-zinc-900">
                     {partner.cheapestPackagePrice

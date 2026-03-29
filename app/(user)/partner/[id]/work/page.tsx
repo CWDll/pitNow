@@ -22,7 +22,6 @@ function levelClass(level: "초급" | "중급"): string {
     : "bg-amber-50 text-amber-600";
 }
 
-
 interface PartnerPackagesResponse {
   success: boolean;
   packages?: PartnerShopPackage[];
@@ -44,11 +43,9 @@ interface PartnerResponse {
   partner?: PartnerInfo;
 }
 
-
 function parseMode(value: string | null): ReservationType {
   return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
 }
-
 
 function PartnerWorkPageContent() {
   const params = useParams<{ id: string }>();
@@ -77,8 +74,7 @@ function PartnerWorkPageContent() {
     () => cars.find((car) => car.id === selectedCarId) ?? cars[0],
     [cars, selectedCarId],
   );
-  const resolvedSelectedPackageId =
-    selectedPackageId || packages[0]?.id || "";
+  const resolvedSelectedPackageId = selectedPackageId || packages[0]?.id || "";
   const shouldScrollCars = cars.length > 3;
 
   useEffect(() => {
@@ -346,17 +342,20 @@ function PartnerWorkPageContent() {
                       .map((task) => task.title)
                       .join(", "),
                   )}&packageId=${encodeURIComponent(resolvedSelectedPackageId)}&packageTitle=${encodeURIComponent(
-                    packages.find((item) => item.id === resolvedSelectedPackageId)
-                      ?.name ?? "패키지",
+                    packages.find(
+                      (item) => item.id === resolvedSelectedPackageId,
+                    )?.name ?? "패키지",
                   )}&packageMinutes=${encodeURIComponent(
                     String(
-                      packages.find((item) => item.id === resolvedSelectedPackageId)
-                        ?.durationMinutes ?? 60,
+                      packages.find(
+                        (item) => item.id === resolvedSelectedPackageId,
+                      )?.durationMinutes ?? 60,
                     ),
                   )}&packagePrice=${encodeURIComponent(
                     String(
-                      packages.find((item) => item.id === resolvedSelectedPackageId)
-                        ?.price ?? 0,
+                      packages.find(
+                        (item) => item.id === resolvedSelectedPackageId,
+                      )?.price ?? 0,
                     ),
                   )}&carId=${selectedCar.id}&carLabel=${encodeURIComponent(`${selectedCar.model} (${selectedCar.year})`)}`,
                 )
