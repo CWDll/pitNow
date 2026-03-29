@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import type { CheckInPayload } from "@/src/domain/types";
@@ -48,7 +48,7 @@ function buildMockUrl(
   return `mock://checkin/${reservationId}/${field}/${encodeURIComponent(file.name)}`;
 }
 
-export default function CheckinPage() {
+function CheckinPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -246,5 +246,13 @@ export default function CheckinPage() {
         </div>
       </form>
     </section>
+  );
+}
+
+export default function CheckinPage() {
+  return (
+    <Suspense fallback={<section className="pb-24" />}>
+      <CheckinPageContent />
+    </Suspense>
   );
 }
