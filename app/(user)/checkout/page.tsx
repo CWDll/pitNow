@@ -6,8 +6,6 @@ import { ChangeEvent, Suspense, useMemo, useState } from "react";
 interface CheckoutApiError {
   error?: string | { message?: string };
 }
-const HELPER_VERIFY_BASE_FEE = 5000;
-const HELPER_VERIFY_UNIT_FEE = 2000;
 
 function extractError(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") {
@@ -64,8 +62,6 @@ function CheckoutPageContent() {
   const [checks, setChecks] = useState<boolean[]>([false, false, false]);
   const [photo1, setPhoto1] = useState<File | null>(null);
   const [photo2, setPhoto2] = useState<File | null>(null);
-  const [helperVerifyRequested, setHelperVerifyRequested] =
-    useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
@@ -77,11 +73,6 @@ function CheckoutPageContent() {
 
     return previewFee;
   }, [previewFee]);
-
-  const helperVerifyFeePreview = helperVerifyRequested
-    ? HELPER_VERIFY_BASE_FEE +
-      Math.max(0, selectedTaskCount) * HELPER_VERIFY_UNIT_FEE
-    : 0;
 
   const canSubmitBase =
     reservationId.length > 0 &&
@@ -105,7 +96,7 @@ function CheckoutPageContent() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ reservationId, helperVerifyRequested }),
+        body: JSON.stringify({ reservationId }),
       });
 
       const data: unknown = await response.json();
@@ -123,15 +114,6 @@ function CheckoutPageContent() {
           ? (data as { extraFee: number }).extraFee
           : additionalFee;
 
-      const helperVerifyFee =
-        data &&
-        typeof data === "object" &&
-        "helperVerifyFee" in data &&
-        typeof (data as { helperVerifyFee?: unknown }).helperVerifyFee ===
-          "number"
-          ? (data as { helperVerifyFee: number }).helperVerifyFee
-          : helperVerifyFeePreview;
-
       const query = new URLSearchParams({
         reservationId,
         reservationType,
@@ -142,7 +124,6 @@ function CheckoutPageContent() {
         workTitle: taskLabels,
         totalPrice: String(totalPrice),
         extraFee: String(extraFee),
-        helperVerifyFee: String(helperVerifyFee),
         taskIds,
         taskLabels,
         selectedTaskCount: String(selectedTaskCount),
@@ -249,40 +230,14 @@ function CheckoutPageContent() {
           <span>추가 요금</span>
           <span>{additionalFee.toLocaleString("ko-KR")}원</span>
         </p>
-        <p className="mt-2 flex justify-between">
-          <span>카 마스터 검수</span>
-          <span>{helperVerifyFeePreview.toLocaleString("ko-KR")}원</span>
-        </p>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-xl font-semibold text-zinc-900">
           <span>총 정산 예상</span>
           <span className="text-red-500">
-            {(
-              totalPrice +
-              additionalFee +
-              helperVerifyFeePreview
-            ).toLocaleString("ko-KR")}
-            원
+            {(totalPrice + additionalFee).toLocaleString("ko-KR")}원
           </span>
         </p>
       </div>
-
-      <label className="mt-5 flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-800">
-        <input
-          type="checkbox"
-          className="mt-1 h-5 w-5"
-          checked={helperVerifyRequested}
-          onChange={() => setHelperVerifyRequested((prev) => !prev)}
-        />
-        <span>
-          카 마스터 검수 +{HELPER_VERIFY_BASE_FEE.toLocaleString("ko-KR")}
-          원 (기본)
-          <br />
-          <span className="text-sm text-zinc-500">
-            선택 작업 {Math.max(0, selectedTaskCount)}개 기준 가산 포함
-          </span>
-        </span>
-      </label>
 
       {error ? (
         <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">

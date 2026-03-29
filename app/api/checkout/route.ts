@@ -29,9 +29,6 @@ interface ReservationRow {
   reserved_end_time?: string | null;
   blocked_until?: string | null;
   total_price: number | string;
-  selected_task_count: number | null;
-  helper_verify_requested: boolean | null;
-  helper_verify_fee: number | string | null;
 }
 
 interface CheckoutRow {
@@ -112,8 +109,15 @@ function toFiniteNumber(value: number | string): number | null {
   return parsedValue;
 }
 
-function normalizeReservationType(value: string | null | undefined): ReservationType {
-  if (value === "SHOP_SERVICE" || value === "PACKAGE" || value === "PACKAGE_SERVICE" || value === "PKG") {
+function normalizeReservationType(
+  value: string | null | undefined,
+): ReservationType {
+  if (
+    value === "SHOP_SERVICE" ||
+    value === "PACKAGE" ||
+    value === "PACKAGE_SERVICE" ||
+    value === "PKG"
+  ) {
     return "SHOP_SERVICE";
   }
 
@@ -196,7 +200,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { reservationId, helperVerifyRequested } = body;
+  const { reservationId } = body;
 
   let { data: reservation, error: reservationError } = await supabase
     .from("reservations")
@@ -271,21 +275,14 @@ export async function POST(req: Request) {
   const startTime = parseIsoDate(reservation.start_time);
   const endTime = parseIsoDate(reservation.end_time);
   const reservedEndTime = parseIsoDate(
-    reservation.reserved_end_time ?? reservation.blocked_until ?? reservation.end_time,
+    reservation.reserved_end_time ??
+      reservation.blocked_until ??
+      reservation.end_time,
   );
-  const reservationType = normalizeReservationType(reservation.reservation_type);
+  const reservationType = normalizeReservationType(
+    reservation.reservation_type,
+  );
   const totalPrice = toFiniteNumber(reservation.total_price);
-  const persistedHelperVerifyFee =
-    reservation.helper_verify_fee === null
-      ? 0
-      : (toFiniteNumber(reservation.helper_verify_fee) ?? 0);
-  const selectedTaskCount =
-    typeof reservation.selected_task_count === "number" &&
-    Number.isInteger(reservation.selected_task_count) &&
-    reservation.selected_task_count > 0
-      ? reservation.selected_task_count
-      : 0;
-  const isHelperAlreadyRequested = reservation.helper_verify_requested === true;
 
   if (!startTime || !endTime || !reservedEndTime || totalPrice === null) {
     return errorResponse(
@@ -312,34 +309,6 @@ export async function POST(req: Request) {
       "FEE_CALCULATION_ERROR",
       "초과요금 계산 중 오류가 발생했습니다.",
     );
-  }
-
-  const shouldApplyHelperVerify =
-    helperVerifyRequested === true || isHelperAlreadyRequested;
-  const helperVerifyFee = shouldApplyHelperVerify
-    ? Math.max(persistedHelperVerifyFee, 5000 + selectedTaskCount * 2000)
-    : 0;
-
-  if (
-    shouldApplyHelperVerify &&
-    (!isHelperAlreadyRequested || persistedHelperVerifyFee !== helperVerifyFee)
-  ) {
-    const { error: helperUpdateError } = await supabase
-      .from("reservations")
-      .update({
-        helper_verify_requested: true,
-        helper_verify_fee: helperVerifyFee,
-      })
-      .eq("id", reservationId);
-
-    if (helperUpdateError) {
-      console.error("HELPER VERIFY UPDATE ERROR:", helperUpdateError);
-      return errorResponse(
-        500,
-        "DB_ERROR",
-        "헬퍼 작업 확인 정보 저장 중 오류가 발생했습니다.",
-      );
-    }
   }
 
   const { error: insertCheckoutError } = await supabase
@@ -399,10 +368,7 @@ export async function POST(req: Request) {
     success: true,
     status: "COMPLETED" as const,
     extraFee,
-    helperVerifyFee,
-    totalSettlement: Number(
-      (totalPrice + extraFee + helperVerifyFee).toFixed(2),
-    ),
+    totalSettlement: Number((totalPrice + extraFee).toFixed(2)),
   });
 }
 

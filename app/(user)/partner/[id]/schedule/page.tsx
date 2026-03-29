@@ -156,7 +156,8 @@ function PartnerSchedulePageContent() {
 
   const safeGarage = garage;
   const resolvedBayIds = bayIds.length > 0 ? bayIds : safeGarage.bayIds;
-  const selectedBayId = resolvedBayIds[selectedBay - 1] ?? resolvedBayIds[0] ?? safeGarage.bayId;
+  const selectedBayId =
+    resolvedBayIds[selectedBay - 1] ?? resolvedBayIds[0] ?? safeGarage.bayId;
 
   useEffect(() => {
     let isCancelled = false;
@@ -243,14 +244,22 @@ function PartnerSchedulePageContent() {
       return true;
     }
 
-    const blockStartIso = toIsoByDateAndTime(selectedDate, timeBoundaries[blockIdx]);
-    const blockEndIso = toIsoByDateAndTime(selectedDate, timeBoundaries[blockIdx + 1]);
+    const blockStartIso = toIsoByDateAndTime(
+      selectedDate,
+      timeBoundaries[blockIdx],
+    );
+    const blockEndIso = toIsoByDateAndTime(
+      selectedDate,
+      timeBoundaries[blockIdx + 1],
+    );
     const blockStartMs = new Date(blockStartIso).getTime();
     const blockEndMs = new Date(blockEndIso).getTime();
 
     return reservationRanges.some(
       (range) =>
-        range.bayId === bayId && blockStartMs < range.endMs && range.startMs < blockEndMs,
+        range.bayId === bayId &&
+        blockStartMs < range.endMs &&
+        range.startMs < blockEndMs,
     );
   }
 
@@ -551,7 +560,9 @@ function PartnerSchedulePageContent() {
         </span>
       </div>
 
-      <div className={`grid gap-2 ${resolvedBayIds.length > 4 ? "grid-cols-6" : "grid-cols-4"}`}>
+      <div
+        className={`grid gap-2 ${resolvedBayIds.length > 4 ? "grid-cols-6" : "grid-cols-4"}`}
+      >
         {Array.from({ length: resolvedBayIds.length }).map((_, index) => {
           const bayNumber = index + 1;
           const active = bayNumber === selectedBay;

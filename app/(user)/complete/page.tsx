@@ -41,7 +41,6 @@ function CompletePageContent() {
   const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
   const extraFee = Number(searchParams.get("extraFee") ?? "0");
-  const helperVerifyFee = Number(searchParams.get("helperVerifyFee") ?? "0");
 
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
@@ -51,7 +50,7 @@ function CompletePageContent() {
   const [hasExistingReview, setHasExistingReview] = useState(false);
   const [isLoadingReview, setIsLoadingReview] = useState(true);
 
-  const total = totalPrice + extraFee + helperVerifyFee;
+  const total = totalPrice + extraFee;
 
   async function handleSubmitReview() {
     setReviewError("");
@@ -139,10 +138,6 @@ function CompletePageContent() {
         <p className="mt-2 flex justify-between text-base text-zinc-700">
           <span>추가 요금</span>
           <span>{extraFee.toLocaleString("ko-KR")}원</span>
-        </p>
-        <p className="mt-2 flex justify-between text-base text-zinc-700">
-          <span>카 마스터 검수</span>
-          <span>{helperVerifyFee.toLocaleString("ko-KR")}원</span>
         </p>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-2xl font-semibold text-zinc-900">
