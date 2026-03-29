@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import {
+  formatMinutesLabel,
   getGarageById,
   getGarageBayIdByNumber,
   getGarageShopPackages,
@@ -151,17 +152,14 @@ function PartnerWorkPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialMode = parseMode(searchParams.get("mode"));
+  const initialBookingMode = initialMode === "SHOP_SERVICE" ? "PACKAGE" : "SELF";
 
-  const [reservationType, setReservationType] =
-    useState<ReservationType>(initialMode);
   const [cars] = useState(() => loadMockCarsFromStorage() ?? initialMockCars);
-  const [bookingMode, setBookingMode] = useState<"SELF" | "PACKAGE">("SELF");
+  const [bookingMode, setBookingMode] = useState<"SELF" | "PACKAGE">(initialBookingMode);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([
     selfMaintenanceTaskOptions[0].id,
   ]);
-  const [selectedPackageId, setSelectedPackageId] = useState<string>(
-    workOptions[0].id,
-  );
+  const [selectedPackageId, setSelectedPackageId] = useState<string>("");
   const [selectedCarId, setSelectedCarId] = useState<string>(() =>
     getInitialActiveCarId(loadMockCarsFromStorage() ?? initialMockCars),
   );
@@ -185,6 +183,14 @@ function PartnerWorkPageContent() {
     [packages, selectedPackageId],
   );
   const shouldScrollCars = cars.length > 3;
+  const reservationType: ReservationType =
+    bookingMode === "PACKAGE" ? "SHOP_SERVICE" : "SELF_SERVICE";
+
+  useEffect(() => {
+    if (!selectedPackageId && packages[0]) {
+      setSelectedPackageId(packages[0].id);
+    }
+  }, [packages, selectedPackageId]);
 
   const weekDates = useMemo(
     () =>
@@ -421,14 +427,14 @@ function PartnerWorkPageContent() {
                 </button>
               );
             })
-          : workOptions.map((option) => {
-              const selected = selectedPackageId === option.id;
+          : packages.map((item) => {
+              const selected = selectedPackageId === item.id;
 
               return (
                 <button
-                  key={option.id}
+                  key={item.id}
                   type="button"
-                  onClick={() => setSelectedPackageId(option.id)}
+                  onClick={() => setSelectedPackageId(item.id)}
                   className={`w-full rounded-2xl border p-4 text-left transition ${
                     selected
                       ? "border-blue-500 bg-blue-50/40"
@@ -436,9 +442,10 @@ function PartnerWorkPageContent() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-2xl font-medium text-zinc-900">
-                      {option.title}
-                    </p>
+                    <div>
+                      <p className="text-2xl font-medium text-zinc-900">{item.name}</p>
+                      <p className="mt-1 text-base text-zinc-600">{item.summary}</p>
+                    </div>
                     {selected ? (
                       <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
                         선택됨
@@ -446,24 +453,11 @@ function PartnerWorkPageContent() {
                     ) : null}
                   </div>
 
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                    <span
-                      className={`rounded-full px-2 py-1 font-medium ${levelClass(option.level)}`}
-                    >
-                      {option.level}
-                    </span>
-                    {option.helperRequired ? (
-                      <span className="rounded-full bg-rose-50 px-2 py-1 font-medium text-rose-600">
-                        헬퍼 필수
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <p className="mt-2 text-base text-zinc-600">
-                    {option.description}
+                  <p className="mt-2 text-base text-zinc-500">
+                    ◷ 소요 {formatMinutesLabel(item.durationMinutes)}
                   </p>
-                  <p className="mt-1 text-base text-zinc-500">
-                    ◷ {option.durationLabel}
+                  <p className="mt-1 text-lg font-semibold text-zinc-900">
+                    {item.price.toLocaleString("ko-KR")}원
                   </p>
                 </button>
               );
@@ -481,7 +475,7 @@ function PartnerWorkPageContent() {
           onClick={() =>
             selectedCar
               ? router.push(
-                  `/partner/${garage.id}/schedule?bookingMode=${bookingMode}&taskIds=${encodeURIComponent(
+                  `/partner/${garage.id}/schedule?mode=${bookingMode === "PACKAGE" ? "SHOP_SERVICE" : "SELF_SERVICE"}&bookingMode=${bookingMode}&taskIds=${encodeURIComponent(
                     selectedTaskIds.join(","),
                   )}&taskLabels=${encodeURIComponent(
                     selfMaintenanceTaskOptions
@@ -489,18 +483,14 @@ function PartnerWorkPageContent() {
                       .map((task) => task.title)
                       .join(", "),
                   )}&packageId=${encodeURIComponent(selectedPackageId)}&packageTitle=${encodeURIComponent(
-                    workOptions.find(
-                      (option) => option.id === selectedPackageId,
-                    )?.title ?? "패키지",
+                    packages.find((item) => item.id === selectedPackageId)?.name ?? "패키지",
                   )}&carId=${selectedCar.id}&carLabel=${encodeURIComponent(`${selectedCar.model} (${selectedCar.year})`)}`,
                 )
               : null
           }
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300"
         >
-          {reservationType === "SELF_SERVICE"
-            ? "안전 동의로 이동"
-            : "시간 선택으로 이동"}
+          {bookingMode === "SELF" ? "시간 선택으로 이동" : "시간 선택으로 이동"}
         </button>
       </div>
 
