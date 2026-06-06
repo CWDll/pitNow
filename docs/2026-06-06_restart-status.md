@@ -1,0 +1,277 @@
+# PitNow 재개 현황 정리
+
+작성일: 2026-06-06
+
+## 1. 한 줄 요약
+
+PitNow는 현재 `Next.js App Router + Supabase` 기반으로 모바일 사용자 예약 루프의 화면과 주요 API가 한 바퀴 연결된 상태다. 다만 실제 결제, 실제 사진 업로드, 서버 기준 타이머 상태 전환, 관리자 콘솔, Auth/RLS, 상태 전환 로그는 아직 MVP 완성 전의 큰 빈칸으로 남아 있다.
+
+현재 코드는 “동작 가능한 프로토타입 후반부”에 가깝고, “운영 가능한 MVP”로 가려면 DB/API 정합성 정리와 실서비스 필수 연동을 우선해야 한다.
+
+## 2. 기준 문서상 제품 목표
+
+Source of Truth 기준 MVP 목표는 다음 예약 루프다.
+
+`reserve -> pay -> check-in(QR + 4 photos) -> in-use(timer) -> checkout(photo + settlement) -> review`
+
+최신 의사결정 기준으로는 다음이 중요하다.
+
+- `Helper mode`는 폐기되고 `Shop Service`로 대체되었다.
+- `Self Service`는 법적 허용 작업 선택과 “선택 작업만 수행” 동의가 필수다.
+- 예약 시간은 최소 1시간, 1시간 단위다.
+- 예약 충돌은 DB 레벨에서 막아야 한다.
+- 점유 충돌 기준은 `start_time ~ blocked_until(end_time + 1 hour)`이다.
+- 체크인은 QR 확인과 차량 4방향 사진이 있어야 한다.
+- 타이머와 초과요금은 프론트가 아니라 서버 기준이어야 한다.
+- 모든 상태 전환은 명시적이어야 하고 로그가 남아야 한다.
+
+주의할 점: `docs/Decisions.md`의 2026-03-18 항목에는 Self 추가 단위가 30분이라고 남아 있으나, 2026-03-29 결정과 `docs/Policies_MVP.md`, `docs/UI_MVP.md`, 실제 마이그레이션/코드는 1시간 단위를 따른다. 앞으로는 2026-03-29 결정을 최신 기준으로 보는 것이 맞다.
+
+## 3. 문서화 현황
+
+문서화는 MVP를 재개하기에 충분한 수준까지 되어 있다.
+
+- `docs/PRD_MVP.md`: MVP 기능 범위, Self/Shop 서비스 방향, 운영 정책이 정리되어 있다.
+- `docs/UserFlow_MVP.md`: Self Service 예약 플로우가 mermaid로 정리되어 있다.
+- `docs/DB_MVP.md`: 핵심 테이블과 제약 조건 설계가 정리되어 있다.
+- `docs/API_MVP.md`: 예약/체크인/체크아웃/리뷰 API 스펙이 정리되어 있다.
+- `docs/Policies_MVP.md`: 시간, 버퍼, 노쇼, 초과요금, 체크인/체크아웃 정책이 정리되어 있다.
+- `docs/Risks_MVP.md`: 법적/안전/운영 리스크와 통제 방법이 정리되어 있다.
+- `docs/UI_MVP.md`: 모바일 사용자 UI와 데스크톱 관리자 UI 분리 원칙이 정리되어 있다.
+- `docs/Decisions.md`: 주요 결정 로그가 append-only 형태로 남아 있다.
+- `docs/2026-03-18_2way-reservation-alignment-report.md`: 2-way 예약 모델 정렬 보고서가 별도로 있다.
+
+부족한 문서:
+
+- 실제 구현 상태와 남은 일을 연결한 로드맵 문서가 없었다. 이 문서가 그 역할을 한다.
+- PWA 요구사항은 문서에 있으나 구현 체크리스트가 없다.
+- Toss 결제 연동 스펙과 결제 상태 모델이 아직 별도 문서로 없다.
+- Supabase Storage, Auth/RLS, 관리자 콘솔 범위 문서가 아직 구체적이지 않다.
+
+## 4. 실제 구현 현황
+
+### 4.1 기술/프로젝트 상태
+
+- Next.js `16.1.6`, React `19.2.3`, TypeScript, Tailwind CSS v4, Supabase 클라이언트가 설치되어 있다.
+- `app/`, `src/lib/`, `src/domain/`, `db/`, `supabase/`, `docs/` 구조가 있다.
+- `npm run lint` 통과.
+- `npm run build` 통과.
+- Git working tree는 이 문서 작성 전 기준으로 깨끗했다.
+
+### 4.2 구현된 사용자 화면
+
+모바일 사용자 플로우 화면은 대부분 존재한다.
+
+- `/`: 홈, 파트너 목록, 평점/리뷰 집계 표시.
+- `/partner/[id]`: 파트너 상세.
+- `/partner/[id]/work`: Self Service 또는 Shop Service 선택, 작업/패키지 선택.
+- `/partner/[id]/schedule`: 날짜/시간/베이 선택, 버퍼 포함 예약 가능 블록 표시.
+- `/safety`: Self Service 안전 동의.
+- `/payment`: 결제 화면 UI와 예약 API 호출.
+- `/reservation-complete`: 예약 완료 후 Self는 체크인, Shop은 이용중 화면으로 이동.
+- `/checkin`: QR 스캔 UI, 차량 4방향 사진 선택, 체크인 API 호출.
+- `/in-use`: Self 타이머 화면, Shop 진행중 화면.
+- `/checkout`: 체크리스트와 체크아웃 사진 선택, 체크아웃 API 호출.
+- `/complete`: 완료 요약과 리뷰 작성/수정.
+- `/reservation`: 내 예약 목록 성격의 화면.
+- `/my-car`, `/mypage`, `/guide`, `/safety`: 주변 보조 화면.
+
+### 4.3 구현된 API
+
+- `POST /api/reservations`
+  - 예약 생성.
+  - 최소 1시간, 1시간 단위 검증.
+  - Self 작업 선택/동의 검증.
+  - `blocked_until = end_time + 1 hour` 계산.
+  - DB exclusion constraint 충돌 에러 처리.
+  - Self 작업/동의 테이블 저장.
+
+- `POST /api/checkin`
+  - 예약 존재 여부 확인.
+  - `CONFIRMED` 상태만 체크인 허용.
+  - 4방향 사진 문자열 필수.
+  - `checkins` insert 후 예약 상태를 `CHECKED_IN`으로 변경.
+
+- `POST /api/checkout`
+  - `CHECKED_IN` 또는 `IN_USE` 상태만 체크아웃 허용.
+  - 서버 현재 시간 기준으로 초과요금 계산.
+  - `checkouts` insert 후 예약 상태를 `COMPLETED`로 변경.
+  - Shop Service는 초과요금 0 처리.
+
+- `GET/POST/PATCH /api/reviews`
+  - 완료된 예약의 리뷰 조회/작성/수정.
+  - 중복 리뷰 방지.
+  - 파트너별 리뷰 집계 기반 마련.
+
+- `GET /api/partners/[id]`
+  - 파트너 상세 정보 조회.
+
+- `GET /api/partner-packages`
+  - 파트너별 Shop Service 패키지 조회.
+
+### 4.4 DB/마이그레이션 현황
+
+마이그레이션은 `db/migrations`와 `supabase/migrations`에 분산되어 있다.
+
+구현된 핵심 테이블/개념:
+
+- `partners`
+- `bays`
+- `service_packages`
+- `partner_package_prices`
+- `reservations`
+- `self_maintenance_tasks`
+- `reservation_tasks`
+- `self_task_agreements`
+- `checkins`
+- `checkouts`
+- `reviews`
+
+중요 제약:
+
+- `btree_gist` extension 사용.
+- `reservations`에 `blocked_until`, `selected_task_count`, `helper_verify_requested`, `helper_verify_fee` 추가.
+- `chk_reservation_hour_unit`: 1시간 이상, 1시간 단위.
+- `chk_blocked_until_buffer`: `blocked_until = end_time + interval '1 hour'`.
+- `chk_helper_verify_fee`: 헬퍼 검수 수수료 조건.
+- `no_overlap`: 같은 `bay_id`에서 `tstzrange(start_time, blocked_until)` 겹침 방지. 활성 상태는 `CONFIRMED`, `CHECKED_IN`, `IN_USE`.
+
+주의할 점:
+
+- 문서의 `DB_MVP.md`에는 `idx_reservations_time`에서 `reserved_end_time`을 참조하지만 기본 reservations 정의에는 `reserved_end_time`이 늦게 추가되는 등 문서와 마이그레이션 간 표현 차이가 있다.
+- 실제 예약 API는 오래된 DB 스키마와 최신 스키마를 동시에 맞추기 위한 fallback/compatibility 코드가 있다. 재개 후 정리 대상이다.
+
+## 5. 완료된 것으로 볼 수 있는 범위
+
+- MVP 핵심 사용자 여정 화면 골격은 구현되어 있다.
+- Self/Shop 예약 모드 선택이 구현되어 있다.
+- Self Service 법적 허용 작업 선택 UI가 있다.
+- Self Service 동의 UI가 있다.
+- 베이/시간 선택에서 이미 예약된 시간과 종료 후 1시간 버퍼를 고려한다.
+- 예약 생성 API가 DB 충돌 방지와 연결되어 있다.
+- 체크인 API가 4방향 사진 필수 조건을 검증한다.
+- 타이머 화면과 서버 체크아웃 초과요금 계산이 있다.
+- 완료 후 리뷰 작성/수정이 가능하다.
+- 파트너/패키지/리뷰 데이터는 Supabase 기반으로 조회하려는 구조가 잡혀 있다.
+- 빌드와 린트가 통과한다.
+
+## 6. 아직 부족하거나 미완성인 범위
+
+### 6.1 MVP 필수에 가까운 미완성
+
+- Toss 실제 결제 연동이 없다. 현재 `/payment`는 결제 UI 후 바로 예약 API를 호출한다.
+- 결제 상태 테이블/결제 승인/실패/환불 처리가 없다.
+- 실제 Supabase Storage 업로드가 없다. 체크인/체크아웃 사진은 `mock://...` 문자열로 저장된다.
+- Auth가 없다. API는 `MOCK_USER_ID`를 사용한다.
+- RLS 정책이 없다.
+- 상태 전환 로그 테이블이 없다. AGENTS 지침의 “Log all state transitions”와 PRD 원칙을 아직 만족하지 못한다.
+- `IN_USE` 상태 전환 API가 없다. 체크인 후 DB 상태는 `CHECKED_IN`이고, 프론트에서만 이용중으로 간주한다.
+- 타이머 시작 기준이 “체크인 사진 업로드 완료 후 서버 상태 전환”으로 완전히 모델링되어 있지 않다.
+- 체크아웃 사진 URL이 DB에 저장되지 않는다. 현재 `checkouts`에는 `extra_fee`, `completed_at`만 저장된다.
+- 체크아웃의 청소/공구/폐기물 체크 결과가 DB에 저장되지 않는다.
+- 헬퍼 검수 요청을 체크아웃 시점에 추가로 선택/정산하는 API 로직이 문서만큼 완성되어 있지 않다.
+
+### 6.2 UX/운영 측면 미완성
+
+- PWA manifest/service worker/installable 설정이 없다.
+- 관리자 콘솔 `/admin`이 없다.
+- 예약 연장 API와 실제 상태/요금 반영이 없다.
+- SOS 버튼과 매장 연락 버튼은 UI만 있다.
+- QR 스캔은 실제 카메라/QR 검증이 아니라 버튼 토글이다.
+- 차량 정보는 localStorage mock 데이터다.
+- 예약 목록은 실데이터 연동 수준을 더 확인/보강해야 한다.
+- 지도 기능은 실제 지도 SDK 연동이 없다.
+- 모바일 전용 전략은 CSS max-width wrapper로 어느 정도 구현되어 있지만, PWA 모바일 UX 검증은 아직 필요하다.
+
+### 6.3 코드 품질/정합성 정리 대상
+
+- `src/domain/types.ts`의 `ReservationType`은 `SELF_SERVICE | SHOP_SERVICE`인데 API payload는 `bookingMode: SELF | PACKAGE`를 쓴다. 변환 계층은 있지만 명칭이 혼재한다.
+- 예약 API가 `reservation_type` 후보를 여러 개 시도한다. 최신 DB 기준을 확정하면 제거해야 한다.
+- 예약 API의 법적 작업 검증이 하드코딩 allowlist와 DB 조회를 둘 다 사용한다. DB를 단일 기준으로 삼는 편이 좋다.
+- `DEFAULT_HOURLY_PRICE = 20000`이 예약 API에 하드코딩되어 있어, 파트너별 `hourly_price`와 불일치할 수 있다.
+- Shop Service 예약은 `package_id`, package duration/price를 API payload로 명확히 받지 않는다.
+- 스케줄 화면의 시간 계산은 `Date.UTC`를 사용한다. 한국 현지 영업시간 기준 예약이라면 timezone 정책을 명시하고 검증해야 한다.
+- API 응답 에러 형태가 `{ error: string }`와 `{ success:false, error:{code,message} }`로 섞여 있다.
+- DB 마이그레이션 위치가 `db/migrations`와 `supabase/migrations`에 나뉘어 있다. 운영 적용 기준을 하나로 정해야 한다.
+
+## 7. 추천 작업 순서
+
+### 1단계: 기준 정리와 DB/API 정합성 고정
+
+가장 먼저 할 일은 스키마와 타입 이름을 하나로 고정하는 것이다.
+
+- `SELF_SERVICE`, `SHOP_SERVICE`를 DB/API/domain 공통 표준으로 확정.
+- `bookingMode: SELF | PACKAGE`는 UI 내부 용어로만 둘지, API에서도 표준 타입을 쓸지 결정.
+- `reservations` 최신 스키마를 기준으로 API fallback 코드 제거.
+- `partner_id`, `reservation_type`, `package_id`, `duration_minutes`, `reserved_end_time`, `blocked_until` 의미를 문서와 코드에서 일치.
+- 파트너별 `hourly_price`로 Self 가격 계산.
+- Shop Service 예약 생성 API에 package id/duration/price 검증 추가.
+
+### 2단계: 상태 전환을 서버 중심으로 완성
+
+- `reservation_status_logs` 테이블 추가.
+- 예약 생성, 체크인, 이용 시작, 체크아웃, 취소 상태 전환마다 로그 insert.
+- `POST /api/reservations/[id]/start` 또는 체크인 API 내부에서 `CHECKED_IN -> IN_USE` 전환 정책 결정.
+- 프론트 타이머는 서버에서 내려준 `serverNow`, `end_time` 기준으로 표시.
+- 허용되지 않는 상태 전환을 API 단에서 일관되게 차단.
+
+### 3단계: 사진/Storage 실연동
+
+- Supabase Storage bucket 설계.
+- 체크인 4방향 사진 업로드 후 URL 저장.
+- 체크아웃 사진 업로드 후 URL 저장.
+- 업로드 실패 시 상태 전환이 일어나지 않도록 처리.
+- 파일 타입/크기 제한 정책 추가.
+
+### 4단계: 결제 MVP 연동
+
+- Toss 결제 플로우 설계 문서 추가.
+- 결제 대기/승인/실패 상태 모델 추가.
+- 결제 승인 성공 후에만 예약 `CONFIRMED`.
+- 예약 충돌과 결제 사이 race condition 처리 정책 결정.
+
+### 5단계: 관리자와 운영 화면
+
+- `/admin` layout 분리.
+- 예약 현황/체크인 사진/체크아웃/정산 모니터링.
+- 파트너 패키지 가격 관리.
+- Desktop only UI로 구현.
+
+### 6단계: PWA/모바일 마감
+
+- `manifest.json`, app icons, installability.
+- 모바일 viewport QA.
+- 홈 지도/검색/필터 고도화.
+- 실제 QR 스캔.
+- 예약 연장/SOS/매장 연락 기능.
+
+## 8. 다음 개발 시작 제안
+
+바로 개발을 재개한다면 첫 작업은 다음 중 하나가 좋다.
+
+1. 스키마/API 정합성 정리
+   - 장점: 뒤 작업 전체가 안정된다.
+   - 단점: 사용자 눈에 보이는 변화는 적다.
+
+2. Storage 기반 사진 업로드 구현
+   - 장점: 체크인/체크아웃 핵심 MVP 체감 완성도가 오른다.
+   - 단점: Auth/RLS 전이면 보안 정책을 임시로 설계해야 한다.
+
+추천은 1번이다. 현재 코드가 빌드되는 좋은 상태라서, 먼저 타입/DB/API 이름과 fallback을 정리하면 이후 결제, Storage, 관리자 작업이 덜 흔들린다.
+
+## 9. 검증 기록
+
+2026-06-06 기준 로컬에서 확인한 결과:
+
+```bash
+npm run lint
+```
+
+성공.
+
+```bash
+npm run build
+```
+
+성공. Next.js가 20개 app route/page를 정상 빌드했다.
+
