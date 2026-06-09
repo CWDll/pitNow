@@ -381,3 +381,35 @@ PWA 1차 적용을 진행했다.
 - MVP에서는 설치 가능성과 오프라인 안내까지만 지원한다.
 - 예약/결제/체크인/체크아웃 데이터 변경은 오프라인 처리하지 않는다.
 - 실제 iOS/Android 설치 UX는 실기기 또는 브라우저 Lighthouse로 추가 확인이 필요하다.
+
+## 15. 2026-06-09 상태 전환 / 서버 타이머 검증
+
+예약 상태 전환을 서버 API 기준으로 검증했다.
+
+- 예약 생성 시 `CONFIRMED` 저장 및 `reservation_status_logs` 기록 확인.
+- Self Service는 `CONFIRMED` 상태에서 바로 `/api/reservations/[id]/start` 호출 시 `400 INVALID_RESERVATION_STATUS`로 거부되는 것 확인.
+- 체크인 API 호출 후 `CONFIRMED -> CHECKED_IN` 전환 및 로그 기록 확인.
+- `/api/reservations/[id]/start` 호출 후 `CHECKED_IN -> IN_USE` 전환, `serverNow`, `startTime`, `endTime`, `totalPrice` 응답 확인.
+- 이미 `IN_USE`인 예약에 start API를 다시 호출하면 상태를 중복 변경하지 않고 현재 서버 기준 시간만 다시 내려주는 idempotent 동작 확인.
+- 체크아웃 API 호출 후 `IN_USE -> COMPLETED` 전환, 정산 응답, 로그 기록 확인.
+- 프론트 `in-use` 화면은 start API 응답의 `serverNow`를 기준으로 로컬 clock offset을 계산하고, `calculateRemainingTimeAt` / `calculateOverduePreviewAt`로 표시한다.
+
+검증한 로그 순서:
+
+```text
+null -> CONFIRMED
+CONFIRMED -> CHECKED_IN
+CHECKED_IN -> IN_USE
+IN_USE -> COMPLETED
+```
+
+테스트 DB row cleanup:
+
+- `reservation_status_logs`
+- `reservation_tasks`
+- `self_task_agreements`
+- `checkins`
+- `checkouts`
+- `reservations`
+
+남은 테스트 예약이 `[]`인 것까지 확인했다.

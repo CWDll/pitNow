@@ -191,3 +191,24 @@ Rules:
 
 Reason:
 PitNow 핵심 플로우는 서버 상태, 사진 업로드, 결제, 정산에 의존하므로 MVP에서 오프라인 쓰기 큐를 만들면 데이터 정합성 위험이 커진다. 먼저 설치 가능성과 안전한 오프라인 안내만 제공하고, 오프라인 제출/재시도는 운영 요구가 명확해진 뒤 별도 설계한다.
+
+---
+
+## 2026-06-09
+
+Decision:
+Self Service 이용 시작은 체크인 완료 후 서버 API에서만 `IN_USE`로 전환한다.
+프론트 타이머는 `/api/reservations/[id]/start` 응답의 `serverNow`, `startTime`, `endTime`을 기준으로 표시한다.
+
+Rules:
+
+- 예약 생성은 `null -> CONFIRMED` 로그를 남긴다.
+- 체크인은 사진 4장 저장 후 `CONFIRMED -> CHECKED_IN` 로그를 남긴다.
+- Self Service는 `CHECKED_IN` 상태에서만 `/api/reservations/[id]/start`가 `IN_USE`로 전환할 수 있다.
+- Shop Service는 `CONFIRMED` 상태에서 start API가 `IN_USE`로 전환할 수 있다.
+- 이미 `IN_USE`인 예약에 start API를 다시 호출하면 중복 로그 없이 현재 `serverNow`와 예약 시간 정보를 반환한다.
+- 체크아웃은 `CHECKED_IN` 또는 `IN_USE`에서만 `COMPLETED`로 전환하고 로그를 남긴다.
+- 상태 로그 저장 실패가 실제 DB 오류이면 상태 변경과 증적 insert를 rollback한다. 단, 로그 테이블 미적용 환경은 개발 편의를 위해 skip 허용한다.
+
+Reason:
+타이머 시작을 프론트 화면 진입으로만 판단하면 체크인 증적 없이 이용이 시작되거나, 로컬 시계 조작에 따라 정산이 흔들릴 수 있다. 서버 상태 전환과 서버 시간 응답을 기준으로 고정해야 MVP 핵심 원칙인 “사진 4장 후 타이머 시작”, “서버 기준 타이머”, “명시적 상태 전환 로그”를 만족한다.
