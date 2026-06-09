@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>PitNow 오프라인</title>
+    <style>
+      :root {
+        color-scheme: light;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      body {
+        min-height: 100dvh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background:
+          radial-gradient(circle at top left, rgba(245, 158, 11, 0.22), transparent 34rem),
+          linear-gradient(160deg, #f8fafc 0%, #e2e8f0 100%);
+      }
+
+      main {
+        width: min(100%, 360px);
+        border: 1px solid rgba(15, 23, 42, 0.1);
+        border-radius: 28px;
+        padding: 28px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.16);
+      }
+
+      .mark {
+        display: inline-grid;
+        place-items: center;
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        background: #0f172a;
+        color: #fbbf24;
+        font-weight: 900;
+        letter-spacing: -0.08em;
+      }
+
+      h1 {
+        margin: 22px 0 10px;
+        font-size: 28px;
+        line-height: 1.15;
+        letter-spacing: -0.05em;
+      }
+
+      p {
+        margin: 0;
+        color: #475569;
+        font-size: 15px;
+        line-height: 1.7;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark">PN</div>
+      <h1>지금은 연결이 끊겨 있어요</h1>
+      <p>예약, 체크인, 결제 상태는 서버 확인이 필요합니다. 네트워크가 복구되면 PitNow를 다시 열어주세요.</p>
+    </main>
+  </body>
+</html>

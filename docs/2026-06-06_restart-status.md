@@ -364,3 +364,20 @@ npm run build
 - 예약 시 helper verification 선선택 후 체크아웃 재요청: 중복 청구 없이 `15000 + 0 + 7000 = 22000` 확인.
 - API 응답과 `checkouts` DB 저장값 일치 확인.
 - 테스트 Storage object 18개와 테스트 DB row cleanup 확인.
+
+## 14. 2026-06-09 PWA 업데이트
+
+PWA 1차 적용을 진행했다.
+
+- `app/manifest.ts` 추가.
+- PitNow 앱 메타데이터, 모바일 viewport, theme color, Apple Web App 설정 추가.
+- `public/icons/`에 SVG 원본과 192/512/180 PNG 아이콘 세트 추가.
+- `public/sw.js` 서비스워커 추가.
+- `app/pwa-register.tsx`에서 서비스워커 등록.
+- 오프라인 navigation fallback용 `public/offline.html` 추가.
+
+범위:
+
+- MVP에서는 설치 가능성과 오프라인 안내까지만 지원한다.
+- 예약/결제/체크인/체크아웃 데이터 변경은 오프라인 처리하지 않는다.
+- 실제 iOS/Android 설치 UX는 실기기 또는 브라우저 Lighthouse로 추가 확인이 필요하다.

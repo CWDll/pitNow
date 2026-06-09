@@ -173,3 +173,21 @@ Rules:
 
 Reason:
 기존 체크아웃은 `extra_fee` 중심이라 최종 정산 상세를 DB에 충분히 남기지 못했고, 완료 화면도 쿼리스트링의 프론트 계산값에 많이 의존했다.
+
+---
+
+## 2026-06-09
+
+Decision:
+MVP의 PWA 1차 범위는 installable manifest, app icon, service worker registration, offline fallback 안내 페이지까지로 고정한다.
+
+Rules:
+
+- Manifest는 `app/manifest.ts`에서 관리하고 `/manifest.webmanifest`로 제공한다.
+- 앱 이름은 `PitNow`, 표시 모드는 `standalone`, 시작 URL은 `/`로 둔다.
+- 홈 화면 아이콘은 `public/icons/`의 PNG icon 세트를 사용한다.
+- 서비스워커는 navigation request가 오프라인 실패할 때 `/offline.html`을 반환한다.
+- 예약/결제/체크인/체크아웃의 실제 데이터 변경은 오프라인에서 처리하지 않는다.
+
+Reason:
+PitNow 핵심 플로우는 서버 상태, 사진 업로드, 결제, 정산에 의존하므로 MVP에서 오프라인 쓰기 큐를 만들면 데이터 정합성 위험이 커진다. 먼저 설치 가능성과 안전한 오프라인 안내만 제공하고, 오프라인 제출/재시도는 운영 요구가 명확해진 뒤 별도 설계한다.
