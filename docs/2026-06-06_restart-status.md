@@ -356,3 +356,11 @@ npm run build
 주의:
 
 - 원격 Supabase에는 `db/migrations/20260609_checkout_settlement_breakdown.sql` 적용이 필요하다.
+
+검증:
+
+- 정상 체크아웃: `basePrice 15000 + extraFee 0 + helperVerifyFee 0 = totalSettlement 15000` 확인.
+- 체크아웃 시 helper verification 추가 요청: `15000 + 0 + 7000 = 22000` 확인.
+- 예약 시 helper verification 선선택 후 체크아웃 재요청: 중복 청구 없이 `15000 + 0 + 7000 = 22000` 확인.
+- API 응답과 `checkouts` DB 저장값 일치 확인.
+- 테스트 Storage object 18개와 테스트 DB row cleanup 확인.
