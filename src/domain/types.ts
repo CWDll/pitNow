@@ -36,6 +36,11 @@ export interface CheckOut {
   id: string;
   reservationId: string;
   extraFee: number;
+  toolCheckCompleted: boolean;
+  cleaningCompleted: boolean;
+  wasteDisposalCompleted: boolean;
+  checkoutPhoto1: string | null;
+  checkoutPhoto2: string | null;
   completedAt: string;
 }
 
@@ -73,6 +78,11 @@ export interface CheckInPayload {
 export interface CheckOutPayload {
   reservationId: string;
   helperVerifyRequested?: boolean;
+  toolCheckCompleted?: boolean;
+  cleaningCompleted?: boolean;
+  wasteDisposalCompleted?: boolean;
+  checkoutPhoto1?: string;
+  checkoutPhoto2?: string;
 }
 
 export interface CreateReviewPayload {

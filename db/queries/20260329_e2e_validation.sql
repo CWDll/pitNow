@@ -87,6 +87,11 @@ select
   r.total_price as base_price,
   coalesce(co.extra_fee, 0) as extra_fee,
   r.total_price + coalesce(co.extra_fee, 0) as final_settlement,
+  co.tool_check_completed,
+  co.cleaning_completed,
+  co.waste_disposal_completed,
+  co.checkout_photo_1 is not null as has_checkout_photo_1,
+  co.checkout_photo_2 is not null as has_checkout_photo_2,
   co.completed_at
 from reservations r
 left join checkouts co on co.reservation_id = r.id

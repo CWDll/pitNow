@@ -144,7 +144,12 @@ totalPrice: number
 입력:
 {
 reservationId: string,
-helperVerifyRequested?: boolean
+helperVerifyRequested?: boolean,
+toolCheckCompleted?: boolean,
+cleaningCompleted?: boolean,
+wasteDisposalCompleted?: boolean,
+checkoutPhoto1?: string,
+checkoutPhoto2?: string
 }
 
 로직:
@@ -153,6 +158,7 @@ helperVerifyRequested?: boolean
 • 초과 시간 계산
 • 1시간 단위 올림
 • extra_fee 계산
+• SELF_SERVICE는 tool/cleaning/waste 체크와 체크아웃 사진 2장 필수
 • helperVerifyRequested=true 이고 예약 시 미선택이면
 helperVerifyFee 재계산 후 정산 반영
 • checkouts insert

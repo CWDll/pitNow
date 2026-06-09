@@ -161,14 +161,13 @@ Source of Truth 기준 MVP 목표는 다음 예약 루프다.
 
 - Toss 실제 결제 연동이 없다. 현재 `/payment`는 결제 UI 후 바로 예약 API를 호출한다.
 - 결제 상태 테이블/결제 승인/실패/환불 처리가 없다.
-- 실제 Supabase Storage 업로드가 없다. 체크인/체크아웃 사진은 `mock://...` 문자열로 저장된다.
+- 2026-06-09 코드/마이그레이션 추가: 체크인/체크아웃 사진을 Supabase Storage `reservation-photos` bucket에 업로드하도록 연결했다. 원격 Supabase에는 `db/migrations/20260609_reservation_photos_storage.sql` 적용이 필요하다.
 - Auth가 없다. API는 `MOCK_USER_ID`를 사용한다.
 - RLS 정책이 없다.
 - 2026-06-09 코드/마이그레이션 추가: `reservation_status_logs` 테이블과 상태 전환 로그 유틸을 추가했다. 원격 Supabase에는 `db/migrations/20260609_reservation_status_logs.sql` 적용이 필요하다.
 - 2026-06-09 해결: `POST /api/reservations/:id/start`를 추가해 `IN_USE` 상태 전환을 서버에서 명시적으로 처리한다.
 - 2026-06-09 해결: `/in-use` 타이머는 start API의 `serverNow`, `startTime`, `endTime` 기준으로 계산한다.
-- 체크아웃 사진 URL이 DB에 저장되지 않는다. 현재 `checkouts`에는 `extra_fee`, `completed_at`만 저장된다.
-- 체크아웃의 청소/공구/폐기물 체크 결과가 DB에 저장되지 않는다.
+- 2026-06-09 코드/마이그레이션 추가: 체크아웃 사진 URL과 청소/공구/폐기물 체크 결과를 `checkouts`에 저장하도록 연결했다. 원격 Supabase에는 `db/migrations/20260609_reservation_photos_storage.sql` 적용이 필요하다.
 - 헬퍼 검수 요청을 체크아웃 시점에 추가로 선택/정산하는 API 로직이 문서만큼 완성되어 있지 않다.
 
 ### 6.2 UX/운영 측면 미완성
@@ -216,11 +215,11 @@ Source of Truth 기준 MVP 목표는 다음 예약 루프다.
 
 ### 3단계: 사진/Storage 실연동
 
-- Supabase Storage bucket 설계.
-- 체크인 4방향 사진 업로드 후 URL 저장.
-- 체크아웃 사진 업로드 후 URL 저장.
+- 2026-06-09 코드/마이그레이션 추가: Supabase Storage bucket 설계.
+- 2026-06-09 코드 추가: 체크인 4방향 사진 업로드 후 URL 저장.
+- 2026-06-09 코드/마이그레이션 추가: 체크아웃 사진 업로드 후 URL 저장.
 - 업로드 실패 시 상태 전환이 일어나지 않도록 처리.
-- 파일 타입/크기 제한 정책 추가.
+- 2026-06-09 코드/마이그레이션 추가: 파일 타입/크기 제한 정책 추가.
 
 ### 4단계: 결제 MVP 연동
 
@@ -317,3 +316,20 @@ npm run build
 
 - 원격 Supabase에 `reservation_status_logs` 테이블을 적용했고, 현재 anon-key 기반 개발 단계에 맞춰 RLS는 꺼둔 상태다.
 - 운영 전 Auth/RLS 전환 시에는 `reservation_status_logs`에도 RLS policy 또는 server-only service role 경로를 설계해야 한다.
+
+## 12. 2026-06-09 Storage 업데이트
+
+사진 증적 Storage 연동 1차 구현을 진행했다.
+
+- `db/migrations/20260609_reservation_photos_storage.sql` 추가.
+- Supabase Storage bucket `reservation-photos` 설계.
+- 체크인 4방향 사진을 Storage에 업로드한 뒤 `/api/checkin` 호출.
+- 체크아웃 사진 2장을 Storage에 업로드한 뒤 `/api/checkout` 호출.
+- `checkouts`에 `tool_check_completed`, `cleaning_completed`, `waste_disposal_completed`, `checkout_photo_1`, `checkout_photo_2` 컬럼 추가.
+- Self Service 체크아웃 API는 체크리스트 3개와 사진 2장을 필수 검증.
+
+주의:
+
+- 원격 Supabase에는 `db/migrations/20260609_reservation_photos_storage.sql` 적용이 필요하다.
+- 현재 MVP 개발 단계는 public bucket + anon upload policy를 사용한다.
+- 운영 전에는 private bucket/signed URL/Auth/RLS/server-only service role 중 하나로 전환해야 한다.

@@ -132,3 +132,24 @@ Reason:
 Operational note:
 원격 Supabase에는 `reservation_status_logs` 테이블 마이그레이션을 적용해야 실제 로그가 저장된다.
 개발 중 테이블이 아직 없으면 API는 경고 후 진행하지만, 운영 전에는 `db/migrations/20260609_reservation_status_logs.sql` 적용이 필수다.
+
+---
+
+## 2026-06-09
+
+Decision:
+체크인/체크아웃 사진 증적은 Supabase Storage `reservation-photos` bucket에 업로드하고, DB에는 업로드 결과 URL을 저장한다.
+
+Rules:
+
+- 체크인 4방향 사진은 Storage 업로드가 모두 성공해야 `/api/checkin`을 호출한다.
+- 체크아웃 사진 2장은 Storage 업로드가 모두 성공해야 `/api/checkout`을 호출한다.
+- Self Service 체크아웃은 공구/청소/폐기물 체크리스트와 사진 2장을 API에서 필수 검증한다.
+- 체크아웃 증적은 `checkouts` 테이블에 저장한다.
+- MVP 개발 단계에서는 Auth/RLS가 아직 없으므로 public bucket + anon insert policy를 사용한다.
+
+Reason:
+기존 `mock://...` 문자열은 실제 사진 증적을 보존하지 못해 MVP 핵심 조건인 체크인 4장 사진/체크아웃 사진 저장을 만족하지 못한다.
+
+Production note:
+운영 전에는 private bucket, signed upload URL, Auth/RLS 또는 server-only service role 구조로 전환해야 한다.

@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
+import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
+
 interface CheckoutApiError {
   error?: string | { message?: string };
 }
@@ -26,10 +28,6 @@ function extractError(payload: unknown): string | null {
   }
 
   return null;
-}
-
-function buildMockUrl(reservationId: string, file: File, key: string): string {
-  return `mock://checkout/${reservationId}/${key}/${encodeURIComponent(file.name)}`;
 }
 
 function CheckoutPageContent() {
@@ -84,12 +82,34 @@ function CheckoutPageContent() {
 
     setIsLoading(true);
     try {
+      const [checkoutPhoto1, checkoutPhoto2] = await Promise.all([
+        uploadReservationPhoto({
+          reservationId,
+          phase: "checkout",
+          field: "photo-1",
+          file: photo1,
+        }),
+        uploadReservationPhoto({
+          reservationId,
+          phase: "checkout",
+          field: "photo-2",
+          file: photo2,
+        }),
+      ]);
+
       const response = await fetch("/api/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ reservationId }),
+        body: JSON.stringify({
+          reservationId,
+          toolCheckCompleted: checks[0],
+          cleaningCompleted: checks[1],
+          wasteDisposalCompleted: checks[2],
+          checkoutPhoto1,
+          checkoutPhoto2,
+        }),
       });
 
       const data: unknown = await response.json();
@@ -120,13 +140,17 @@ function CheckoutPageContent() {
         taskIds,
         taskLabels,
         selectedTaskCount: String(selectedTaskCount),
-        checkoutPhoto1: buildMockUrl(reservationId, photo1, "photo1"),
-        checkoutPhoto2: buildMockUrl(reservationId, photo2, "photo2"),
+        checkoutPhoto1,
+        checkoutPhoto2,
       });
 
       router.push(`/complete?${query.toString()}`);
-    } catch {
-      setError("체크아웃 처리 중 오류가 발생했습니다.");
+    } catch (uploadOrNetworkError) {
+      setError(
+        uploadOrNetworkError instanceof Error
+          ? uploadOrNetworkError.message
+          : "체크아웃 처리 중 오류가 발생했습니다.",
+      );
     } finally {
       setIsLoading(false);
     }

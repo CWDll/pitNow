@@ -19,6 +19,11 @@ type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 interface CheckoutRequestBody {
   reservationId: string;
   helperVerifyRequested?: boolean;
+  toolCheckCompleted?: boolean;
+  cleaningCompleted?: boolean;
+  wasteDisposalCompleted?: boolean;
+  checkoutPhoto1?: string;
+  checkoutPhoto2?: string;
 }
 
 interface ReservationRow {
@@ -65,6 +70,13 @@ function parseAndValidateBody(payload: unknown): CheckoutRequestBody | null {
     string,
     unknown
   >;
+  const {
+    toolCheckCompleted,
+    cleaningCompleted,
+    wasteDisposalCompleted,
+    checkoutPhoto1,
+    checkoutPhoto2,
+  } = payload as Record<string, unknown>;
 
   if (typeof reservationId !== "string") {
     return null;
@@ -73,6 +85,41 @@ function parseAndValidateBody(payload: unknown): CheckoutRequestBody | null {
   if (
     typeof helperVerifyRequested !== "undefined" &&
     typeof helperVerifyRequested !== "boolean"
+  ) {
+    return null;
+  }
+
+  if (
+    typeof toolCheckCompleted !== "undefined" &&
+    typeof toolCheckCompleted !== "boolean"
+  ) {
+    return null;
+  }
+
+  if (
+    typeof cleaningCompleted !== "undefined" &&
+    typeof cleaningCompleted !== "boolean"
+  ) {
+    return null;
+  }
+
+  if (
+    typeof wasteDisposalCompleted !== "undefined" &&
+    typeof wasteDisposalCompleted !== "boolean"
+  ) {
+    return null;
+  }
+
+  if (
+    typeof checkoutPhoto1 !== "undefined" &&
+    typeof checkoutPhoto1 !== "string"
+  ) {
+    return null;
+  }
+
+  if (
+    typeof checkoutPhoto2 !== "undefined" &&
+    typeof checkoutPhoto2 !== "string"
   ) {
     return null;
   }
@@ -86,6 +133,17 @@ function parseAndValidateBody(payload: unknown): CheckoutRequestBody | null {
   return {
     reservationId: normalizedReservationId,
     helperVerifyRequested,
+    toolCheckCompleted,
+    cleaningCompleted,
+    wasteDisposalCompleted,
+    checkoutPhoto1:
+      typeof checkoutPhoto1 === "string" && checkoutPhoto1.trim()
+        ? checkoutPhoto1.trim()
+        : undefined,
+    checkoutPhoto2:
+      typeof checkoutPhoto2 === "string" && checkoutPhoto2.trim()
+        ? checkoutPhoto2.trim()
+        : undefined,
   };
 }
 
@@ -289,11 +347,31 @@ export async function POST(req: Request) {
     );
   }
 
+  if (
+    reservationType === "SELF_SERVICE" &&
+    (!body.toolCheckCompleted ||
+      !body.cleaningCompleted ||
+      !body.wasteDisposalCompleted ||
+      !body.checkoutPhoto1 ||
+      !body.checkoutPhoto2)
+  ) {
+    return errorResponse(
+      400,
+      "CHECKOUT_EVIDENCE_REQUIRED",
+      "셀프 정비 체크아웃은 체크리스트와 사진 2장이 모두 필요합니다.",
+    );
+  }
+
   const { error: insertCheckoutError } = await supabase
     .from("checkouts")
     .insert({
       reservation_id: reservationId,
       extra_fee: extraFee,
+      tool_check_completed: Boolean(body.toolCheckCompleted),
+      cleaning_completed: Boolean(body.cleaningCompleted),
+      waste_disposal_completed: Boolean(body.wasteDisposalCompleted),
+      checkout_photo_1: body.checkoutPhoto1 ?? null,
+      checkout_photo_2: body.checkoutPhoto2 ?? null,
     });
 
   if (insertCheckoutError) {
@@ -351,6 +429,8 @@ export async function POST(req: Request) {
     metadata: {
       extraFee,
       reservationType,
+      checkoutPhotoCount:
+        body.checkoutPhoto1 && body.checkoutPhoto2 ? 2 : 0,
     },
   });
 

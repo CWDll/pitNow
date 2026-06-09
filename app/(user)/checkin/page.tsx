@@ -4,6 +4,7 @@ import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import type { CheckInPayload } from "@/src/domain/types";
+import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
 
 type PhotoField = "frontImg" | "rearImg" | "leftImg" | "rightImg";
 
@@ -38,14 +39,6 @@ function extractErrorMessage(payload: unknown): string | null {
   }
 
   return null;
-}
-
-function buildMockUrl(
-  reservationId: string,
-  field: PhotoField,
-  file: File,
-): string {
-  return `mock://checkin/${reservationId}/${field}/${encodeURIComponent(file.name)}`;
 }
 
 function CheckinPageContent() {
@@ -108,16 +101,43 @@ function CheckinPageContent() {
       return;
     }
 
-    const payload: CheckInPayload = {
-      reservationId,
-      frontImg: buildMockUrl(reservationId, "frontImg", frontImgFile),
-      rearImg: buildMockUrl(reservationId, "rearImg", rearImgFile),
-      leftImg: buildMockUrl(reservationId, "leftImg", leftImgFile),
-      rightImg: buildMockUrl(reservationId, "rightImg", rightImgFile),
-    };
-
     setIsLoading(true);
     try {
+      const [frontImg, rearImg, leftImg, rightImg] = await Promise.all([
+        uploadReservationPhoto({
+          reservationId,
+          phase: "checkin",
+          field: "front",
+          file: frontImgFile,
+        }),
+        uploadReservationPhoto({
+          reservationId,
+          phase: "checkin",
+          field: "rear",
+          file: rearImgFile,
+        }),
+        uploadReservationPhoto({
+          reservationId,
+          phase: "checkin",
+          field: "left",
+          file: leftImgFile,
+        }),
+        uploadReservationPhoto({
+          reservationId,
+          phase: "checkin",
+          field: "right",
+          file: rightImgFile,
+        }),
+      ]);
+
+      const payload: CheckInPayload = {
+        reservationId,
+        frontImg,
+        rearImg,
+        leftImg,
+        rightImg,
+      };
+
       const response = await fetch("/api/checkin", {
         method: "POST",
         headers: {
@@ -147,8 +167,12 @@ function CheckinPageContent() {
         workTitle,
       });
       router.push(`/in-use?${query.toString()}`);
-    } catch {
-      setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } catch (uploadOrNetworkError) {
+      setError(
+        uploadOrNetworkError instanceof Error
+          ? uploadOrNetworkError.message
+          : "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     } finally {
       setIsLoading(false);
     }

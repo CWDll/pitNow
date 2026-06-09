@@ -226,9 +226,37 @@ create table checkouts (
   id uuid primary key default gen_random_uuid(),
   reservation_id uuid unique references reservations(id) on delete cascade,
   extra_fee numeric default 0,
+  tool_check_completed boolean not null default false,
+  cleaning_completed boolean not null default false,
+  waste_disposal_completed boolean not null default false,
+  checkout_photo_1 text,
+  checkout_photo_2 text,
   completed_at timestamptz default now()
 );
 ```
+
+---
+
+## Storage
+
+MVP photo evidence uses Supabase Storage.
+
+Bucket:
+
+- `reservation-photos`
+- public read for MVP development
+- 10MB max file size
+- allowed MIME types: `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/heif`
+
+Paths:
+
+- `checkin/{reservation_id}/{field}-{timestamp}-{uuid}.{ext}`
+- `checkout/{reservation_id}/{field}-{timestamp}-{uuid}.{ext}`
+
+Operational note:
+
+- Current MVP uses anon-key upload policy because Auth/RLS is not implemented yet.
+- Before production, move to Auth/RLS or server-only signed upload URLs.
 
 ---
 
