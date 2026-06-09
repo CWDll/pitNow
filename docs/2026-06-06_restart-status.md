@@ -382,6 +382,19 @@ PWA 1차 적용을 진행했다.
 - 예약/결제/체크인/체크아웃 데이터 변경은 오프라인 처리하지 않는다.
 - 실제 iOS/Android 설치 UX는 실기기 또는 브라우저 Lighthouse로 추가 확인이 필요하다.
 
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- `GET /manifest.webmanifest` 응답 `200`, content-type `application/manifest+json` 확인.
+- Manifest 필수 필드 `name`, `short_name`, `start_url`, `display`, `icons` 누락 없음 확인.
+- Manifest `display=standalone`, `start_url=/` 확인.
+- Manifest icon set에 `192x192`, `512x512`, `maskable 192x192`, `maskable 512x512` 포함 확인.
+- `GET /sw.js` 응답 `200`, content-type `application/javascript` 확인.
+- `GET /offline.html` 응답 `200`, content-type `text/html` 확인.
+- `GET /icons/icon-192.png`, `GET /icons/maskable-512.png` 응답 `200`, content-type `image/png` 확인.
+- `file public/icons/*.png`로 PNG 치수 확인: apple 180, icon 192/512, maskable 192/512.
+
 ## 15. 2026-06-09 상태 전환 / 서버 타이머 검증
 
 예약 상태 전환을 서버 API 기준으로 검증했다.
