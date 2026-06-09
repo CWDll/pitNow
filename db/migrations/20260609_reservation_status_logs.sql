@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS reservation_status_logs (
   )
 );
 
+ALTER TABLE reservation_status_logs DISABLE ROW LEVEL SECURITY;
+
 CREATE INDEX IF NOT EXISTS idx_reservation_status_logs_reservation
   ON reservation_status_logs(reservation_id, created_at);
 

@@ -315,5 +315,5 @@ npm run build
 
 주의:
 
-- 현재 원격 Supabase에는 `reservation_status_logs` 테이블이 아직 없었다.
-- 운영 전 Supabase SQL Editor 또는 CLI로 `db/migrations/20260609_reservation_status_logs.sql`을 적용해야 실제 상태 로그가 저장된다.
+- 원격 Supabase에 `reservation_status_logs` 테이블을 적용했고, 현재 anon-key 기반 개발 단계에 맞춰 RLS는 꺼둔 상태다.
+- 운영 전 Auth/RLS 전환 시에는 `reservation_status_logs`에도 RLS policy 또는 server-only service role 경로를 설계해야 한다.
