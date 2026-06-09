@@ -212,3 +212,27 @@ Rules:
 
 Reason:
 타이머 시작을 프론트 화면 진입으로만 판단하면 체크인 증적 없이 이용이 시작되거나, 로컬 시계 조작에 따라 정산이 흔들릴 수 있다. 서버 상태 전환과 서버 시간 응답을 기준으로 고정해야 MVP 핵심 원칙인 “사진 4장 후 타이머 시작”, “서버 기준 타이머”, “명시적 상태 전환 로그”를 만족한다.
+
+---
+
+## 2026-06-09
+
+Decision:
+Admin console 1차 범위는 desktop only 조회 콘솔로 제한한다.
+
+Routes:
+
+- `/admin`
+- `/admin/reservations`
+- `/admin/settlement`
+- `/admin/packages`
+
+Rules:
+
+- User mobile layout과 admin layout은 공유하지 않는다.
+- Admin layout은 `app/admin/layout.tsx`에서 분리한다.
+- 1차 admin은 예약/정산/패키지 조회만 제공한다.
+- 예약 취소, 강제 완료, 패키지 가격 수정, 정산 확정 같은 쓰기 액션은 Auth/RLS/권한 모델 확정 후 추가한다.
+
+Reason:
+MVP 운영자는 예약 루프의 상태와 정산/패키지 데이터를 빠르게 확인해야 하지만, 인증/권한 없이 쓰기 기능을 먼저 넣으면 운영 리스크가 커진다. 결제 연동 전 단계에서는 read-only 모니터링 콘솔로 범위를 제한한다.

@@ -173,7 +173,7 @@ Source of Truth 기준 MVP 목표는 다음 예약 루프다.
 ### 6.2 UX/운영 측면 미완성
 
 - PWA manifest/service worker/installable 설정이 없다.
-- 관리자 콘솔 `/admin`이 없다.
+- 2026-06-09 1차 해결: 관리자 콘솔 `/admin`, `/admin/reservations`, `/admin/settlement`, `/admin/packages`를 추가했다. 아직 편집/권한/운영 액션은 없다.
 - 예약 연장 API와 실제 상태/요금 반영이 없다.
 - SOS 버튼과 매장 연락 버튼은 UI만 있다.
 - QR 스캔은 실제 카메라/QR 검증이 아니라 버튼 토글이다.
@@ -234,6 +234,7 @@ Source of Truth 기준 MVP 목표는 다음 예약 루프다.
 - 예약 현황/체크인 사진/체크아웃/정산 모니터링.
 - 파트너 패키지 가격 관리.
 - Desktop only UI로 구현.
+- 2026-06-09 1차 구현: Desktop only admin layout과 예약/정산/패키지 조회 테이블 추가.
 
 ### 6단계: PWA/모바일 마감
 
@@ -426,3 +427,29 @@ IN_USE -> COMPLETED
 - `reservations`
 
 남은 테스트 예약이 `[]`인 것까지 확인했다.
+
+## 16. 2026-06-09 Admin Console 1차 구현
+
+관리자 콘솔의 MVP 기반을 추가했다.
+
+- `/admin`: 운영 지표 overview.
+- `/admin/reservations`: 최근 100개 예약의 상태, 타입, 파트너, 베이, 예약 시간, 버퍼 종료, 금액 확인.
+- `/admin/settlement`: 최근 100개 체크아웃의 base/extra/helper/total settlement와 체크리스트 증적 상태 확인.
+- `/admin/packages`: 파트너별 Shop Service 패키지 가격과 활성 상태 확인.
+- 사용자 모바일 layout과 공유하지 않는 별도 `app/admin/layout.tsx` 추가.
+- Admin layout은 `min-w-[1024px]` 기준의 desktop only UI로 구성.
+- 데이터 조회 helper는 `app/admin/_lib/admin-data.ts`에 분리.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- 빌드 라우트에 `/admin`, `/admin/packages`, `/admin/reservations`, `/admin/settlement` 포함 확인.
+- 실제 HTTP 요청으로 `GET /admin`, `GET /admin/reservations`, `GET /admin/settlement`, `GET /admin/packages` 모두 `200 text/html` 응답 확인.
+
+남은 일:
+
+- Admin 인증/권한 분리.
+- 예약 취소/강제 완료/노쇼 처리 같은 운영 액션.
+- 패키지 가격 편집.
+- 정산 상세 drill-down.
