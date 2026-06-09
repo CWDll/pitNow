@@ -21,7 +21,9 @@
 
 입력:
 {
+reservationType: 'SELF_SERVICE' | 'SHOP_SERVICE',
 bayId: string,
+packageId?: string,
 taskIds: string[],
 agreeOnlySelectedTasks: boolean,
 consentMethod: 'CHECKBOX' | 'SIGNATURE',
@@ -34,17 +36,22 @@ endTime: string (ISO)
 로직:
 • startTime < endTime 검증
 • 작업 시간은 1시간 이상 + 1시간 단위 검증
+• reservationType은 SELF_SERVICE / SHOP_SERVICE만 허용
 • taskIds는 self_maintenance_tasks.is_legal=true 만 허용
-• taskIds 최소 1개 필수
-• agreeOnlySelectedTasks=true 필수
-• consentMethod 검증 (SIGNATURE면 signatureImageUrl 필수)
+• SELF_SERVICE는 taskIds 최소 1개 필수
+• SELF_SERVICE는 agreeOnlySelectedTasks=true 필수
+• SELF_SERVICE는 consentMethod 검증 (SIGNATURE면 signatureImageUrl 필수)
+• SHOP_SERVICE는 packageId 필수
+• SHOP_SERVICE는 partner_package_prices 기준으로 packageId/가격/소요시간 검증
 • blockedUntil = endTime + 1시간
-• helperVerifyRequested=true 이면 helperVerifyFee 계산
+• SELF_SERVICE에서 helperVerifyRequested=true 이면 helperVerifyFee 계산
 (기본 5,000 + 선택 작업별 단가 합산)
+• helperVerifyFee는 클라이언트 입력을 신뢰하지 않고 서버에서 계산
 • user_id는 MOCK_USER_ID 사용
 • status = CONFIRMED
-• total_price 계산 후 저장 (시간요금 + helperVerifyFee)
-• reservation_tasks / self_task_agreements 저장
+• SELF_SERVICE total_price = 파트너 시간요금 × 예약시간 + helperVerifyFee
+• SHOP_SERVICE total_price = 파트너 패키지 가격
+• SELF_SERVICE는 reservation_tasks / self_task_agreements 저장
 • 겹침은 DB에서 자동 차단
 
 에러:

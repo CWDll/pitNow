@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 import type { CreateReservationPayload } from "@/src/domain/types";
+import { extractApiErrorMessage } from "@/src/lib/api-error";
 
 const paymentMethods = [
   "신용/체크카드",
@@ -21,6 +22,20 @@ function parseReservationId(payload: unknown): string | null {
   return null;
 }
 
+function parseNumberField(payload: unknown, fieldName: string): number | null {
+  if (!payload || typeof payload !== "object" || !(fieldName in payload)) {
+    return null;
+  }
+
+  const value = (payload as Record<string, unknown>)[fieldName];
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
 function PaymentPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,6 +48,8 @@ function PaymentPageContent() {
   const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
   const bookingMode =
     searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
+  const reservationType =
+    bookingMode === "PACKAGE" ? "SHOP_SERVICE" : "SELF_SERVICE";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
   const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
@@ -103,8 +120,9 @@ function PaymentPageContent() {
 
     try {
       const body: CreateReservationPayload = {
-        bookingMode,
+        reservationType,
         bayId,
+        packageId: bookingMode === "PACKAGE" ? packageId : undefined,
         taskIds: bookingMode === "SELF" ? taskIds : undefined,
         agreeOnlySelectedTasks:
           bookingMode === "SELF" ? agreeOnlySelectedTasks : undefined,
@@ -115,8 +133,6 @@ function PaymentPageContent() {
             : undefined,
         helperVerifyRequested:
           bookingMode === "SELF" ? helperVerifyRequested : false,
-        helperVerifyFee:
-          bookingMode === "SELF" ? Math.max(0, helperVerifyFee) : 0,
         startTime,
         endTime,
       };
@@ -132,14 +148,12 @@ function PaymentPageContent() {
       const data: unknown = await response.json();
 
       if (!response.ok) {
-        const message =
-          data &&
-          typeof data === "object" &&
-          "error" in data &&
-          typeof (data as { error?: unknown }).error === "string"
-            ? (data as { error: string }).error
-            : "결제 처리 중 예약 생성에 실패했습니다.";
-        setError(message);
+        setError(
+          extractApiErrorMessage(
+            data,
+            "결제 처리 중 예약 생성에 실패했습니다.",
+          ),
+        );
         return;
       }
 
@@ -149,8 +163,12 @@ function PaymentPageContent() {
         return;
       }
 
+      const confirmedTotalPrice =
+        parseNumberField(data, "totalPrice") ?? totalPrice;
+
       const query = new URLSearchParams({
         reservationId,
+        reservationType,
         bookingMode,
         partnerId,
         carId,
@@ -164,7 +182,7 @@ function PaymentPageContent() {
         packageTitle,
         dateLabel,
         bayLabel,
-        totalPrice: String(totalPrice),
+        totalPrice: String(confirmedTotalPrice),
         startTime,
         endTime,
         blockedMinutes: String(blockedMinutes),

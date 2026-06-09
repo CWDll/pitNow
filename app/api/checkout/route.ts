@@ -112,12 +112,7 @@ function toFiniteNumber(value: number | string): number | null {
 function normalizeReservationType(
   value: string | null | undefined,
 ): ReservationType {
-  if (
-    value === "SHOP_SERVICE" ||
-    value === "PACKAGE" ||
-    value === "PACKAGE_SERVICE" ||
-    value === "PKG"
-  ) {
+  if (value === "SHOP_SERVICE") {
     return "SHOP_SERVICE";
   }
 
@@ -202,31 +197,13 @@ export async function POST(req: Request) {
 
   const { reservationId } = body;
 
-  let { data: reservation, error: reservationError } = await supabase
+  const { data: reservation, error: reservationError } = await supabase
     .from("reservations")
     .select(
       "id, status, reservation_type, start_time, end_time, reserved_end_time, blocked_until, total_price, selected_task_count, helper_verify_requested, helper_verify_fee",
     )
     .eq("id", reservationId)
     .maybeSingle<ReservationRow>();
-
-  if (
-    reservationError?.code === "PGRST204" &&
-    (reservationError.message?.includes("reservation_type") ||
-      reservationError.message?.includes("reserved_end_time") ||
-      reservationError.message?.includes("blocked_until"))
-  ) {
-    const fallbackResult = await supabase
-      .from("reservations")
-      .select(
-        "id, status, start_time, end_time, total_price, selected_task_count, helper_verify_requested, helper_verify_fee",
-      )
-      .eq("id", reservationId)
-      .maybeSingle<ReservationRow>();
-
-    reservation = fallbackResult.data;
-    reservationError = fallbackResult.error;
-  }
 
   if (reservationError) {
     console.error("RESERVATION SELECT ERROR:", reservationError);

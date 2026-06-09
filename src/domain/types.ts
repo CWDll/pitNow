@@ -50,13 +50,13 @@ export interface Review {
 }
 
 export interface CreateReservationPayload {
-  bookingMode: "SELF" | "PACKAGE";
+  reservationType: ReservationType;
   bayId: string;
+  packageId?: string;
   taskIds?: string[];
   agreeOnlySelectedTasks?: boolean;
   consentMethod?: "CHECKBOX" | "SIGNATURE";
   helperVerifyRequested?: boolean;
-  helperVerifyFee?: number;
   signatureImageUrl?: string;
   startTime: string;
   endTime: string;

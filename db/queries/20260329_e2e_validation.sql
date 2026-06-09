@@ -50,7 +50,7 @@ select
 from reservations r
 left join reservation_tasks rt on rt.reservation_id = r.id
 left join self_task_agreements sta on sta.reservation_id = r.id
-where r.reservation_type in ('SELF_SERVICE', 'SELF', 'SELF_MAINTENANCE', 'TIME')
+where r.reservation_type = 'SELF_SERVICE'
 group by r.id, r.status
 order by r.id;
 

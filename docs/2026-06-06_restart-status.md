@@ -185,11 +185,10 @@ Source of Truth 기준 MVP 목표는 다음 예약 루프다.
 
 ### 6.3 코드 품질/정합성 정리 대상
 
-- `src/domain/types.ts`의 `ReservationType`은 `SELF_SERVICE | SHOP_SERVICE`인데 API payload는 `bookingMode: SELF | PACKAGE`를 쓴다. 변환 계층은 있지만 명칭이 혼재한다.
-- 예약 API가 `reservation_type` 후보를 여러 개 시도한다. 최신 DB 기준을 확정하면 제거해야 한다.
-- 예약 API의 법적 작업 검증이 하드코딩 allowlist와 DB 조회를 둘 다 사용한다. DB를 단일 기준으로 삼는 편이 좋다.
-- `DEFAULT_HOURLY_PRICE = 20000`이 예약 API에 하드코딩되어 있어, 파트너별 `hourly_price`와 불일치할 수 있다.
-- Shop Service 예약은 `package_id`, package duration/price를 API payload로 명확히 받지 않는다.
+- 2026-06-09 해결: `ReservationType` / 예약 생성 payload / DB `reservation_type`을 `SELF_SERVICE | SHOP_SERVICE` 기준으로 정리했다.
+- 2026-06-09 해결: 예약 API의 과거 `reservation_type` 후보 시도와 하드코딩 작업 allowlist를 제거했다.
+- 2026-06-09 해결: 예약 API의 하드코딩 시간요금을 제거하고 파트너 `hourly_price` 기준으로 계산한다.
+- 2026-06-09 해결: Shop Service 예약은 `packageId`, 패키지 소요시간, 파트너별 가격을 서버에서 검증한다.
 - 스케줄 화면의 시간 계산은 `Date.UTC`를 사용한다. 한국 현지 영업시간 기준 예약이라면 timezone 정책을 명시하고 검증해야 한다.
 - API 응답 에러 형태가 `{ error: string }`와 `{ success:false, error:{code,message} }`로 섞여 있다.
 - DB 마이그레이션 위치가 `db/migrations`와 `supabase/migrations`에 나뉘어 있다. 운영 적용 기준을 하나로 정해야 한다.
@@ -275,3 +274,23 @@ npm run build
 
 성공. Next.js가 20개 app route/page를 정상 빌드했다.
 
+## 10. 2026-06-09 업데이트
+
+스키마/API 정합성 1차 정리를 진행했다.
+
+- API/DB/domain의 공식 예약 타입을 `SELF_SERVICE` / `SHOP_SERVICE`로 고정했다.
+- `/api/reservations`는 더 이상 과거 reservation_type 후보값을 시도하지 않는다.
+- 예약 생성 payload는 `bookingMode` 대신 `reservationType`을 사용한다.
+- `bookingMode: SELF | PACKAGE`는 사용자 화면 탭/쿼리 표현으로만 남겼다.
+- Self Service 가격은 API에서 파트너 `hourly_price` 기준으로 계산한다.
+- Self Service helper verification fee는 API에서 `self_maintenance_tasks.helper_verify_unit_fee` 기준으로 계산한다.
+- Shop Service는 `packageId` 필수이며 파트너 패키지 가격/소요시간을 서버에서 검증한다.
+- 체크아웃 API의 과거 예약 타입 fallback도 제거했다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- 실제 `/api/reservations` 호출로 잘못된 `reservationType: SELF`가 `INVALID_INPUT`으로 거부되는 것을 확인.
+- 실제 Self Service 예약 생성, 중복 예약 거부(`RESERVATION_OVERLAP`), 테스트 데이터 cleanup 확인.
+- 실제 Shop Service 예약 생성과 테스트 데이터 cleanup 확인.
