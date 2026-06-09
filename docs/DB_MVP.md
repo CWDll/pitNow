@@ -225,7 +225,11 @@ create table checkins (
 create table checkouts (
   id uuid primary key default gen_random_uuid(),
   reservation_id uuid unique references reservations(id) on delete cascade,
+  base_price numeric not null default 0,
   extra_fee numeric default 0,
+  helper_verify_requested boolean not null default false,
+  helper_verify_fee numeric not null default 0,
+  total_settlement numeric not null default 0,
   tool_check_completed boolean not null default false,
   cleaning_completed boolean not null default false,
   waste_disposal_completed boolean not null default false,

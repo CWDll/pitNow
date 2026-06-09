@@ -35,7 +35,11 @@ export interface CheckIn {
 export interface CheckOut {
   id: string;
   reservationId: string;
+  basePrice: number;
   extraFee: number;
+  helperVerifyRequested: boolean;
+  helperVerifyFee: number;
+  totalSettlement: number;
   toolCheckCompleted: boolean;
   cleaningCompleted: boolean;
   wasteDisposalCompleted: boolean;

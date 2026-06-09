@@ -84,9 +84,14 @@ limit 50;
 select
   r.id as reservation_id,
   r.status,
-  r.total_price as base_price,
+  coalesce(co.base_price, r.total_price) as base_price,
   coalesce(co.extra_fee, 0) as extra_fee,
-  r.total_price + coalesce(co.extra_fee, 0) as final_settlement,
+  coalesce(co.helper_verify_requested, r.helper_verify_requested) as helper_verify_requested,
+  coalesce(co.helper_verify_fee, r.helper_verify_fee, 0) as helper_verify_fee,
+  coalesce(
+    co.total_settlement,
+    r.total_price + coalesce(co.extra_fee, 0)
+  ) as final_settlement,
   co.tool_check_completed,
   co.cleaning_completed,
   co.waste_disposal_completed,

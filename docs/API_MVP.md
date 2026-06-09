@@ -161,6 +161,7 @@ checkoutPhoto2?: string
 • SELF_SERVICE는 tool/cleaning/waste 체크와 체크아웃 사진 2장 필수
 • helperVerifyRequested=true 이고 예약 시 미선택이면
 helperVerifyFee 재계산 후 정산 반영
+• basePrice / extraFee / helperVerifyFee / totalSettlement를 서버에서 확정
 • checkouts insert
 • reservations.status → COMPLETED
 • reservation_status_logs에 상태 전환 로그 저장
@@ -174,7 +175,9 @@ else → ceil(diff / 1시간) \* (시간요금)
 성공 응답:
 {
 status: “COMPLETED”,
+basePrice: number,
 extraFee: number,
+helperVerifyRequested: boolean,
 helperVerifyFee: number,
 totalSettlement: number
 }

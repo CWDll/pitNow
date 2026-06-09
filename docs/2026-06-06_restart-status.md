@@ -168,7 +168,7 @@ Source of Truth 기준 MVP 목표는 다음 예약 루프다.
 - 2026-06-09 해결: `POST /api/reservations/:id/start`를 추가해 `IN_USE` 상태 전환을 서버에서 명시적으로 처리한다.
 - 2026-06-09 해결: `/in-use` 타이머는 start API의 `serverNow`, `startTime`, `endTime` 기준으로 계산한다.
 - 2026-06-09 코드/마이그레이션 추가: 체크아웃 사진 URL과 청소/공구/폐기물 체크 결과를 `checkouts`에 저장하도록 연결했다. 원격 Supabase에는 `db/migrations/20260609_reservation_photos_storage.sql` 적용이 필요하다.
-- 헬퍼 검수 요청을 체크아웃 시점에 추가로 선택/정산하는 API 로직이 문서만큼 완성되어 있지 않다.
+- 2026-06-09 코드/마이그레이션 추가: 체크아웃 시점 helper verification 추가 요청/정산과 settlement breakdown 저장을 구현했다. 원격 Supabase에는 `db/migrations/20260609_checkout_settlement_breakdown.sql` 적용이 필요하다.
 
 ### 6.2 UX/운영 측면 미완성
 
@@ -341,3 +341,18 @@ npm run build
 - `checkouts`에 체크리스트 3개와 체크아웃 사진 URL 2개 저장 확인.
 - 상태 로그 `CONFIRMED -> CHECKED_IN -> IN_USE -> COMPLETED` 유지 확인.
 - 테스트 Storage object 6개와 테스트 DB row cleanup 확인.
+
+## 13. 2026-06-09 정산 업데이트
+
+체크아웃 정산 breakdown 1차 구현을 진행했다.
+
+- `db/migrations/20260609_checkout_settlement_breakdown.sql` 추가.
+- `checkouts`에 `base_price`, `helper_verify_requested`, `helper_verify_fee`, `total_settlement` 컬럼 추가.
+- `/api/checkout`이 `basePrice`, `extraFee`, `helperVerifyFee`, `totalSettlement`를 서버에서 확정해 응답.
+- 체크아웃 시점 helper verification 추가 요청 지원.
+- 예약 시 이미 helper verification을 선택한 경우 중복 청구하지 않도록 기본가와 helper fee를 분리.
+- 완료 화면은 체크아웃 API 응답에서 전달된 정산 breakdown을 표시.
+
+주의:
+
+- 원격 Supabase에는 `db/migrations/20260609_checkout_settlement_breakdown.sql` 적용이 필요하다.

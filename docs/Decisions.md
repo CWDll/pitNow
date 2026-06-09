@@ -153,3 +153,23 @@ Reason:
 
 Production note:
 운영 전에는 private bucket, signed upload URL, Auth/RLS 또는 server-only service role 구조로 전환해야 한다.
+
+---
+
+## 2026-06-09
+
+Decision:
+체크아웃 시점의 정산 breakdown을 서버에서 확정하고 `checkouts`에 저장한다.
+
+Rules:
+
+- `base_price`: 예약 기본가. 예약 시 helper 검수비가 포함되어 있으면 이를 제외한 금액.
+- `extra_fee`: 서버 현재 시각 기준 초과요금.
+- `helper_verify_fee`: 예약 시 또는 체크아웃 시 요청된 카 마스터 검수비.
+- `total_settlement`: `base_price + extra_fee + helper_verify_fee`.
+- 체크아웃 시 helper verification을 추가 요청할 수 있다.
+- 이미 예약 시 helper verification을 요청했다면 중복 청구하지 않고 기존 fee를 사용한다.
+- 완료 화면은 체크아웃 API 응답의 서버 확정 정산값을 표시한다.
+
+Reason:
+기존 체크아웃은 `extra_fee` 중심이라 최종 정산 상세를 DB에 충분히 남기지 못했고, 완료 화면도 쿼리스트링의 프론트 계산값에 많이 의존했다.

@@ -53,6 +53,8 @@ function CheckoutPageContent() {
   const [checks, setChecks] = useState<boolean[]>([false, false, false]);
   const [photo1, setPhoto1] = useState<File | null>(null);
   const [photo2, setPhoto2] = useState<File | null>(null);
+  const [helperVerifyRequested, setHelperVerifyRequested] =
+    useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
@@ -107,6 +109,7 @@ function CheckoutPageContent() {
           toolCheckCompleted: checks[0],
           cleaningCompleted: checks[1],
           wasteDisposalCompleted: checks[2],
+          helperVerifyRequested,
           checkoutPhoto1,
           checkoutPhoto2,
         }),
@@ -126,6 +129,29 @@ function CheckoutPageContent() {
         typeof (data as { extraFee?: unknown }).extraFee === "number"
           ? (data as { extraFee: number }).extraFee
           : additionalFee;
+      const basePrice =
+        data &&
+        typeof data === "object" &&
+        "basePrice" in data &&
+        typeof (data as { basePrice?: unknown }).basePrice === "number"
+          ? (data as { basePrice: number }).basePrice
+          : totalPrice;
+      const helperVerifyFee =
+        data &&
+        typeof data === "object" &&
+        "helperVerifyFee" in data &&
+        typeof (data as { helperVerifyFee?: unknown }).helperVerifyFee ===
+          "number"
+          ? (data as { helperVerifyFee: number }).helperVerifyFee
+          : 0;
+      const totalSettlement =
+        data &&
+        typeof data === "object" &&
+        "totalSettlement" in data &&
+        typeof (data as { totalSettlement?: unknown }).totalSettlement ===
+          "number"
+          ? (data as { totalSettlement: number }).totalSettlement
+          : basePrice + extraFee + helperVerifyFee;
 
       const query = new URLSearchParams({
         reservationId,
@@ -135,8 +161,10 @@ function CheckoutPageContent() {
         carLabel,
         garageName,
         workTitle: taskLabels,
-        totalPrice: String(totalPrice),
+        totalPrice: String(basePrice),
         extraFee: String(extraFee),
+        helperVerifyFee: String(helperVerifyFee),
+        totalSettlement: String(totalSettlement),
         taskIds,
         taskLabels,
         selectedTaskCount: String(selectedTaskCount),
@@ -247,6 +275,21 @@ function CheckoutPageContent() {
           <span>추가 요금</span>
           <span>{additionalFee.toLocaleString("ko-KR")}원</span>
         </p>
+        <label className="mt-3 flex items-start gap-3 rounded-xl bg-white px-3 py-3 text-zinc-800">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5"
+            checked={helperVerifyRequested}
+            onChange={() => setHelperVerifyRequested((prev) => !prev)}
+          />
+          <span>
+            카 마스터 검수 요청
+            <br />
+            <span className="text-sm text-zinc-500">
+              서버에서 선택 작업 기준으로 검수비를 확정합니다.
+            </span>
+          </span>
+        </label>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-xl font-semibold text-zinc-900">
           <span>총 정산 예상</span>
