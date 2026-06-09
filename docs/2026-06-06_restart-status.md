@@ -333,3 +333,11 @@ npm run build
 - 원격 Supabase에는 `db/migrations/20260609_reservation_photos_storage.sql` 적용이 필요하다.
 - 현재 MVP 개발 단계는 public bucket + anon upload policy를 사용한다.
 - 운영 전에는 private bucket/signed URL/Auth/RLS/server-only service role 중 하나로 전환해야 한다.
+
+검증:
+
+- 실제 Storage 업로드 6장(체크인 4장, 체크아웃 2장) 성공.
+- `checkins`에 Storage public URL 4개 저장 확인.
+- `checkouts`에 체크리스트 3개와 체크아웃 사진 URL 2개 저장 확인.
+- 상태 로그 `CONFIRMED -> CHECKED_IN -> IN_USE -> COMPLETED` 유지 확인.
+- 테스트 Storage object 6개와 테스트 DB row cleanup 확인.
