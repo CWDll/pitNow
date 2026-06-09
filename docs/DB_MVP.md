@@ -253,7 +253,39 @@ create index idx_reviews_user on reviews(user_id);
 MVP 제외 (향후 확장용)
 • vehicles
 • payments
-• status_logs
 
 지금은 최소 스키마만 유지한다.
+```
+
+---
+
+## reservation_status_logs
+
+All explicit reservation state transitions must be logged.
+
+```sql
+create table reservation_status_logs (
+  id uuid primary key default gen_random_uuid(),
+  reservation_id uuid not null references reservations(id) on delete cascade,
+  from_status text,
+  to_status text not null check (
+    to_status in ('CONFIRMED', 'CHECKED_IN', 'IN_USE', 'COMPLETED', 'CANCELLED')
+  ),
+  actor_type text not null default 'SYSTEM' check (
+    actor_type in ('SYSTEM', 'USER', 'PARTNER', 'ADMIN')
+  ),
+  reason text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  check (
+    from_status is null
+    or from_status in ('CONFIRMED', 'CHECKED_IN', 'IN_USE', 'COMPLETED', 'CANCELLED')
+  )
+);
+
+create index idx_reservation_status_logs_reservation
+  on reservation_status_logs(reservation_id, created_at);
+
+create index idx_reservation_status_logs_transition
+  on reservation_status_logs(from_status, to_status);
 ```

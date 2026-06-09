@@ -164,9 +164,9 @@ Source of Truth 기준 MVP 목표는 다음 예약 루프다.
 - 실제 Supabase Storage 업로드가 없다. 체크인/체크아웃 사진은 `mock://...` 문자열로 저장된다.
 - Auth가 없다. API는 `MOCK_USER_ID`를 사용한다.
 - RLS 정책이 없다.
-- 상태 전환 로그 테이블이 없다. AGENTS 지침의 “Log all state transitions”와 PRD 원칙을 아직 만족하지 못한다.
-- `IN_USE` 상태 전환 API가 없다. 체크인 후 DB 상태는 `CHECKED_IN`이고, 프론트에서만 이용중으로 간주한다.
-- 타이머 시작 기준이 “체크인 사진 업로드 완료 후 서버 상태 전환”으로 완전히 모델링되어 있지 않다.
+- 2026-06-09 코드/마이그레이션 추가: `reservation_status_logs` 테이블과 상태 전환 로그 유틸을 추가했다. 원격 Supabase에는 `db/migrations/20260609_reservation_status_logs.sql` 적용이 필요하다.
+- 2026-06-09 해결: `POST /api/reservations/:id/start`를 추가해 `IN_USE` 상태 전환을 서버에서 명시적으로 처리한다.
+- 2026-06-09 해결: `/in-use` 타이머는 start API의 `serverNow`, `startTime`, `endTime` 기준으로 계산한다.
 - 체크아웃 사진 URL이 DB에 저장되지 않는다. 현재 `checkouts`에는 `extra_fee`, `completed_at`만 저장된다.
 - 체크아웃의 청소/공구/폐기물 체크 결과가 DB에 저장되지 않는다.
 - 헬퍼 검수 요청을 체크아웃 시점에 추가로 선택/정산하는 API 로직이 문서만큼 완성되어 있지 않다.
@@ -203,15 +203,15 @@ Source of Truth 기준 MVP 목표는 다음 예약 루프다.
 - `bookingMode: SELF | PACKAGE`는 UI 내부 용어로만 둘지, API에서도 표준 타입을 쓸지 결정.
 - `reservations` 최신 스키마를 기준으로 API fallback 코드 제거.
 - `partner_id`, `reservation_type`, `package_id`, `duration_minutes`, `reserved_end_time`, `blocked_until` 의미를 문서와 코드에서 일치.
-- 파트너별 `hourly_price`로 Self 가격 계산.
-- Shop Service 예약 생성 API에 package id/duration/price 검증 추가.
+- 2026-06-09 해결: 파트너별 `hourly_price`로 Self 가격 계산.
+- 2026-06-09 해결: Shop Service 예약 생성 API에 package id/duration/price 검증 추가.
 
 ### 2단계: 상태 전환을 서버 중심으로 완성
 
-- `reservation_status_logs` 테이블 추가.
-- 예약 생성, 체크인, 이용 시작, 체크아웃, 취소 상태 전환마다 로그 insert.
-- `POST /api/reservations/[id]/start` 또는 체크인 API 내부에서 `CHECKED_IN -> IN_USE` 전환 정책 결정.
-- 프론트 타이머는 서버에서 내려준 `serverNow`, `end_time` 기준으로 표시.
+- 2026-06-09 코드/마이그레이션 추가: `reservation_status_logs` 테이블 추가.
+- 2026-06-09 부분 해결: 예약 생성, 체크인, 이용 시작, 체크아웃 상태 전환 로그 연결. 취소 전환은 아직 취소 API와 함께 필요.
+- 2026-06-09 해결: `POST /api/reservations/[id]/start`에서 `IN_USE` 전환 처리.
+- 2026-06-09 해결: 프론트 타이머는 서버에서 내려준 `serverNow`, `end_time` 기준으로 표시.
 - 허용되지 않는 상태 전환을 API 단에서 일관되게 차단.
 
 ### 3단계: 사진/Storage 실연동
@@ -294,3 +294,26 @@ npm run build
 - 실제 `/api/reservations` 호출로 잘못된 `reservationType: SELF`가 `INVALID_INPUT`으로 거부되는 것을 확인.
 - 실제 Self Service 예약 생성, 중복 예약 거부(`RESERVATION_OVERLAP`), 테스트 데이터 cleanup 확인.
 - 실제 Shop Service 예약 생성과 테스트 데이터 cleanup 확인.
+
+## 11. 2026-06-09 상태 전환 업데이트
+
+상태 전환 서버 중심화 1차 정리를 진행했다.
+
+- `db/migrations/20260609_reservation_status_logs.sql` 추가.
+- `src/lib/reservation-status.ts` 추가.
+- 예약 생성, 체크인, 이용 시작, 체크아웃 상태 전환 로그 연결.
+- `POST /api/reservations/[id]/start` 추가.
+- Self Service는 `CHECKED_IN -> IN_USE`, Shop Service는 `CONFIRMED -> IN_USE`로 명시 전환.
+- `/in-use` 화면은 start API 응답의 `serverNow` 기준으로 타이머를 계산.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- 실제 Self Service API smoke test로 `CONFIRMED -> CHECKED_IN -> IN_USE -> COMPLETED` 확인 후 cleanup.
+- 실제 Shop Service API smoke test로 `CONFIRMED -> IN_USE -> COMPLETED` 확인 후 cleanup.
+
+주의:
+
+- 현재 원격 Supabase에는 `reservation_status_logs` 테이블이 아직 없었다.
+- 운영 전 Supabase SQL Editor 또는 CLI로 `db/migrations/20260609_reservation_status_logs.sql`을 적용해야 실제 상태 로그가 저장된다.

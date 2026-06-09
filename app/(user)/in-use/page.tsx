@@ -4,8 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import {
-  calculateOverduePreview,
-  calculateRemainingTime,
+  calculateOverduePreviewAt,
+  calculateRemainingTimeAt,
   formatRemainingTime,
 } from "@/src/lib/timer";
 import type { ReservationType } from "@/src/domain/types";
@@ -24,7 +24,9 @@ function fallbackWindow(): { start: string; end: string } {
 function InUsePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tick, setTick] = useState<number>(0);
+  const [tick, setTick] = useState<number>(() => Date.now());
+  const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
+  const [startError, setStartError] = useState<string>("");
 
   const reservationType = parseMode(searchParams.get("reservationType"));
   const reservationId = searchParams.get("reservationId") ?? "";
@@ -41,23 +43,102 @@ function InUsePageContent() {
   const blockedMinutes = Number(searchParams.get("blockedMinutes") ?? "60");
 
   const fallback = useMemo(() => fallbackWindow(), []);
-  const startTime = searchParams.get("startTime") ?? fallback.start;
-  const endTime = searchParams.get("endTime") ?? fallback.end;
+  const [startTime, setStartTime] = useState<string>(
+    () => searchParams.get("startTime") ?? fallback.start,
+  );
+  const [endTime, setEndTime] = useState<string>(
+    () => searchParams.get("endTime") ?? fallback.end,
+  );
+  const [confirmedTotalPrice, setConfirmedTotalPrice] =
+    useState<number>(totalPrice);
 
   useEffect(() => {
     const id = window.setInterval(() => setTick(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function startReservation() {
+      if (!reservationId) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/reservations/${reservationId}/start`, {
+          method: "POST",
+          cache: "no-store",
+        });
+        const data: unknown = await response.json();
+
+        if (!response.ok || isCancelled) {
+          if (!isCancelled) {
+            setStartError("이용 시작 처리에 실패했습니다.");
+          }
+          return;
+        }
+
+        if (!data || typeof data !== "object") {
+          return;
+        }
+
+        const typed = data as {
+          serverNow?: unknown;
+          startTime?: unknown;
+          endTime?: unknown;
+          totalPrice?: unknown;
+        };
+
+        if (typeof typed.serverNow === "string") {
+          const serverNowMs = new Date(typed.serverNow).getTime();
+          if (Number.isFinite(serverNowMs)) {
+            setServerOffsetMs(serverNowMs - Date.now());
+          }
+        }
+
+        if (typeof typed.startTime === "string") {
+          setStartTime(typed.startTime);
+        }
+
+        if (typeof typed.endTime === "string") {
+          setEndTime(typed.endTime);
+        }
+
+        if (
+          typeof typed.totalPrice === "number" &&
+          Number.isFinite(typed.totalPrice)
+        ) {
+          setConfirmedTotalPrice(typed.totalPrice);
+        }
+      } catch {
+        if (!isCancelled) {
+          setStartError("이용 시작 처리 중 네트워크 오류가 발생했습니다.");
+        }
+      }
+    }
+
+    void startReservation();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [reservationId]);
+
+  const serverNowMs = tick + serverOffsetMs;
+
   const remaining = useMemo(() => {
-    void tick;
-    return calculateRemainingTime(endTime);
-  }, [endTime, tick]);
+    return calculateRemainingTimeAt(endTime, serverNowMs);
+  }, [endTime, serverNowMs]);
 
   const overdue = useMemo(() => {
-    void tick;
-    return calculateOverduePreview(endTime, totalPrice, startTime);
-  }, [endTime, startTime, tick, totalPrice]);
+    return calculateOverduePreviewAt(
+      endTime,
+      confirmedTotalPrice,
+      startTime,
+      serverNowMs,
+    );
+  }, [confirmedTotalPrice, endTime, startTime, serverNowMs]);
 
   const timeText = formatRemainingTime(remaining.remainingMs);
 
@@ -73,7 +154,7 @@ function InUsePageContent() {
       workTitle,
       startTime,
       endTime,
-      totalPrice: String(totalPrice),
+      totalPrice: String(confirmedTotalPrice),
       taskIds,
       taskLabels,
       selectedTaskCount,
@@ -102,7 +183,7 @@ function InUsePageContent() {
       garageName,
       carLabel,
       workTitle,
-      totalPrice: String(totalPrice),
+      totalPrice: String(confirmedTotalPrice),
       extraFee: String(data.extraFee ?? 0),
     });
 
@@ -193,6 +274,9 @@ function InUsePageContent() {
 
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4 text-left">
         <p className="text-xl font-semibold text-zinc-900">{workTitle}</p>
+        {startError ? (
+          <p className="mt-2 text-sm text-red-500">{startError}</p>
+        ) : null}
         <p className="mt-2 text-sm text-zinc-500">
           예상 초과요금: {Number(overdue.previewFee).toLocaleString("ko-KR")}원
         </p>

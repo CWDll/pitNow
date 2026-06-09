@@ -1,0 +1,182 @@
+import { NextResponse } from "next/server";
+
+import type { ReservationStatus, ReservationType } from "@/src/domain/types";
+import { logReservationStatusChange } from "@/src/lib/reservation-status";
+import {
+  getSupabaseEnvErrorResponse,
+  hasSupabaseEnv,
+  supabase,
+} from "@/src/lib/supabase";
+
+interface Context {
+  params: Promise<{ id: string }>;
+}
+
+interface ReservationRow {
+  id: string;
+  status: ReservationStatus;
+  reservation_type: ReservationType;
+  start_time: string;
+  end_time: string;
+  total_price: number | string;
+}
+
+function errorResponse(status: number, code: string, message: string) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code,
+        message,
+      },
+    },
+    { status },
+  );
+}
+
+function getExpectedFromStatus(
+  reservationType: ReservationType,
+): ReservationStatus {
+  return reservationType === "SHOP_SERVICE" ? "CONFIRMED" : "CHECKED_IN";
+}
+
+export async function POST(_: Request, context: Context) {
+  if (!hasSupabaseEnv) {
+    return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
+  }
+
+  const { id } = await context.params;
+  const reservationId = id.trim();
+
+  if (!reservationId) {
+    return errorResponse(400, "INVALID_RESERVATION_ID", "예약 ID가 필요합니다.");
+  }
+
+  const { data: reservation, error: reservationError } = await supabase
+    .from("reservations")
+    .select("id, status, reservation_type, start_time, end_time, total_price")
+    .eq("id", reservationId)
+    .maybeSingle<ReservationRow>();
+
+  if (reservationError) {
+    console.error("RESERVATION START LOOKUP ERROR:", reservationError);
+    return errorResponse(500, "DB_ERROR", "예약 조회 중 오류가 발생했습니다.");
+  }
+
+  if (!reservation) {
+    return errorResponse(404, "RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다.");
+  }
+
+  const serverNow = new Date().toISOString();
+
+  if (reservation.status === "IN_USE") {
+    return NextResponse.json({
+      success: true,
+      status: "IN_USE" as const,
+      serverNow,
+      startTime: reservation.start_time,
+      endTime: reservation.end_time,
+      totalPrice: Number(reservation.total_price),
+    });
+  }
+
+  const expectedFromStatus = getExpectedFromStatus(
+    reservation.reservation_type,
+  );
+
+  if (reservation.status !== expectedFromStatus) {
+    return errorResponse(
+      400,
+      "INVALID_RESERVATION_STATUS",
+      `${expectedFromStatus} 상태의 예약만 이용 시작할 수 있습니다.`,
+    );
+  }
+
+  const { data: updatedReservation, error: updateError } = await supabase
+    .from("reservations")
+    .update({ status: "IN_USE" })
+    .eq("id", reservationId)
+    .eq("status", expectedFromStatus)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (updateError) {
+    console.error("RESERVATION START UPDATE ERROR:", updateError);
+    return errorResponse(500, "DB_ERROR", "예약 상태 변경 중 오류가 발생했습니다.");
+  }
+
+  if (!updatedReservation) {
+    return errorResponse(
+      409,
+      "STATUS_CONFLICT",
+      "예약 상태가 변경되어 이용 시작을 완료할 수 없습니다.",
+    );
+  }
+
+  const logResult = await logReservationStatusChange({
+    reservationId,
+    fromStatus: expectedFromStatus,
+    toStatus: "IN_USE",
+    actorType: reservation.reservation_type === "SHOP_SERVICE" ? "PARTNER" : "USER",
+    reason: "usage_started",
+    metadata: {
+      reservationType: reservation.reservation_type,
+    },
+  });
+
+  if (!logResult.ok && !logResult.skippedMissingTable) {
+    await supabase
+      .from("reservations")
+      .update({ status: expectedFromStatus })
+      .eq("id", reservationId)
+      .eq("status", "IN_USE");
+    return errorResponse(
+      500,
+      "STATUS_LOG_ERROR",
+      "예약 상태 변경 로그 저장에 실패했습니다.",
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    status: "IN_USE" as const,
+    serverNow,
+    startTime: reservation.start_time,
+    endTime: reservation.end_time,
+    totalPrice: Number(reservation.total_price),
+  });
+}
+
+function methodNotAllowed() {
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: "METHOD_NOT_ALLOWED",
+        message: "POST 메서드만 허용됩니다.",
+      },
+    },
+    {
+      status: 405,
+      headers: {
+        Allow: "POST",
+      },
+    },
+  );
+}
+
+export function GET() {
+  return methodNotAllowed();
+}
+
+export function PUT() {
+  return methodNotAllowed();
+}
+
+export function PATCH() {
+  return methodNotAllowed();
+}
+
+export function DELETE() {
+  return methodNotAllowed();
+}

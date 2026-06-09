@@ -5,6 +5,7 @@ import {
   hasSupabaseEnv,
   supabase,
 } from "@/src/lib/supabase";
+import { logReservationStatusChange } from "@/src/lib/reservation-status";
 
 type ReservationStatus =
   | "CONFIRMED"
@@ -338,6 +339,32 @@ export async function POST(req: Request) {
       409,
       "STATUS_CONFLICT",
       "예약 상태가 변경되어 체크아웃을 완료할 수 없습니다.",
+    );
+  }
+
+  const logResult = await logReservationStatusChange({
+    reservationId,
+    fromStatus: reservation.status,
+    toStatus: "COMPLETED",
+    actorType: "USER",
+    reason: "checkout_completed",
+    metadata: {
+      extraFee,
+      reservationType,
+    },
+  });
+
+  if (!logResult.ok && !logResult.skippedMissingTable) {
+    await supabase
+      .from("reservations")
+      .update({ status: reservation.status })
+      .eq("id", reservationId)
+      .eq("status", "COMPLETED");
+    await rollbackCheckoutInsert(reservationId);
+    return errorResponse(
+      500,
+      "STATUS_LOG_ERROR",
+      "예약 상태 변경 로그 저장에 실패했습니다.",
     );
   }
 

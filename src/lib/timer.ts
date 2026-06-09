@@ -24,9 +24,16 @@ function parseIsoDate(iso: string): Date | null {
 }
 
 export function calculateRemainingTime(endTime: string): RemainingTimeResult {
+  return calculateRemainingTimeAt(endTime, Date.now());
+}
+
+export function calculateRemainingTimeAt(
+  endTime: string,
+  nowMs: number,
+): RemainingTimeResult {
   const endDate = parseIsoDate(endTime);
 
-  if (!endDate) {
+  if (!endDate || !Number.isFinite(nowMs)) {
     return {
       remainingMs: 0,
       remainingMinutes: 0,
@@ -34,7 +41,6 @@ export function calculateRemainingTime(endTime: string): RemainingTimeResult {
     };
   }
 
-  const nowMs = Date.now();
   const remainingMs = endDate.getTime() - nowMs;
 
   return {
@@ -49,6 +55,15 @@ export function calculateOverduePreview(
   totalPrice: number,
   startTime: string,
 ): OverduePreviewResult {
+  return calculateOverduePreviewAt(endTime, totalPrice, startTime, Date.now());
+}
+
+export function calculateOverduePreviewAt(
+  endTime: string,
+  totalPrice: number,
+  startTime: string,
+  nowMs: number,
+): OverduePreviewResult {
   const endDate = parseIsoDate(endTime);
   const startDate = parseIsoDate(startTime);
 
@@ -56,7 +71,8 @@ export function calculateOverduePreview(
     !endDate ||
     !startDate ||
     !Number.isFinite(totalPrice) ||
-    totalPrice < 0
+    totalPrice < 0 ||
+    !Number.isFinite(nowMs)
   ) {
     return {
       overdueMinutes: 0,
@@ -73,7 +89,6 @@ export function calculateOverduePreview(
     };
   }
 
-  const nowMs = Date.now();
   const endMs = endDate.getTime();
 
   if (nowMs <= endMs) {

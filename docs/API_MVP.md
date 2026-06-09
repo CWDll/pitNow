@@ -104,7 +104,37 @@ status: “CHECKED_IN”
 
 ⸻
 
-3. POST /api/checkout
+3. POST /api/reservations/:id/start
+
+⸻
+
+기능:
+이용 시작 상태 전환 + 서버 기준 타이머 기준값 반환
+
+검증:
+• SELF_SERVICE는 CHECKED_IN 상태만 시작 가능
+• SHOP_SERVICE는 CONFIRMED 상태만 시작 가능
+• 이미 IN_USE이면 idempotent 성공 응답
+• COMPLETED/CANCELLED 상태는 시작 불가
+
+로직:
+• reservations.status → IN_USE
+• reservation_status_logs에 상태 전환 로그 저장
+• 서버 현재 시각 serverNow 반환
+• startTime/endTime/totalPrice 반환
+
+성공 응답:
+{
+status: “IN_USE”,
+serverNow: string,
+startTime: string,
+endTime: string,
+totalPrice: number
+}
+
+⸻
+
+4. POST /api/checkout
 
 ⸻
 
@@ -127,6 +157,7 @@ helperVerifyRequested?: boolean
 helperVerifyFee 재계산 후 정산 반영
 • checkouts insert
 • reservations.status → COMPLETED
+• reservation_status_logs에 상태 전환 로그 저장
 
 초과요금 계산 방식:
 
@@ -144,7 +175,7 @@ totalSettlement: number
 
 ⸻
 
-4. POST /api/reviews
+5. POST /api/reviews
 
 ⸻
 
@@ -182,7 +213,8 @@ reviewId: string
 허용:
 
 CONFIRMED → CHECKED_IN
-CHECKED_IN → IN_USE (프론트 계산용)
+CHECKED_IN → IN_USE
+CONFIRMED → IN_USE (SHOP_SERVICE only)
 IN_USE → COMPLETED
 CONFIRMED → CANCELLED
 

@@ -53,6 +53,7 @@ function CheckinPageContent() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId")?.trim() ?? "";
+  const reservationType = searchParams.get("reservationType") ?? "SELF_SERVICE";
   const partnerId = searchParams.get("partnerId") ?? "";
   const carId = searchParams.get("carId") ?? "";
   const carLabel = searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)";
@@ -134,6 +135,7 @@ function CheckinPageContent() {
 
       const query = new URLSearchParams({
         reservationId,
+        reservationType,
         partnerId,
         carId,
         carLabel,

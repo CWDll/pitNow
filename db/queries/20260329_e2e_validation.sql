@@ -71,6 +71,17 @@ where r.status in ('CHECKED_IN', 'IN_USE', 'COMPLETED')
 order by r.created_at desc;
 
 select
+  rsl.reservation_id,
+  rsl.from_status,
+  rsl.to_status,
+  rsl.actor_type,
+  rsl.reason,
+  rsl.created_at
+from reservation_status_logs rsl
+order by rsl.created_at desc
+limit 50;
+
+select
   r.id as reservation_id,
   r.status,
   r.total_price as base_price,

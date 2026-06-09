@@ -108,3 +108,27 @@ Options considered:
 
 - 장점: DB/API/domain 명칭 일치, 예약 생성 로직 단순화, 서버 검증 기준 명확
 - 단점: 기존 호출부 payload 수정 필요
+
+---
+
+## 2026-06-09
+
+Decision:
+예약 상태 전환을 서버 API에서 명시적으로 처리하고 `reservation_status_logs`에 기록한다.
+
+Rules:
+
+- 예약 생성 시 `null -> CONFIRMED` 로그를 남긴다.
+- 체크인 완료 시 `CONFIRMED -> CHECKED_IN` 로그를 남긴다.
+- 이용 시작 API `POST /api/reservations/:id/start`를 추가한다.
+- Self Service는 `CHECKED_IN -> IN_USE`만 허용한다.
+- Shop Service는 체크인 사진 플로우가 없으므로 `CONFIRMED -> IN_USE`를 허용한다.
+- 체크아웃 완료 시 기존 상태에서 `COMPLETED`로 로그를 남긴다.
+- 프론트 타이머는 start API가 반환한 `serverNow`, `startTime`, `endTime` 기준으로 계산한다.
+
+Reason:
+체크인 후 프론트가 이용중 상태를 암묵적으로 가정하고 있었고, PRD의 “모든 상태 전환 기록” 원칙을 만족하지 못했다.
+
+Operational note:
+원격 Supabase에는 `reservation_status_logs` 테이블 마이그레이션을 적용해야 실제 로그가 저장된다.
+개발 중 테이블이 아직 없으면 API는 경고 후 진행하지만, 운영 전에는 `db/migrations/20260609_reservation_status_logs.sql` 적용이 필수다.

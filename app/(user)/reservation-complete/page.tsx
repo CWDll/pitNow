@@ -35,6 +35,7 @@ function ReservationCompletePageContent() {
 
   const query = new URLSearchParams({
     reservationId,
+    reservationType,
     bookingMode,
     partnerId,
     carId,

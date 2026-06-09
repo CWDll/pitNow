@@ -2,6 +2,7 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import type { ReservationType } from "@/src/domain/types";
+import { logReservationStatusChange } from "@/src/lib/reservation-status";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
@@ -635,6 +636,29 @@ export async function POST(req: Request) {
       await supabase.from("reservations").delete().eq("id", data.id);
       return jsonError(500, "DB_ERROR", "작업 동의 정보 저장에 실패했습니다.");
     }
+  }
+
+  const logResult = await logReservationStatusChange({
+    reservationId: data.id,
+    fromStatus: null,
+    toStatus: "CONFIRMED",
+    actorType: "USER",
+    reason: "reservation_created",
+    metadata: {
+      reservationType: body.reservationType,
+      packageId,
+      selectedTaskCount:
+        body.reservationType === "SELF_SERVICE" ? body.taskIds.length : 0,
+    },
+  });
+
+  if (!logResult.ok && !logResult.skippedMissingTable) {
+    await supabase.from("reservations").delete().eq("id", data.id);
+    return jsonError(
+      500,
+      "STATUS_LOG_ERROR",
+      "예약 상태 변경 로그 저장에 실패했습니다.",
+    );
   }
 
   return NextResponse.json({
