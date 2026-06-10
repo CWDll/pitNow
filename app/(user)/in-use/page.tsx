@@ -9,6 +9,7 @@ import {
   formatRemainingTime,
 } from "@/src/lib/timer";
 import { authFetch } from "@/src/lib/auth-fetch";
+import { requireClientSession } from "@/src/lib/client-auth";
 import type { ReservationType } from "@/src/domain/types";
 
 function parseMode(value: string | null): ReservationType {
@@ -67,6 +68,12 @@ function InUsePageContent() {
       }
 
       try {
+        const hasSession = await requireClientSession();
+
+        if (!hasSession) {
+          return;
+        }
+
         const response = await authFetch(`/api/reservations/${reservationId}/start`, {
           method: "POST",
           cache: "no-store",
@@ -166,6 +173,12 @@ function InUsePageContent() {
   }
 
   async function goCompleteDirectly() {
+    const hasSession = await requireClientSession();
+
+    if (!hasSession) {
+      return;
+    }
+
     const response = await authFetch("/api/checkout", {
       method: "POST",
       headers: {

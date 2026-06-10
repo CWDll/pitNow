@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 
 import type { CreateReviewPayload } from "@/src/domain/types";
 import { authFetch } from "@/src/lib/auth-fetch";
+import { requireClientSession } from "@/src/lib/client-auth";
 
 interface ReviewApiError {
   error?: string | { message?: string };
@@ -73,6 +74,12 @@ function CompletePageContent() {
 
     setIsSubmittingReview(true);
     try {
+      const hasSession = await requireClientSession();
+
+      if (!hasSession) {
+        return;
+      }
+
       const payload: CreateReviewPayload = {
         reservationId,
         rating,

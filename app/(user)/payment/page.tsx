@@ -6,6 +6,7 @@ import { Suspense, useMemo, useState } from "react";
 import type { CreateReservationPayload } from "@/src/domain/types";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
+import { requireClientSession } from "@/src/lib/client-auth";
 
 const paymentMethods = [
   "신용/체크카드",
@@ -120,6 +121,12 @@ function PaymentPageContent() {
     setIsPaying(true);
 
     try {
+      const hasSession = await requireClientSession();
+
+      if (!hasSession) {
+        return;
+      }
+
       const body: CreateReservationPayload = {
         reservationType,
         bayId,

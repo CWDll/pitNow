@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 import { authFetch } from "@/src/lib/auth-fetch";
+import { requireClientSession } from "@/src/lib/client-auth";
 import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
 
 interface CheckoutApiError {
@@ -85,6 +86,12 @@ function CheckoutPageContent() {
 
     setIsLoading(true);
     try {
+      const hasSession = await requireClientSession();
+
+      if (!hasSession) {
+        return;
+      }
+
       const [checkoutPhoto1, checkoutPhoto2] = await Promise.all([
         uploadReservationPhoto({
           reservationId,

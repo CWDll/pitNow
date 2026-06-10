@@ -469,5 +469,20 @@ Auth/RLS 기반 작업을 시작했다.
 - 원격 Supabase에는 `db/migrations/20260611_auth_rls_foundation.sql` 적용이 필요하다.
 - RLS 적용 후 Admin 콘솔 데이터를 보려면 `SUPABASE_SERVICE_ROLE_KEY` 환경변수가 필요하다.
 - Storage bucket은 아직 public read를 유지한다. 운영 전 private bucket + signed read URL 전환을 권장한다.
+
+## 18. 2026-06-11 사용자 Auth UI 1차 구현
+
+Supabase Auth 로그인/세션 UI를 연결했다.
+
+- `/login` 추가: email/password 로그인과 회원가입 지원.
+- `/mypage`에서 로그인 상태, 사용자 이메일, 로그아웃 버튼 표시.
+- 예약 생성, 체크인, 이용 시작, 체크아웃, 리뷰 저장 전 클라이언트 세션 확인.
+- 세션이 없으면 `/login?next=현재경로`로 이동.
+- `/reservation` 예약 내역을 브라우저 Supabase 세션 기준 조회로 전환.
+
+주의:
+
+- Supabase Auth 이메일 확인 설정이 켜져 있으면 회원가입 후 메일 인증이 필요할 수 있다.
+- 추후 UX 개선 단계에서 비밀번호 재설정, 소셜 로그인, 휴대폰 OTP를 추가할 수 있다.
 - 패키지 가격 편집.
 - 정산 상세 drill-down.

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import type { CheckInPayload } from "@/src/domain/types";
 import { authFetch } from "@/src/lib/auth-fetch";
+import { requireClientSession } from "@/src/lib/client-auth";
 import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
 
 type PhotoField = "frontImg" | "rearImg" | "leftImg" | "rightImg";
@@ -104,6 +105,12 @@ function CheckinPageContent() {
 
     setIsLoading(true);
     try {
+      const hasSession = await requireClientSession();
+
+      if (!hasSession) {
+        return;
+      }
+
       const [frontImg, rearImg, leftImg, rightImg] = await Promise.all([
         uploadReservationPhoto({
           reservationId,
