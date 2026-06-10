@@ -274,3 +274,40 @@ Rules:
 
 Reason:
 RLS 적용 후 사진 업로드와 사용자 mutation은 authenticated session에 의존한다. 결제 연동 전 사용자 계정과 예약 소유권을 화면 흐름에서 먼저 안정화해야 한다.
+
+---
+
+## 2026-06-11
+
+Decision:
+`/my-car` 차량 정보는 localStorage mock이 아니라 Supabase `vehicles` 테이블에 사용자별로 저장한다.
+
+Rules:
+
+- `vehicles.user_id`는 `auth.users.id`를 참조한다.
+- RLS는 `user_id = auth.uid()`인 row만 select/insert/update/delete할 수 있게 제한한다.
+- 사용자별 동일 차량 번호는 중복 등록할 수 없다.
+- 사용자당 대표 차량은 최대 1대만 허용한다.
+- 대표 차량 변경은 `set_active_vehicle(uuid)` DB 함수로 처리해 기존 대표 해제와 새 대표 지정이 같은 transaction에서 실행되게 한다.
+- 정비소 예약 전 차량 선택 화면은 `vehicles`를 읽고, 등록 차량이 없으면 예약 진행을 막고 `/my-car` 등록으로 안내한다.
+
+Reason:
+로그인/세션 UI가 붙은 뒤에도 차량 데이터가 전체 공용 localStorage mock에 남아 있으면 사용자별 예약 소유권과 증적 데이터가 분리되지 않는다. 결제 전이라도 예약에 연결되는 차량 선택은 Auth/RLS 소유권 모델 위에 올려야 한다.
+
+---
+
+## 2026-06-11
+
+Decision:
+예약 생성 시 선택 차량을 `reservations.vehicle_id`로 저장한다.
+
+Rules:
+
+- `POST /api/reservations`는 `vehicleId`를 필수로 받는다.
+- 서버는 `vehicleId`가 로그인 사용자의 `vehicles` row인지 검증한다.
+- 사용자 예약 내역은 저장된 vehicle relation으로 차량명을 표시한다.
+- Admin 예약 모니터에도 차량명을 함께 노출한다.
+- 기존 예약 row 호환성을 위해 DB column은 nullable로 추가하되, 신규 API 요청에서는 필수로 검증한다.
+
+Reason:
+차량 선택을 URL query에만 유지하면 예약 생성 이후에는 데이터 원천이 사라진다. 체크인 사진, 정산, 고객 문의, 관리자 모니터링까지 같은 차량을 추적하려면 예약 row에 차량 FK를 저장해야 한다.

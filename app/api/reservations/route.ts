@@ -16,6 +16,7 @@ type ConsentMethod = "CHECKBOX" | "SIGNATURE";
 interface ReservationRequestBody {
   reservationType: ReservationType;
   bayId: string;
+  vehicleId: string;
   packageId?: string;
   taskIds: string[];
   agreeOnlySelectedTasks: boolean;
@@ -34,6 +35,14 @@ interface BayRow {
 interface PartnerRow {
   id: string;
   hourly_price: number | string | null;
+}
+
+interface VehicleRow {
+  id: string;
+  user_id: string;
+  plate_number: string;
+  model: string;
+  year: number;
 }
 
 interface SelfMaintenanceTaskRow {
@@ -111,6 +120,7 @@ function parseBody(payload: unknown): ReservationRequestBody | null {
   const {
     reservationType,
     bayId,
+    vehicleId,
     packageId,
     taskIds,
     agreeOnlySelectedTasks,
@@ -125,6 +135,7 @@ function parseBody(payload: unknown): ReservationRequestBody | null {
     (reservationType !== "SELF_SERVICE" &&
       reservationType !== "SHOP_SERVICE") ||
     typeof bayId !== "string" ||
+    typeof vehicleId !== "string" ||
     typeof startTime !== "string" ||
     typeof endTime !== "string" ||
     (typeof helperVerifyRequested !== "undefined" &&
@@ -133,7 +144,7 @@ function parseBody(payload: unknown): ReservationRequestBody | null {
     return null;
   }
 
-  if (!bayId.trim() || !startTime.trim() || !endTime.trim()) {
+  if (!bayId.trim() || !vehicleId.trim() || !startTime.trim() || !endTime.trim()) {
     return null;
   }
 
@@ -185,6 +196,7 @@ function parseBody(payload: unknown): ReservationRequestBody | null {
   return {
     reservationType,
     bayId: bayId.trim(),
+    vehicleId: vehicleId.trim(),
     packageId: normalizedPackageId,
     taskIds:
       reservationType === "SELF_SERVICE"
@@ -204,6 +216,39 @@ function parseBody(payload: unknown): ReservationRequestBody | null {
     startTime: startTime.trim(),
     endTime: endTime.trim(),
   };
+}
+
+async function getOwnedVehicle(params: {
+  db: SupabaseClient;
+  vehicleId: string;
+  userId: string;
+}) {
+  const { db, vehicleId, userId } = params;
+  const { data, error } = await db
+    .from("vehicles")
+    .select("id, user_id, plate_number, model, year")
+    .eq("id", vehicleId)
+    .eq("user_id", userId)
+    .maybeSingle<VehicleRow>();
+
+  if (error) {
+    console.error("VEHICLE LOOKUP ERROR:", error);
+    return {
+      error: jsonError(500, "DB_ERROR", "차량 조회 중 오류가 발생했습니다."),
+    };
+  }
+
+  if (!data) {
+    return {
+      error: jsonError(
+        400,
+        "INVALID_VEHICLE",
+        "로그인한 사용자에게 등록된 차량을 선택해 주세요.",
+      ),
+    };
+  }
+
+  return { vehicle: data };
 }
 
 function validateReservationWindow(startTime: string, endTime: string) {
@@ -505,6 +550,16 @@ export async function POST(req: Request) {
     return bayResult.error;
   }
 
+  const vehicleResult = await getOwnedVehicle({
+    db,
+    vehicleId: body.vehicleId,
+    userId: auth.userId,
+  });
+
+  if ("error" in vehicleResult) {
+    return vehicleResult.error;
+  }
+
   const {
     bay,
     hourlyPrice,
@@ -576,6 +631,7 @@ export async function POST(req: Request) {
     .from("reservations")
     .insert({
       user_id: auth.userId,
+      vehicle_id: body.vehicleId,
       partner_id: partnerId,
       bay_id: body.bayId,
       reservation_type: body.reservationType,
@@ -658,6 +714,7 @@ export async function POST(req: Request) {
     client: db,
     metadata: {
       reservationType: body.reservationType,
+      vehicleId: body.vehicleId,
       packageId,
       selectedTaskCount:
         body.reservationType === "SELF_SERVICE" ? body.taskIds.length : 0,
@@ -678,6 +735,7 @@ export async function POST(req: Request) {
     id: data.id,
     status: data.status,
     reservationType: body.reservationType,
+    vehicleId: body.vehicleId,
     blockedUntil: data.blocked_until,
     totalPrice: Number(data.total_price),
     helperVerifyFee,

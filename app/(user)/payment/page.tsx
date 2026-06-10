@@ -99,6 +99,11 @@ function PaymentPageContent() {
       return;
     }
 
+    if (!carId) {
+      setError("예약에 연결할 차량 정보가 없습니다. 내 차를 먼저 선택해 주세요.");
+      return;
+    }
+
     if (bookingMode === "SELF" && taskIds.length === 0) {
       setError("최소 1개 이상의 셀프 정비 작업을 선택해 주세요.");
       return;
@@ -130,6 +135,7 @@ function PaymentPageContent() {
       const body: CreateReservationPayload = {
         reservationType,
         bayId,
+        vehicleId: carId,
         packageId: bookingMode === "PACKAGE" ? packageId : undefined,
         taskIds: bookingMode === "SELF" ? taskIds : undefined,
         agreeOnlySelectedTasks:

@@ -24,6 +24,7 @@
 {
 reservationType: 'SELF_SERVICE' | 'SHOP_SERVICE',
 bayId: string,
+vehicleId: string,
 packageId?: string,
 taskIds: string[],
 agreeOnlySelectedTasks: boolean,
@@ -44,6 +45,7 @@ endTime: string (ISO)
 • SELF_SERVICE는 consentMethod 검증 (SIGNATURE면 signatureImageUrl 필수)
 • SHOP_SERVICE는 packageId 필수
 • SHOP_SERVICE는 partner_package_prices 기준으로 packageId/가격/소요시간 검증
+• vehicleId는 로그인한 사용자 소유 vehicles row만 허용
 • blockedUntil = endTime + 1시간
 • SELF_SERVICE에서 helperVerifyRequested=true 이면 helperVerifyFee 계산
 (기본 5,000 + 선택 작업별 단가 합산)
@@ -60,6 +62,7 @@ endTime: string (ISO)
 • 시간 겹침
 • 잘못된 시간 범위
 • bay 없음
+• 로그인 사용자 소유가 아닌 vehicleId
 • 법적 허용 외 작업 선택
 • 서약/동의 누락
 

@@ -8,13 +8,10 @@ import {
   formatMinutesLabel,
   selfMaintenanceTaskOptions,
 } from "../../../_data/mock-garages";
-import {
-  getInitialActiveCarId,
-  initialMockCars,
-  loadMockCarsFromStorage,
-} from "@/app/(user)/_data/mock-cars";
+import type { CarItem } from "@/app/(user)/_data/mock-cars";
 import type { PartnerShopPackage } from "@/src/domain/shop-package";
 import type { ReservationType } from "@/src/domain/types";
+import { supabase } from "@/src/lib/supabase";
 
 function levelClass(level: "초급" | "중급"): string {
   return level === "초급"
@@ -43,8 +40,35 @@ interface PartnerResponse {
   partner?: PartnerInfo;
 }
 
+interface VehicleRow {
+  id: string;
+  user_id: string;
+  plate_number: string;
+  model: string;
+  year: number;
+  type_label: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 function parseMode(value: string | null): ReservationType {
   return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
+}
+
+function mapVehicleToCar(row: VehicleRow): CarItem {
+  return {
+    id: row.id,
+    number: row.plate_number,
+    model: row.model,
+    year: row.year,
+    typeLabel: row.type_label,
+    isActive: row.is_active,
+    history: [],
+  };
+}
+
+function getInitialSelectedCarId(cars: CarItem[]): string {
+  return cars.find((car) => car.isActive)?.id ?? cars[0]?.id ?? "";
 }
 
 function PartnerWorkPageContent() {
@@ -55,7 +79,10 @@ function PartnerWorkPageContent() {
   const initialBookingMode =
     initialMode === "SHOP_SERVICE" ? "PACKAGE" : "SELF";
 
-  const [cars] = useState(() => loadMockCarsFromStorage() ?? initialMockCars);
+  const [cars, setCars] = useState<CarItem[]>([]);
+  const [isCarsLoading, setIsCarsLoading] = useState<boolean>(true);
+  const [needsLoginForCars, setNeedsLoginForCars] = useState<boolean>(false);
+  const [carsErrorMessage, setCarsErrorMessage] = useState<string>("");
   const [bookingMode, setBookingMode] = useState<"SELF" | "PACKAGE">(
     initialBookingMode,
   );
@@ -63,9 +90,7 @@ function PartnerWorkPageContent() {
     selfMaintenanceTaskOptions[0].id,
   ]);
   const [selectedPackageId, setSelectedPackageId] = useState<string>("");
-  const [selectedCarId, setSelectedCarId] = useState<string>(() =>
-    getInitialActiveCarId(loadMockCarsFromStorage() ?? initialMockCars),
-  );
+  const [selectedCarId, setSelectedCarId] = useState<string>("");
   const [isCarPickerOpen, setIsCarPickerOpen] = useState(false);
   const [garage, setGarage] = useState<PartnerInfo | null>(null);
   const [packages, setPackages] = useState<PartnerShopPackage[]>([]);
@@ -76,6 +101,60 @@ function PartnerWorkPageContent() {
   );
   const resolvedSelectedPackageId = selectedPackageId || packages[0]?.id || "";
   const shouldScrollCars = cars.length > 3;
+  const loginNextPath = encodeURIComponent(
+    `/partner/${garage?.id ?? params.id}/work?mode=${initialMode}`,
+  );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadCars() {
+      setIsCarsLoading(true);
+      setNeedsLoginForCars(false);
+      setCarsErrorMessage("");
+
+      const { data: sessionData } = await supabase.auth.getSession();
+
+      if (!sessionData.session) {
+        if (!isCancelled) {
+          setCars([]);
+          setSelectedCarId("");
+          setNeedsLoginForCars(true);
+          setIsCarsLoading(false);
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("id,user_id,plate_number,model,year,type_label,is_active,created_at")
+        .order("is_active", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (error) {
+        setCars([]);
+        setSelectedCarId("");
+        setCarsErrorMessage("차량 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        setIsCarsLoading(false);
+        return;
+      }
+
+      const nextCars = ((data ?? []) as VehicleRow[]).map(mapVehicleToCar);
+      setCars(nextCars);
+      setSelectedCarId(getInitialSelectedCarId(nextCars));
+      setIsCarsLoading(false);
+    }
+
+    void loadCars();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
@@ -213,16 +292,30 @@ function PartnerWorkPageContent() {
         <p className="mb-1 block text-xs text-zinc-500">내 차 선택</p>
         <button
           type="button"
-          onClick={() => setIsCarPickerOpen(true)}
+          onClick={() => (cars.length > 0 ? setIsCarPickerOpen(true) : null)}
+          disabled={cars.length === 0}
           className="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 text-left"
         >
           <span className="text-lg text-zinc-800">
-            {selectedCar
+            {isCarsLoading
+              ? "차량 정보를 불러오는 중"
+              : selectedCar
               ? `${selectedCar.model} (${selectedCar.year}) · ${selectedCar.number}`
               : "차량 없음"}
           </span>
-          <span className="text-sm text-zinc-500">변경</span>
+          <span className="text-sm text-zinc-500">{cars.length > 0 ? "변경" : "필요"}</span>
         </button>
+        {needsLoginForCars ? (
+          <p className="mt-2 text-sm text-red-600">
+            예약하려면 먼저 로그인해 주세요. <Link href={`/login?next=${loginNextPath}`} className="font-semibold underline">로그인</Link>
+          </p>
+        ) : carsErrorMessage ? (
+          <p className="mt-2 text-sm text-red-600">{carsErrorMessage}</p>
+        ) : !isCarsLoading && cars.length === 0 ? (
+          <p className="mt-2 text-sm text-zinc-600">
+            등록된 차량이 없습니다. <Link href="/my-car" className="font-semibold text-blue-600 underline">내 차량 등록</Link> 후 예약을 진행해 주세요.
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-3">
@@ -327,6 +420,7 @@ function PartnerWorkPageContent() {
         <button
           type="button"
           disabled={
+            isCarsLoading ||
             !selectedCar ||
             (bookingMode === "SELF" && selectedTaskIds.length === 0) ||
             (bookingMode === "PACKAGE" && !resolvedSelectedPackageId)

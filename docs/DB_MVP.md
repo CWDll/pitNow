@@ -99,6 +99,7 @@ For `SHOP_SERVICE`, it is computed by rounding package duration up to 30-minute 
 create table reservations (
 id uuid primary key default gen_random_uuid(),
 user_id uuid not null,
+vehicle_id uuid references vehicles(id) on delete restrict,
 bay_id uuid references bays(id) on delete cascade,
 start_time timestamptz not null,
 end_time timestamptz not null,
@@ -139,6 +140,7 @@ or (helper_verify_requested = true and helper_verify_fee >= 5000)
 
 create index idx_reservations_bay on reservations(bay_id);
 create index idx_reservations_user on reservations(user_id);
+create index idx_reservations_vehicle on reservations(vehicle_id);
 create index idx_reservations_time on reservations(start_time, reserved_end_time);
 ```
 
@@ -306,8 +308,43 @@ Auth / RLS foundation
 
 ⸻
 
+## vehicles
+
+User-owned vehicle registry used by `/my-car` and reservation vehicle selection.
+
+```sql
+create table vehicles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  plate_number text not null,
+  model text not null,
+  year int not null check (year >= 1990 and year <= 2100),
+  type_label text not null default '세단',
+  is_active boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index uq_vehicles_user_plate on vehicles(user_id, plate_number);
+create unique index uq_vehicles_one_active_per_user
+  on vehicles(user_id)
+  where is_active = true;
+```
+
+RLS:
+
+- Authenticated users may select/insert/update/delete only rows where `user_id = auth.uid()`.
+- First registered vehicle is set active by the client.
+- Representative vehicle changes use `set_active_vehicle(uuid)` so deactivating the previous vehicle and activating the next vehicle happen in one DB transaction.
+- Reservation vehicle picker reads this table instead of local mock storage.
+
+Migration:
+
+- `db/migrations/20260611_user_vehicles.sql`
+
+⸻
+
 MVP 제외 (향후 확장용)
-• vehicles
 • payments
 
 지금은 최소 스키마만 유지한다.

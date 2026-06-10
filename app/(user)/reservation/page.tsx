@@ -15,6 +15,7 @@ interface ReservationRow {
   id: string;
   partner_id: string;
   bay_id: string;
+  vehicle_id: string | null;
   reservation_type: ReservationType;
   package_id: string | null;
   start_time: string;
@@ -22,6 +23,18 @@ interface ReservationRow {
   reserved_end_time: string;
   status: ReservationStatus;
   total_price: number;
+  vehicles:
+    | {
+        plate_number: string;
+        model: string;
+        year: number;
+      }
+    | Array<{
+        plate_number: string;
+        model: string;
+        year: number;
+      }>
+    | null;
 }
 
 function formatDateLabel(startTime: string, endTime: string): string {
@@ -41,6 +54,9 @@ function formatDateLabel(startTime: string, endTime: string): string {
 
 function mapReservationItem(reservation: ReservationRow): ReservationListItem {
   const garage = garageList.find((item) => item.id === reservation.partner_id);
+  const vehicle = Array.isArray(reservation.vehicles)
+    ? reservation.vehicles[0] ?? null
+    : reservation.vehicles;
   const workTitle =
     reservation.reservation_type === "SELF_SERVICE"
       ? "셀프 정비"
@@ -68,6 +84,9 @@ function mapReservationItem(reservation: ReservationRow): ReservationListItem {
     startTime: reservation.start_time,
     endTime: reservation.end_time,
     blockedMinutes,
+    carLabel: vehicle
+      ? `${vehicle.model} (${vehicle.year}) · ${vehicle.plate_number}`
+      : "등록 차량",
   };
 }
 
@@ -93,7 +112,7 @@ export default function ReservationListPage() {
 
       const { data, error: reservationError } = await supabase
         .from("reservations")
-        .select("id, partner_id, bay_id, reservation_type, package_id, start_time, end_time, reserved_end_time, status, total_price")
+        .select("id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, reserved_end_time, status, total_price, vehicles(plate_number, model, year)")
         .order("start_time", { ascending: false })
         .returns<ReservationRow[]>();
 

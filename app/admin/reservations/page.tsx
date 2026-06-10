@@ -51,6 +51,7 @@ export default async function AdminReservationsPage() {
               <th className="px-4 py-4">Type</th>
               <th className="px-4 py-4">Partner</th>
               <th className="px-4 py-4">Bay</th>
+              <th className="px-4 py-4">Vehicle</th>
               <th className="px-4 py-4">Time</th>
               <th className="px-4 py-4">Blocked</th>
               <th className="px-4 py-4 text-right">Price</th>
@@ -60,7 +61,7 @@ export default async function AdminReservationsPage() {
           <tbody className="divide-y divide-white/10">
             {reservations.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
                   예약 데이터가 없습니다.
                 </td>
               </tr>
@@ -79,6 +80,7 @@ export default async function AdminReservationsPage() {
                   <td className="px-4 py-4">{typeLabel(reservation.reservationType)}</td>
                   <td className="px-4 py-4">{reservation.partnerName}</td>
                   <td className="px-4 py-4">{reservation.bayName}</td>
+                  <td className="px-4 py-4">{reservation.vehicleLabel}</td>
                   <td className="px-4 py-4">
                     {formatAdminDateTime(reservation.startTime)} -{" "}
                     {formatAdminDateTime(reservation.endTime)}

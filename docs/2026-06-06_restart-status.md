@@ -486,3 +486,35 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - 추후 UX 개선 단계에서 비밀번호 재설정, 소셜 로그인, 휴대폰 OTP를 추가할 수 있다.
 - 패키지 가격 편집.
 - 정산 상세 drill-down.
+
+## 19. 2026-06-11 사용자별 차량 데이터 전환
+
+`/my-car`와 예약 전 차량 선택을 Supabase Auth 사용자 기준으로 전환했다.
+
+- `vehicles` 테이블과 사용자 소유 RLS migration 추가.
+- `/my-car`는 로그인한 사용자의 차량만 조회/추가/삭제/대표 설정한다.
+- 사용자는 같은 차량 번호를 중복 등록할 수 없다.
+- 사용자당 대표 차량은 1대만 허용한다.
+- 대표 차량 변경은 `set_active_vehicle(uuid)` DB 함수로 원자적으로 처리한다.
+- `/partner/[id]/work`는 localStorage mock 차량 대신 로그인 사용자의 `vehicles`를 읽는다.
+- 차량이 없으면 예약 진행을 막고 `/my-car` 등록으로 안내한다.
+
+주의:
+
+- 원격 Supabase에는 `db/migrations/20260611_user_vehicles.sql` 적용이 필요하다.
+- 기존 localStorage mock 차량은 더 이상 사용자 예약 플로우에 사용하지 않는다.
+
+## 20. 2026-06-11 예약-차량 FK 연결
+
+예약 생성 시 선택 차량을 `reservations.vehicle_id`에 저장하도록 연결했다.
+
+- `db/migrations/20260611_reservation_vehicle_link.sql` 추가.
+- `POST /api/reservations`는 `vehicleId`를 필수로 받고 사용자 소유 차량인지 검증한다.
+- 결제 화면은 선택된 `carId`를 예약 생성 payload의 `vehicleId`로 전송한다.
+- `/reservation` 예약 내역은 저장된 vehicle relation으로 차량명을 표시한다.
+- `/admin/reservations`에도 차량명을 표시한다.
+
+주의:
+
+- 원격 Supabase에는 `db/migrations/20260611_reservation_vehicle_link.sql` 적용이 필요하다.
+- 기존 예약 row는 `vehicle_id`가 null일 수 있으므로 화면에서는 `등록 차량` 또는 `-` fallback을 유지한다.

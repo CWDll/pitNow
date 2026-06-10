@@ -58,9 +58,21 @@ export interface Review {
   createdAt: string;
 }
 
+export interface Vehicle {
+  id: string;
+  userId: string;
+  plateNumber: string;
+  model: string;
+  year: number;
+  typeLabel: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface CreateReservationPayload {
   reservationType: ReservationType;
   bayId: string;
+  vehicleId: string;
   packageId?: string;
   taskIds?: string[];
   agreeOnlySelectedTasks?: boolean;

@@ -13,6 +13,7 @@ export interface AdminReservationRow {
   id: string;
   partner_id: string;
   bay_id: string | null;
+  vehicle_id?: string | null;
   reservation_type: AdminReservationType;
   package_id: string | null;
   start_time: string;
@@ -48,6 +49,13 @@ interface BayRow {
   name: string;
 }
 
+interface VehicleRow {
+  id: string;
+  plate_number: string;
+  model: string;
+  year: number;
+}
+
 interface PartnerPackagePriceRow {
   partner_id: string;
   labor_price: number | string;
@@ -74,6 +82,7 @@ export interface AdminReservationItem {
   id: string;
   partnerName: string;
   bayName: string;
+  vehicleLabel: string;
   reservationType: AdminReservationType;
   packageId: string | null;
   startTime: string;
@@ -157,34 +166,85 @@ async function getBayMap() {
   return new Map((data ?? []).map((bay) => [bay.id, bay.name]));
 }
 
+async function getVehicleMap() {
+  if (!supabaseAdmin) {
+    return new Map<string, string>();
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("vehicles")
+    .select("id, plate_number, model, year")
+    .returns<VehicleRow[]>();
+
+  if (error) {
+    console.error("ADMIN VEHICLE LOOKUP ERROR:", error);
+    return new Map<string, string>();
+  }
+
+  return new Map(
+    (data ?? []).map((vehicle) => [
+      vehicle.id,
+      `${vehicle.model} (${vehicle.year}) · ${vehicle.plate_number}`,
+    ]),
+  );
+}
+
 export async function getAdminReservations(): Promise<AdminReservationItem[]> {
   if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return [];
   }
 
-  const [partnerMap, bayMap, reservationResult] = await Promise.all([
+  const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all([
     getPartnerMap(),
     getBayMap(),
+    getVehicleMap(),
     supabaseAdmin
       .from("reservations")
       .select(
-        "id, partner_id, bay_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
+        "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
       )
       .order("created_at", { ascending: false })
       .limit(100)
       .returns<AdminReservationRow[]>(),
   ]);
 
+  let reservationRows = reservationResult.data ?? [];
+
   if (reservationResult.error) {
-    console.error("ADMIN RESERVATION LOOKUP ERROR:", reservationResult.error);
-    return [];
+    const shouldFallback =
+      reservationResult.error.code === "PGRST204" ||
+      reservationResult.error.code === "42703";
+
+    if (!shouldFallback) {
+      console.error("ADMIN RESERVATION LOOKUP ERROR:", reservationResult.error);
+      return [];
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("reservations")
+      .select(
+        "id, partner_id, bay_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .returns<AdminReservationRow[]>();
+
+    if (error) {
+      console.error("ADMIN RESERVATION FALLBACK LOOKUP ERROR:", error);
+      return [];
+    }
+
+    reservationRows = data ?? [];
   }
 
-  return (reservationResult.data ?? []).map((reservation) => ({
+  return reservationRows.map((reservation) => ({
     id: reservation.id,
     partnerName: partnerMap.get(reservation.partner_id) ?? "Unknown partner",
     bayName: reservation.bay_id
       ? bayMap.get(reservation.bay_id) ?? "Unknown bay"
+      : "-",
+    vehicleLabel: reservation.vehicle_id
+      ? vehicleMap.get(reservation.vehicle_id) ?? "Unknown vehicle"
       : "-",
     reservationType: reservation.reservation_type,
     packageId: reservation.package_id,

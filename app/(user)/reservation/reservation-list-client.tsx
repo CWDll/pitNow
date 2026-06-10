@@ -18,6 +18,7 @@ export interface ReservationListItem {
   startTime: string;
   endTime: string;
   blockedMinutes: number;
+  carLabel: string;
 }
 
 type ReservationTab = "upcoming" | "history";
@@ -73,7 +74,7 @@ function buildReservationHref(item: ReservationListItem): string {
     startTime: item.startTime,
     endTime: item.endTime,
     blockedMinutes: String(item.blockedMinutes),
-    carLabel: "등록 차량",
+    carLabel: item.carLabel,
   });
 
   if (item.bayLabel) {
