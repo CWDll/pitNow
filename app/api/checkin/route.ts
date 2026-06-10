@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getSupabaseEnvErrorResponse, hasSupabaseEnv, supabase } from "@/src/lib/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { requireRequestUser } from "@/src/lib/auth";
+import { getSupabaseEnvErrorResponse, hasSupabaseEnv } from "@/src/lib/supabase";
 import { logReservationStatusChange } from "@/src/lib/reservation-status";
 
 type ReservationStatus =
@@ -91,8 +94,11 @@ function parseAndValidateBody(payload: unknown): CheckinRequestBody | null {
   return normalizedBody;
 }
 
-async function rollbackCheckinInsert(reservationId: string): Promise<void> {
-  const { error } = await supabase
+async function rollbackCheckinInsert(
+  db: SupabaseClient,
+  reservationId: string,
+): Promise<void> {
+  const { error } = await db
     .from("checkins")
     .delete()
     .eq("reservation_id", reservationId);
@@ -106,6 +112,15 @@ export async function POST(req: Request) {
   if (!hasSupabaseEnv) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
   }
+
+  const authResult = await requireRequestUser(req);
+
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { auth } = authResult;
+  const db = auth.client;
 
   let payload: unknown;
 
@@ -127,10 +142,11 @@ export async function POST(req: Request) {
 
   const { reservationId, frontImg, rearImg, leftImg, rightImg } = body;
 
-  const { data: reservation, error: reservationError } = await supabase
+  const { data: reservation, error: reservationError } = await db
     .from("reservations")
     .select("id, status")
     .eq("id", reservationId)
+    .eq("user_id", auth.userId)
     .maybeSingle<ReservationRow>();
 
   if (reservationError) {
@@ -150,7 +166,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: existingCheckin, error: checkinLookupError } = await supabase
+  const { data: existingCheckin, error: checkinLookupError } = await db
     .from("checkins")
     .select("id")
     .eq("reservation_id", reservationId)
@@ -165,7 +181,7 @@ export async function POST(req: Request) {
     return errorResponse(409, "ALREADY_CHECKED_IN", "이미 체크인된 예약입니다.");
   }
 
-  const { error: insertCheckinError } = await supabase.from("checkins").insert({
+  const { error: insertCheckinError } = await db.from("checkins").insert({
     reservation_id: reservationId,
     front_img: frontImg,
     rear_img: rearImg,
@@ -183,7 +199,7 @@ export async function POST(req: Request) {
     return errorResponse(500, "DB_ERROR", "체크인 저장 중 오류가 발생했습니다.");
   }
 
-  const { data: updatedReservation, error: updateReservationError } = await supabase
+  const { data: updatedReservation, error: updateReservationError } = await db
     .from("reservations")
     .update({ status: "CHECKED_IN" })
     .eq("id", reservationId)
@@ -193,12 +209,12 @@ export async function POST(req: Request) {
 
   if (updateReservationError) {
     console.error("RESERVATION UPDATE ERROR:", updateReservationError);
-    await rollbackCheckinInsert(reservationId);
+    await rollbackCheckinInsert(db, reservationId);
     return errorResponse(500, "DB_ERROR", "예약 상태 변경 중 오류가 발생했습니다.");
   }
 
   if (!updatedReservation) {
-    await rollbackCheckinInsert(reservationId);
+    await rollbackCheckinInsert(db, reservationId);
     return errorResponse(
       409,
       "STATUS_CONFLICT",
@@ -211,19 +227,21 @@ export async function POST(req: Request) {
     fromStatus: "CONFIRMED",
     toStatus: "CHECKED_IN",
     actorType: "USER",
+    actorUserId: auth.source === "supabase" ? auth.userId : null,
     reason: "checkin_completed",
+    client: db,
     metadata: {
       photoCount: 4,
     },
   });
 
   if (!logResult.ok && !logResult.skippedMissingTable) {
-    await supabase
+    await db
       .from("reservations")
       .update({ status: "CONFIRMED" })
       .eq("id", reservationId)
       .eq("status", "CHECKED_IN");
-    await rollbackCheckinInsert(reservationId);
+    await rollbackCheckinInsert(db, reservationId);
     return errorResponse(
       500,
       "STATUS_LOG_ERROR",

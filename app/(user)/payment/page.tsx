@@ -5,6 +5,7 @@ import { Suspense, useMemo, useState } from "react";
 
 import type { CreateReservationPayload } from "@/src/domain/types";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
+import { authFetch } from "@/src/lib/auth-fetch";
 
 const paymentMethods = [
   "신용/체크카드",
@@ -137,7 +138,7 @@ function PaymentPageContent() {
         endTime,
       };
 
-      const response = await fetch("/api/reservations", {
+      const response = await authFetch("/api/reservations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

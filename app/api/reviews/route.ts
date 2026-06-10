@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getSupabaseEnvErrorResponse, hasSupabaseEnv, supabase } from "@/src/lib/supabase";
-
-const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
+import { requireRequestUser } from "@/src/lib/auth";
+import { getSupabaseEnvErrorResponse, hasSupabaseEnv } from "@/src/lib/supabase";
 
 type ReservationStatus =
   | "CONFIRMED"
@@ -89,11 +89,16 @@ function parsePayload(payload: unknown): ReviewPayload | null {
   };
 }
 
-async function getReservation(reservationId: string) {
-  const { data: reservation, error: reservationError } = await supabase
+async function getReservation(
+  db: SupabaseClient,
+  reservationId: string,
+  userId: string,
+) {
+  const { data: reservation, error: reservationError } = await db
     .from("reservations")
     .select("id, status, bay_id")
     .eq("id", reservationId)
+    .eq("user_id", userId)
     .maybeSingle<ReservationRow>();
 
   if (reservationError) {
@@ -108,12 +113,16 @@ async function getReservation(reservationId: string) {
   return { reservation };
 }
 
-async function getReviewByReservationId(reservationId: string) {
-  const { data: review, error } = await supabase
+async function getReviewByReservationId(
+  db: SupabaseClient,
+  reservationId: string,
+  userId: string,
+) {
+  const { data: review, error } = await db
     .from("reviews")
     .select("id, rating, comment")
     .eq("reservation_id", reservationId)
-    .eq("user_id", MOCK_USER_ID)
+    .eq("user_id", userId)
     .maybeSingle<ReviewRow>();
 
   if (error) {
@@ -129,6 +138,14 @@ export async function GET(req: Request) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
   }
 
+  const authResult = await requireRequestUser(req);
+
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { auth } = authResult;
+
   const { searchParams } = new URL(req.url);
   const reservationId = searchParams.get("reservationId")?.trim();
 
@@ -136,7 +153,11 @@ export async function GET(req: Request) {
     return errorResponse(400, "INVALID_INPUT", "reservationId는 필수입니다.");
   }
 
-  const result = await getReviewByReservationId(reservationId);
+  const result = await getReviewByReservationId(
+    auth.client,
+    reservationId,
+    auth.userId,
+  );
   if ("error" in result) {
     return result.error;
   }
@@ -151,6 +172,15 @@ export async function POST(req: Request) {
   if (!hasSupabaseEnv) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
   }
+
+  const authResult = await requireRequestUser(req);
+
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { auth } = authResult;
+  const db = auth.client;
 
   let payload: unknown;
 
@@ -168,7 +198,11 @@ export async function POST(req: Request) {
 
   const { reservationId, rating, comment } = body;
 
-  const reservationResult = await getReservation(reservationId);
+  const reservationResult = await getReservation(
+    db,
+    reservationId,
+    auth.userId,
+  );
   if ("error" in reservationResult) {
     return reservationResult.error;
   }
@@ -177,7 +211,7 @@ export async function POST(req: Request) {
     return errorResponse(400, "INVALID_RESERVATION_STATUS", "완료된 예약만 후기 작성이 가능합니다.");
   }
 
-  const { data: bay, error: bayError } = await supabase
+  const { data: bay, error: bayError } = await db
     .from("bays")
     .select("id, partner_id")
     .eq("id", reservationResult.reservation.bay_id)
@@ -192,7 +226,11 @@ export async function POST(req: Request) {
     return errorResponse(404, "BAY_NOT_FOUND", "베이를 찾을 수 없습니다.");
   }
 
-  const reviewResult = await getReviewByReservationId(reservationId);
+  const reviewResult = await getReviewByReservationId(
+    db,
+    reservationId,
+    auth.userId,
+  );
   if ("error" in reviewResult) {
     return reviewResult.error;
   }
@@ -201,12 +239,12 @@ export async function POST(req: Request) {
     return errorResponse(409, "ALREADY_REVIEWED", "이미 후기를 작성한 예약입니다.");
   }
 
-  const { data: createdReview, error: insertReviewError } = await supabase
+  const { data: createdReview, error: insertReviewError } = await db
     .from("reviews")
     .insert({
       reservation_id: reservationId,
       partner_id: bay.partner_id,
-      user_id: MOCK_USER_ID,
+      user_id: auth.userId,
       rating,
       comment: comment ?? null,
     })
@@ -234,6 +272,15 @@ export async function PATCH(req: Request) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
   }
 
+  const authResult = await requireRequestUser(req);
+
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { auth } = authResult;
+  const db = auth.client;
+
   let payload: unknown;
 
   try {
@@ -249,7 +296,11 @@ export async function PATCH(req: Request) {
   }
 
   const { reservationId, rating, comment } = body;
-  const reviewResult = await getReviewByReservationId(reservationId);
+  const reviewResult = await getReviewByReservationId(
+    db,
+    reservationId,
+    auth.userId,
+  );
 
   if ("error" in reviewResult) {
     return reviewResult.error;
@@ -259,14 +310,14 @@ export async function PATCH(req: Request) {
     return errorResponse(404, "REVIEW_NOT_FOUND", "수정할 리뷰를 찾을 수 없습니다.");
   }
 
-  const { data: updatedReview, error: updateError } = await supabase
+  const { data: updatedReview, error: updateError } = await db
     .from("reviews")
     .update({
       rating,
       comment: comment ?? null,
     })
     .eq("id", reviewResult.review.id)
-    .eq("user_id", MOCK_USER_ID)
+    .eq("user_id", auth.userId)
     .select("id, rating, comment")
     .single<ReviewRow>();
 

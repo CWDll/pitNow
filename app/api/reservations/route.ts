@@ -1,15 +1,14 @@
-import type { PostgrestError } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import type { ReservationType } from "@/src/domain/types";
+import { requireRequestUser } from "@/src/lib/auth";
 import { logReservationStatusChange } from "@/src/lib/reservation-status";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
-  supabase,
 } from "@/src/lib/supabase";
 
-const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
 const HELPER_VERIFY_BASE_FEE = 5000;
 
 type ConsentMethod = "CHECKBOX" | "SIGNATURE";
@@ -254,8 +253,8 @@ function validateReservationWindow(startTime: string, endTime: string) {
   };
 }
 
-async function getBayAndPartner(bayId: string) {
-  const { data: bay, error: bayError } = await supabase
+async function getBayAndPartner(db: SupabaseClient, bayId: string) {
+  const { data: bay, error: bayError } = await db
     .from("bays")
     .select("id, partner_id")
     .eq("id", bayId)
@@ -278,7 +277,7 @@ async function getBayAndPartner(bayId: string) {
     };
   }
 
-  const { data: partner, error: partnerError } = await supabase
+  const { data: partner, error: partnerError } = await db
     .from("partners")
     .select("id, hourly_price")
     .eq("id", bay.partner_id)
@@ -306,8 +305,8 @@ async function getBayAndPartner(bayId: string) {
   return { bay, partner, hourlyPrice };
 }
 
-async function getLegalSelfTasks(taskCodes: string[]) {
-  const { data, error } = await supabase
+async function getLegalSelfTasks(db: SupabaseClient, taskCodes: string[]) {
+  const { data, error } = await db
     .from("self_maintenance_tasks")
     .select("id, code, is_legal, is_active, helper_verify_unit_fee")
     .in("code", taskCodes)
@@ -347,11 +346,12 @@ async function getLegalSelfTasks(taskCodes: string[]) {
 }
 
 async function getPartnerPackage(params: {
+  db: SupabaseClient;
   partnerId: string;
   packageId: string;
 }) {
-  const { partnerId, packageId } = params;
-  const { data, error } = await supabase
+  const { db, partnerId, packageId } = params;
+  const { data, error } = await db
     .from("partner_package_prices")
     .select(
       "labor_price, service_packages!inner(id, duration_minutes, is_active)",
@@ -466,6 +466,15 @@ export async function POST(req: Request) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
   }
 
+  const authResult = await requireRequestUser(req);
+
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { auth } = authResult;
+  const db = auth.client;
+
   let payload: unknown;
 
   try {
@@ -490,7 +499,7 @@ export async function POST(req: Request) {
     return windowResult.error;
   }
 
-  const bayResult = await getBayAndPartner(body.bayId);
+  const bayResult = await getBayAndPartner(db, body.bayId);
 
   if ("error" in bayResult) {
     return bayResult.error;
@@ -522,7 +531,7 @@ export async function POST(req: Request) {
   let packageId: string | null = null;
 
   if (body.reservationType === "SELF_SERVICE") {
-    const taskResult = await getLegalSelfTasks(body.taskIds);
+    const taskResult = await getLegalSelfTasks(db, body.taskIds);
 
     if ("error" in taskResult) {
       return taskResult.error;
@@ -539,6 +548,7 @@ export async function POST(req: Request) {
     totalPrice = durationHours * hourlyPrice + helperVerifyFee;
   } else {
     const partnerPackageResult = await getPartnerPackage({
+      db,
       partnerId,
       packageId: body.packageId ?? "",
     });
@@ -562,10 +572,10 @@ export async function POST(req: Request) {
     totalPrice = partnerPackageResult.laborPrice;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("reservations")
     .insert({
-      user_id: MOCK_USER_ID,
+      user_id: auth.userId,
       partner_id: partnerId,
       bay_id: body.bayId,
       reservation_type: body.reservationType,
@@ -607,17 +617,17 @@ export async function POST(req: Request) {
       task_id: task.id,
     }));
 
-    const { error: taskInsertError } = await supabase
+    const { error: taskInsertError } = await db
       .from("reservation_tasks")
       .insert(reservationTasks);
 
     if (taskInsertError) {
       console.error("RESERVATION TASK INSERT ERROR:", taskInsertError);
-      await supabase.from("reservations").delete().eq("id", data.id);
+      await db.from("reservations").delete().eq("id", data.id);
       return jsonError(500, "DB_ERROR", "선택 작업 저장에 실패했습니다.");
     }
 
-    const { error: agreementInsertError } = await supabase
+    const { error: agreementInsertError } = await db
       .from("self_task_agreements")
       .insert({
         reservation_id: data.id,
@@ -629,11 +639,11 @@ export async function POST(req: Request) {
 
     if (agreementInsertError) {
       console.error("AGREEMENT INSERT ERROR:", agreementInsertError);
-      await supabase
+      await db
         .from("reservation_tasks")
         .delete()
         .eq("reservation_id", data.id);
-      await supabase.from("reservations").delete().eq("id", data.id);
+      await db.from("reservations").delete().eq("id", data.id);
       return jsonError(500, "DB_ERROR", "작업 동의 정보 저장에 실패했습니다.");
     }
   }
@@ -643,7 +653,9 @@ export async function POST(req: Request) {
     fromStatus: null,
     toStatus: "CONFIRMED",
     actorType: "USER",
+    actorUserId: auth.source === "supabase" ? auth.userId : null,
     reason: "reservation_created",
+    client: db,
     metadata: {
       reservationType: body.reservationType,
       packageId,
@@ -653,7 +665,7 @@ export async function POST(req: Request) {
   });
 
   if (!logResult.ok && !logResult.skippedMissingTable) {
-    await supabase.from("reservations").delete().eq("id", data.id);
+    await db.from("reservations").delete().eq("id", data.id);
     return jsonError(
       500,
       "STATUS_LOG_ERROR",

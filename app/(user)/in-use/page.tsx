@@ -8,6 +8,7 @@ import {
   calculateRemainingTimeAt,
   formatRemainingTime,
 } from "@/src/lib/timer";
+import { authFetch } from "@/src/lib/auth-fetch";
 import type { ReservationType } from "@/src/domain/types";
 
 function parseMode(value: string | null): ReservationType {
@@ -66,7 +67,7 @@ function InUsePageContent() {
       }
 
       try {
-        const response = await fetch(`/api/reservations/${reservationId}/start`, {
+        const response = await authFetch(`/api/reservations/${reservationId}/start`, {
           method: "POST",
           cache: "no-store",
         });
@@ -165,7 +166,7 @@ function InUsePageContent() {
   }
 
   async function goCompleteDirectly() {
-    const response = await fetch("/api/checkout", {
+    const response = await authFetch("/api/checkout", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

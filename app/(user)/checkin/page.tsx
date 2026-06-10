@@ -4,6 +4,7 @@ import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import type { CheckInPayload } from "@/src/domain/types";
+import { authFetch } from "@/src/lib/auth-fetch";
 import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
 
 type PhotoField = "frontImg" | "rearImg" | "leftImg" | "rightImg";
@@ -138,7 +139,7 @@ function CheckinPageContent() {
         rightImg,
       };
 
-      const response = await fetch("/api/checkin", {
+      const response = await authFetch("/api/checkin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

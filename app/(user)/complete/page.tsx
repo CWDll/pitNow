@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import type { CreateReviewPayload } from "@/src/domain/types";
+import { authFetch } from "@/src/lib/auth-fetch";
 
 interface ReviewApiError {
   error?: string | { message?: string };
@@ -78,7 +79,7 @@ function CompletePageContent() {
         comment: reviewText.trim() || undefined,
       };
 
-      const response = await fetch("/api/reviews", {
+      const response = await authFetch("/api/reviews", {
         method: hasExistingReview ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
@@ -118,7 +119,7 @@ function CompletePageContent() {
       }
 
       try {
-        const response = await fetch(
+        const response = await authFetch(
           `/api/reviews?reservationId=${encodeURIComponent(reservationId)}`,
           {
             method: "GET",

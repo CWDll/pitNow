@@ -5,7 +5,8 @@
 - Next.js App Router
 - Route Handler based API
 - Supabase DB
-- Mock `user_id` allowed in MVP
+- MVP API uses Supabase Auth user id when `Authorization: Bearer <access_token>` is provided.
+- Local development may use `PITNOW_DEV_USER_ID` fallback unless `PITNOW_DISABLE_DEV_AUTH_FALLBACK=true`.
 - All responses are JSON
 - All status transitions must be explicit
 - Reservation conflicts must be rejected by the DB layer
@@ -47,7 +48,8 @@ endTime: string (ISO)
 • SELF_SERVICE에서 helperVerifyRequested=true 이면 helperVerifyFee 계산
 (기본 5,000 + 선택 작업별 단가 합산)
 • helperVerifyFee는 클라이언트 입력을 신뢰하지 않고 서버에서 계산
-• user_id는 MOCK_USER_ID 사용
+• user_id는 Supabase Auth `auth.users.id` 사용
+• 로컬 개발 fallback은 `PITNOW_DEV_USER_ID` 기준
 • status = CONFIRMED
 • SELF_SERVICE total_price = 파트너 시간요금 × 예약시간 + helperVerifyFee
 • SHOP_SERVICE total_price = 파트너 패키지 가격

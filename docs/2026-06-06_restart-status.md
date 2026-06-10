@@ -451,5 +451,23 @@ IN_USE -> COMPLETED
 
 - Admin 인증/권한 분리.
 - 예약 취소/강제 완료/노쇼 처리 같은 운영 액션.
+
+## 17. 2026-06-11 Auth/RLS 1차 구현
+
+Auth/RLS 기반 작업을 시작했다.
+
+- `src/lib/auth.ts` 추가: API 요청에서 Supabase Bearer token을 검증하고 `auth.users.id`를 사용자 기준으로 사용.
+- 로컬 개발에서는 `PITNOW_DEV_USER_ID` fallback을 허용. production에서는 인증 없는 mutation 거부.
+- `src/lib/auth-fetch.ts` 추가: 클라이언트 API 호출 시 로그인 세션 access token을 자동 첨부.
+- 예약 생성/체크인/이용 시작/체크아웃/리뷰 API를 사용자 소유 예약 기준으로 전환.
+- `/admin-login` 추가 및 `/admin` layout 접근을 `PITNOW_ADMIN_ACCESS_TOKEN` 쿠키 로그인으로 보호.
+- Admin 조회 helper는 RLS 이후를 대비해 `SUPABASE_SERVICE_ROLE_KEY` 기반 서버 전용 client를 사용.
+- `db/migrations/20260611_auth_rls_foundation.sql` 추가.
+
+주의:
+
+- 원격 Supabase에는 `db/migrations/20260611_auth_rls_foundation.sql` 적용이 필요하다.
+- RLS 적용 후 Admin 콘솔 데이터를 보려면 `SUPABASE_SERVICE_ROLE_KEY` 환경변수가 필요하다.
+- Storage bucket은 아직 public read를 유지한다. 운영 전 private bucket + signed read URL 전환을 권장한다.
 - 패키지 가격 편집.
 - 정산 상세 drill-down.

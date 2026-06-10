@@ -236,3 +236,23 @@ Rules:
 
 Reason:
 MVP 운영자는 예약 루프의 상태와 정산/패키지 데이터를 빠르게 확인해야 하지만, 인증/권한 없이 쓰기 기능을 먼저 넣으면 운영 리스크가 커진다. 결제 연동 전 단계에서는 read-only 모니터링 콘솔로 범위를 제한한다.
+
+---
+
+## 2026-06-11
+
+Decision:
+Auth/RLS 1차 기준은 Supabase Auth user id를 예약 소유권의 기준으로 삼고, 로컬 개발에만 `PITNOW_DEV_USER_ID` fallback을 허용한다.
+
+Rules:
+
+- 사용자 mutation API는 `Authorization: Bearer <access_token>`을 우선 사용한다.
+- 로그인 토큰이 없고 production이 아니면 `PITNOW_DEV_USER_ID` 또는 기본 dev user id로 개발 테스트를 허용한다.
+- production에서는 인증 없는 사용자 mutation을 거부한다.
+- `/admin`은 사용자 모바일 Auth와 분리하고 `PITNOW_ADMIN_ACCESS_TOKEN` 쿠키 로그인으로 잠근다.
+- RLS 적용 후 admin 조회는 `SUPABASE_SERVICE_ROLE_KEY` 서버 전용 client를 사용한다.
+- Storage `reservation-photos` anonymous insert policy는 제거하고 authenticated owner insert policy로 전환한다.
+- MVP에서는 사진 URL 표시 호환성을 위해 bucket public read는 유지한다.
+
+Reason:
+결제 연동 전에 예약/사진/상태/정산 데이터의 소유권 기준을 먼저 고정해야 이후 결제 승인, 환불, 관리자 액션이 같은 사용자 모델 위에서 안전하게 확장된다.

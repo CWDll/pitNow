@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { requireRequestUser } from "@/src/lib/auth";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
-  supabase,
 } from "@/src/lib/supabase";
 import { logReservationStatusChange } from "@/src/lib/reservation-status";
 
@@ -244,8 +245,11 @@ function calculateExtraFee(params: {
   return Number(rawExtraFee.toFixed(2));
 }
 
-async function rollbackCheckoutInsert(reservationId: string): Promise<void> {
-  const { error } = await supabase
+async function rollbackCheckoutInsert(
+  db: SupabaseClient,
+  reservationId: string,
+): Promise<void> {
+  const { error } = await db
     .from("checkouts")
     .delete()
     .eq("reservation_id", reservationId);
@@ -256,6 +260,7 @@ async function rollbackCheckoutInsert(reservationId: string): Promise<void> {
 }
 
 async function calculateCheckoutHelperVerifyFee(params: {
+  db: SupabaseClient;
   reservationId: string;
   reservationType: ReservationType;
   alreadyRequested: boolean;
@@ -263,6 +268,7 @@ async function calculateCheckoutHelperVerifyFee(params: {
   requestedAtCheckout: boolean;
 }): Promise<number | null> {
   const {
+    db,
     reservationId,
     reservationType,
     alreadyRequested,
@@ -282,7 +288,7 @@ async function calculateCheckoutHelperVerifyFee(params: {
     return 0;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("reservation_tasks")
     .select("self_maintenance_tasks!inner(helper_verify_unit_fee)")
     .eq("reservation_id", reservationId)
@@ -305,6 +311,15 @@ export async function POST(req: Request) {
   if (!hasSupabaseEnv) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
   }
+
+  const authResult = await requireRequestUser(req);
+
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { auth } = authResult;
+  const db = auth.client;
 
   let payload: unknown;
 
@@ -330,12 +345,13 @@ export async function POST(req: Request) {
 
   const { reservationId } = body;
 
-  const { data: reservation, error: reservationError } = await supabase
+  const { data: reservation, error: reservationError } = await db
     .from("reservations")
     .select(
       "id, status, reservation_type, start_time, end_time, reserved_end_time, blocked_until, total_price, selected_task_count, helper_verify_requested, helper_verify_fee",
     )
     .eq("id", reservationId)
+    .eq("user_id", auth.userId)
     .maybeSingle<ReservationRow>();
 
   if (reservationError) {
@@ -359,7 +375,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: existingCheckout, error: checkoutLookupError } = await supabase
+  const { data: existingCheckout, error: checkoutLookupError } = await db
     .from("checkouts")
     .select("id")
     .eq("reservation_id", reservationId)
@@ -431,6 +447,7 @@ export async function POST(req: Request) {
   }
 
   const helperVerifyFee = await calculateCheckoutHelperVerifyFee({
+    db,
     reservationId,
     reservationType,
     alreadyRequested: Boolean(reservation.helper_verify_requested),
@@ -470,7 +487,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { error: insertCheckoutError } = await supabase
+  const { error: insertCheckoutError } = await db
     .from("checkouts")
     .insert({
       reservation_id: reservationId,
@@ -505,7 +522,7 @@ export async function POST(req: Request) {
   }
 
   const { data: updatedReservation, error: updateReservationError } =
-    await supabase
+    await db
       .from("reservations")
       .update({ status: "COMPLETED" })
       .eq("id", reservationId)
@@ -515,7 +532,7 @@ export async function POST(req: Request) {
 
   if (updateReservationError) {
     console.error("RESERVATION UPDATE ERROR:", updateReservationError);
-    await rollbackCheckoutInsert(reservationId);
+    await rollbackCheckoutInsert(db, reservationId);
     return errorResponse(
       500,
       "DB_ERROR",
@@ -524,7 +541,7 @@ export async function POST(req: Request) {
   }
 
   if (!updatedReservation) {
-    await rollbackCheckoutInsert(reservationId);
+    await rollbackCheckoutInsert(db, reservationId);
     return errorResponse(
       409,
       "STATUS_CONFLICT",
@@ -537,7 +554,9 @@ export async function POST(req: Request) {
     fromStatus: reservation.status,
     toStatus: "COMPLETED",
     actorType: "USER",
+    actorUserId: auth.source === "supabase" ? auth.userId : null,
     reason: "checkout_completed",
+    client: db,
     metadata: {
       basePrice,
       extraFee,
@@ -550,12 +569,12 @@ export async function POST(req: Request) {
   });
 
   if (!logResult.ok && !logResult.skippedMissingTable) {
-    await supabase
+    await db
       .from("reservations")
       .update({ status: reservation.status })
       .eq("id", reservationId)
       .eq("status", "COMPLETED");
-    await rollbackCheckoutInsert(reservationId);
+    await rollbackCheckoutInsert(db, reservationId);
     return errorResponse(
       500,
       "STATUS_LOG_ERROR",

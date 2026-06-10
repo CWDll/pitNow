@@ -1,5 +1,6 @@
 import type { ReservationStatus } from "@/src/domain/types";
 import { supabase } from "@/src/lib/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ReservationStatusActor = "SYSTEM" | "USER" | "PARTNER" | "ADMIN";
 
@@ -10,6 +11,8 @@ interface LogReservationStatusChangeParams {
   actorType?: ReservationStatusActor;
   reason?: string;
   metadata?: Record<string, unknown>;
+  actorUserId?: string | null;
+  client?: SupabaseClient;
 }
 
 export interface StatusLogResult {
@@ -25,15 +28,42 @@ export async function logReservationStatusChange({
   actorType = "SYSTEM",
   reason,
   metadata = {},
+  actorUserId = null,
+  client = supabase,
 }: LogReservationStatusChangeParams): Promise<StatusLogResult> {
-  const { error } = await supabase.from("reservation_status_logs").insert({
+  const insertPayload = {
     reservation_id: reservationId,
     from_status: fromStatus,
     to_status: toStatus,
     actor_type: actorType,
     reason: reason ?? null,
     metadata,
+  };
+
+  const { error } = await client.from("reservation_status_logs").insert({
+    ...insertPayload,
+    actor_user_id: actorUserId,
   });
+
+  if (
+    error?.code === "PGRST204" &&
+    error.message.includes("actor_user_id")
+  ) {
+    const { error: retryError } = await client
+      .from("reservation_status_logs")
+      .insert(insertPayload);
+
+    if (!retryError) {
+      return { ok: true, skippedMissingTable: false };
+    }
+
+    console.error("RESERVATION STATUS LOG RETRY ERROR:", retryError);
+    return {
+      ok: false,
+      skippedMissingTable: false,
+      message: retryError.message,
+    };
+  }
 
   if (!error) {
     return { ok: true, skippedMissingTable: false };

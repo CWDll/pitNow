@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
+import { authFetch } from "@/src/lib/auth-fetch";
 import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
 
 interface CheckoutApiError {
@@ -99,7 +100,7 @@ function CheckoutPageContent() {
         }),
       ]);
 
-      const response = await fetch("/api/checkout", {
+      const response = await authFetch("/api/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

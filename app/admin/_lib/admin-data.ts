@@ -1,4 +1,4 @@
-import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
+import { hasSupabaseServiceRoleEnv, supabaseAdmin } from "@/src/lib/supabase";
 
 export type AdminReservationStatus =
   | "CONFIRMED"
@@ -122,7 +122,11 @@ function firstOrSelf<T>(value: T | T[] | null): T | null {
 }
 
 async function getPartnerMap() {
-  const { data, error } = await supabase
+  if (!supabaseAdmin) {
+    return new Map<string, string>();
+  }
+
+  const { data, error } = await supabaseAdmin
     .from("partners")
     .select("id, name")
     .returns<PartnerRow[]>();
@@ -136,7 +140,11 @@ async function getPartnerMap() {
 }
 
 async function getBayMap() {
-  const { data, error } = await supabase
+  if (!supabaseAdmin) {
+    return new Map<string, string>();
+  }
+
+  const { data, error } = await supabaseAdmin
     .from("bays")
     .select("id, name")
     .returns<BayRow[]>();
@@ -150,14 +158,14 @@ async function getBayMap() {
 }
 
 export async function getAdminReservations(): Promise<AdminReservationItem[]> {
-  if (!hasSupabaseEnv) {
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return [];
   }
 
   const [partnerMap, bayMap, reservationResult] = await Promise.all([
     getPartnerMap(),
     getBayMap(),
-    supabase
+    supabaseAdmin
       .from("reservations")
       .select(
         "id, partner_id, bay_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
@@ -192,13 +200,13 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
 }
 
 export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {
-  if (!hasSupabaseEnv) {
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return [];
   }
 
   const [partnerMap, reservationResult, checkoutResult] = await Promise.all([
     getPartnerMap(),
-    supabase
+    supabaseAdmin
       .from("reservations")
       .select("id, partner_id, reservation_type, status")
       .returns<
@@ -209,7 +217,7 @@ export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {
           status: AdminReservationStatus;
         }>
       >(),
-    supabase
+    supabaseAdmin
       .from("checkouts")
       .select(
         "reservation_id, base_price, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, completed_at",
@@ -259,11 +267,11 @@ export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {
 }
 
 export async function getAdminPackages(): Promise<AdminPackageItem[]> {
-  if (!hasSupabaseEnv) {
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return [];
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("partner_package_prices")
     .select(
       "partner_id, labor_price, is_active, partners!inner(name), service_packages!inner(name, duration_minutes, is_active)",

@@ -259,8 +259,10 @@ Paths:
 
 Operational note:
 
-- Current MVP uses anon-key upload policy because Auth/RLS is not implemented yet.
-- Before production, move to Auth/RLS or server-only signed upload URLs.
+- 2026-06-11 Auth/RLS 1차 기준으로 anonymous upload policy is removed.
+- Authenticated users may upload only under `checkin/{reservation_id}/...` or `checkout/{reservation_id}/...` for their own reservation.
+- The bucket remains public-read in the current MVP so existing public URL display keeps working.
+- Before production, prefer private bucket + signed read URLs for stronger evidence protection.
 
 ---
 
@@ -279,6 +281,28 @@ create table reviews (
 
 create index idx_reviews_partner on reviews(partner_id);
 create index idx_reviews_user on reviews(user_id);
+
+⸻
+
+Auth / RLS foundation
+
+```sql
+-- See db/migrations/20260611_auth_rls_foundation.sql
+
+-- User-owned tables use auth.uid():
+-- reservations
+-- reservation_tasks
+-- self_task_agreements
+-- checkins
+-- checkouts
+-- reservation_status_logs
+-- reviews insert/update
+
+-- Public catalog read remains available:
+-- partners, bays, service_packages, partner_package_prices, self_maintenance_tasks
+
+-- Admin read console should use SUPABASE_SERVICE_ROLE_KEY server-side.
+```
 
 ⸻
 

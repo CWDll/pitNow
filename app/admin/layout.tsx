@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+
+import { hasAdminAccess } from "@/src/lib/admin-auth";
 
 const navItems = [
   { href: "/admin", label: "Overview" },
@@ -8,7 +11,13 @@ const navItems = [
   { href: "/admin/packages", label: "Packages" },
 ] as const;
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const canAccessAdmin = await hasAdminAccess();
+
+  if (!canAccessAdmin) {
+    redirect("/admin-login");
+  }
+
   return (
     <div className="min-h-dvh bg-slate-950 text-slate-100">
       <div className="mx-auto flex min-h-dvh w-full min-w-[1024px] max-w-[1440px]">
@@ -37,6 +46,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <div className="mt-10 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm text-cyan-50">
             Desktop only console. User mobile layout is intentionally not shared.
           </div>
+
+          <Link
+            href="/admin/logout"
+            className="mt-4 block rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
+          >
+            Logout
+          </Link>
         </aside>
 
         <main className="flex-1 px-8 py-8">{children}</main>

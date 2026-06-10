@@ -1,9 +1,8 @@
 import { garageList, getShopPackageById } from "@/app/(user)/_data/mock-garages";
+import { getDevelopmentUserId } from "@/src/lib/auth";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 import ReservationListClient, { type ReservationListItem } from "./reservation-list-client";
-
-const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 type ReservationStatus = "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
@@ -41,10 +40,16 @@ async function getReservationItems(): Promise<ReservationListItem[]> {
     return [];
   }
 
+  const userId = getDevelopmentUserId();
+
+  if (!userId) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from("reservations")
     .select("id, partner_id, bay_id, reservation_type, package_id, start_time, end_time, reserved_end_time, status, total_price")
-    .eq("user_id", MOCK_USER_ID)
+    .eq("user_id", userId)
     .order("start_time", { ascending: false })
     .returns<ReservationRow[]>();
 

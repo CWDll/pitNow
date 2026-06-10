@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
 import type { ReservationStatus, ReservationType } from "@/src/domain/types";
+import { requireRequestUser } from "@/src/lib/auth";
 import { logReservationStatusChange } from "@/src/lib/reservation-status";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
-  supabase,
 } from "@/src/lib/supabase";
 
 interface Context {
@@ -40,10 +40,19 @@ function getExpectedFromStatus(
   return reservationType === "SHOP_SERVICE" ? "CONFIRMED" : "CHECKED_IN";
 }
 
-export async function POST(_: Request, context: Context) {
+export async function POST(req: Request, context: Context) {
   if (!hasSupabaseEnv) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
   }
+
+  const authResult = await requireRequestUser(req);
+
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const { auth } = authResult;
+  const db = auth.client;
 
   const { id } = await context.params;
   const reservationId = id.trim();
@@ -52,10 +61,11 @@ export async function POST(_: Request, context: Context) {
     return errorResponse(400, "INVALID_RESERVATION_ID", "예약 ID가 필요합니다.");
   }
 
-  const { data: reservation, error: reservationError } = await supabase
+  const { data: reservation, error: reservationError } = await db
     .from("reservations")
     .select("id, status, reservation_type, start_time, end_time, total_price")
     .eq("id", reservationId)
+    .eq("user_id", auth.userId)
     .maybeSingle<ReservationRow>();
 
   if (reservationError) {
@@ -92,7 +102,7 @@ export async function POST(_: Request, context: Context) {
     );
   }
 
-  const { data: updatedReservation, error: updateError } = await supabase
+  const { data: updatedReservation, error: updateError } = await db
     .from("reservations")
     .update({ status: "IN_USE" })
     .eq("id", reservationId)
@@ -118,14 +128,16 @@ export async function POST(_: Request, context: Context) {
     fromStatus: expectedFromStatus,
     toStatus: "IN_USE",
     actorType: reservation.reservation_type === "SHOP_SERVICE" ? "PARTNER" : "USER",
+    actorUserId: auth.source === "supabase" ? auth.userId : null,
     reason: "usage_started",
+    client: db,
     metadata: {
       reservationType: reservation.reservation_type,
     },
   });
 
   if (!logResult.ok && !logResult.skippedMissingTable) {
-    await supabase
+    await db
       .from("reservations")
       .update({ status: expectedFromStatus })
       .eq("id", reservationId)
