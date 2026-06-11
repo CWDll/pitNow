@@ -683,3 +683,27 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - Admin token 없이 동일 URL 요청 시 `/admin-login` 307 리다이렉트 확인.
 - `npm run lint` 성공.
 - `npm run build` 성공.
+
+## 28. 2026-06-11 Admin 예약 취소 1차 액션
+
+Admin에서 `CONFIRMED` 예약을 `CANCELLED`로 변경하는 1차 운영 액션을 추가했다.
+
+- `POST /api/admin/reservations/:id/cancel` 추가.
+- Admin token cookie 검증 후 service role client로 상태를 변경한다.
+- `CONFIRMED` 상태에서만 취소 가능하다.
+- 취소는 `transitionReservationStatus()`를 사용해 상태 업데이트와 로그 저장을 함께 처리한다.
+- 취소 사유는 `reservation_status_logs.metadata.reason`에 저장한다.
+- `/admin/reservations/:id`에 예약 취소 form을 추가했다.
+
+검증:
+
+- Admin token 없이 취소 API 호출 시 `ADMIN_AUTH_REQUIRED` 응답 확인.
+- 완료된 seed 예약 취소 시도 시 `INVALID_RESERVATION_STATUS` 응답 확인.
+- Admin token 쿠키 포함 `/admin/reservations/:id` 200 응답 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.
+
+주의:
+
+- 실제 `CONFIRMED` 예약 취소 성공 케이스는 원격 DB 상태를 변경하므로 자동 검증에서 실행하지 않았다.
+- `CHECKED_IN`, `IN_USE`, `COMPLETED` 취소/환불은 결제 정책 확정 후 별도 액션으로 추가한다.

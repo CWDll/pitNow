@@ -8,6 +8,7 @@ import {
   type AdminReservationStatus,
   type AdminReservationType,
 } from "../../_lib/admin-data";
+import CancelReservationForm from "./cancel-reservation-form";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -133,6 +134,14 @@ export default async function AdminReservationDetailPage(props: PageProps) {
           </div>
         ))}
       </div>
+
+      {reservation.status === "CONFIRMED" ? (
+        <CancelReservationForm reservationId={reservation.id} />
+      ) : reservation.status === "CANCELLED" ? (
+        <div className="rounded-3xl border border-slate-400/20 bg-slate-400/10 p-5 text-sm text-slate-300">
+          이 예약은 이미 취소되었습니다. 상태 전환 로그에서 취소 사유를 확인할 수 있습니다.
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">

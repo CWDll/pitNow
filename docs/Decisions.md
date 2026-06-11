@@ -519,3 +519,22 @@ Rules:
 
 Reason:
 MVP 운영에서 분쟁/누락 확인은 “예약 상태, 증적 사진, 체크리스트, 정산 금액, 상태 로그”를 한 번에 보는 능력이 중요하다. 사용자에게는 완료 후 확인 가능한 영수증을 제공하고, 운영자에게는 동일한 DB row 기반의 증적 drill-down을 제공한다.
+
+---
+
+## 2026-06-11
+
+Decision:
+Admin 예약 취소 1차 액션은 `CONFIRMED -> CANCELLED`만 허용한다.
+
+Rules:
+
+- Admin 취소 API는 `POST /api/admin/reservations/:id/cancel`로 제공한다.
+- Admin token cookie가 없으면 401을 반환한다.
+- `SUPABASE_SERVICE_ROLE_KEY`가 없으면 503을 반환한다.
+- `CONFIRMED` 상태 예약만 취소할 수 있다.
+- 취소 시 `transitionReservationStatus()`를 사용해 상태 변경과 `reservation_status_logs` 기록을 함께 처리한다.
+- 취소 사유는 상태 로그 metadata에 저장한다.
+
+Reason:
+MVP 운영에서 가장 위험이 낮고 필요한 수동 개입은 확정 예약 취소다. 체크인/이용중/완료 예약 취소는 환불, 점유, 정산 영향이 있어 별도 정책 확정 전에는 막는다.
