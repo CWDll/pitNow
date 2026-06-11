@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import type { ReservationStatus, ReservationType } from "@/src/domain/types";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
+import { requireClientSession } from "@/src/lib/client-auth";
 
 interface ReservationDetail {
   id: string;
@@ -85,6 +86,11 @@ function ReceiptPageContent() {
       if (!reservationId) {
         setIsLoading(false);
         setError("영수증을 확인할 예약 정보가 없습니다.");
+        return;
+      }
+
+      const hasSession = await requireClientSession();
+      if (!hasSession) {
         return;
       }
 
