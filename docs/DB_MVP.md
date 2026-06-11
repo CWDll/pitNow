@@ -28,6 +28,7 @@ create table partners (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   address text not null,
+  hourly_price numeric not null check (hourly_price > 0),
   lat float8,
   lng float8,
   created_at timestamptz default now()

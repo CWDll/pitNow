@@ -347,6 +347,13 @@ function PartnerSchedulePageContent() {
     bookingMode === "PACKAGE"
       ? hasSelection && selectedBlocks === packageDurationBlocks
       : hasSelection && meetsMinimum;
+  const hasValidHourlyPrice =
+    bookingMode === "PACKAGE" ||
+    Boolean(
+      safeGarage &&
+        Number.isFinite(safeGarage.hourlyPrice) &&
+        safeGarage.hourlyPrice > 0,
+    );
 
   function handleWeekShift(daysToMove: number) {
     setSelectedDate((prev) =>
@@ -466,7 +473,13 @@ function PartnerSchedulePageContent() {
   }
 
   function goNextPage() {
-    if (!canProceed || !startTime || !endTime || !blockedUntilTime) {
+    if (
+      !canProceed ||
+      !hasValidHourlyPrice ||
+      !startTime ||
+      !endTime ||
+      !blockedUntilTime
+    ) {
       return;
     }
 
@@ -741,10 +754,14 @@ function PartnerSchedulePageContent() {
         <button
           type="button"
           onClick={goNextPage}
-          disabled={!canProceed}
+          disabled={!canProceed || !hasValidHourlyPrice}
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
         >
-          {bookingMode === "PACKAGE" ? "결제로 이동" : "안전 동의"}
+          {!hasValidHourlyPrice
+            ? "매장 요금 정보가 필요합니다"
+            : bookingMode === "PACKAGE"
+              ? "결제로 이동"
+              : "안전 동의"}
         </button>
       </div>
     </section>

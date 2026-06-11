@@ -57,6 +57,7 @@ export async function getPartnerProfileById(
   }
 
   const bayIds = (bays ?? []).map((bay) => bay.id);
+  const hourlyPrice = Number(partner.hourly_price);
 
   return {
     id: partner.id,
@@ -64,7 +65,7 @@ export async function getPartnerProfileById(
     address: partner.address,
     hours: partner.hours ?? "운영시간 정보 준비중",
     phone: partner.phone ?? "전화번호 정보 준비중",
-    hourlyPrice: Number(partner.hourly_price ?? 0),
+    hourlyPrice: Number.isFinite(hourlyPrice) ? hourlyPrice : 0,
     bayIds,
     bayCount: bayIds.length,
   };
