@@ -28,6 +28,7 @@ export interface AdminReservationRow {
 }
 
 export interface AdminCheckoutRow {
+  id?: string;
   reservation_id: string;
   base_price: number | string;
   extra_fee: number | string;
@@ -37,6 +38,8 @@ export interface AdminCheckoutRow {
   tool_check_completed: boolean;
   cleaning_completed: boolean;
   waste_disposal_completed: boolean;
+  checkout_photo_1?: string | null;
+  checkout_photo_2?: string | null;
   completed_at: string;
 }
 
@@ -55,6 +58,27 @@ interface VehicleRow {
   plate_number: string;
   model: string;
   year: number;
+}
+
+interface AdminCheckinRow {
+  reservation_id: string;
+  front_img: string;
+  rear_img: string;
+  left_img: string;
+  right_img: string;
+  checked_in_at: string;
+}
+
+interface AdminStatusLogRow {
+  id: string;
+  reservation_id: string;
+  from_status: AdminReservationStatus | null;
+  to_status: AdminReservationStatus;
+  actor_type: "SYSTEM" | "USER" | "PARTNER" | "ADMIN";
+  actor_user_id?: string | null;
+  reason: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
 }
 
 interface PartnerPackagePriceRow {
@@ -116,6 +140,40 @@ export interface AdminPackageItem {
   durationMinutes: number;
   laborPrice: number;
   isActive: boolean;
+}
+
+export interface AdminReservationDetail {
+  reservation: AdminReservationItem;
+  checkin: {
+    frontImg: string;
+    rearImg: string;
+    leftImg: string;
+    rightImg: string;
+    checkedInAt: string;
+  } | null;
+  checkout: {
+    basePrice: number;
+    extraFee: number;
+    helperVerifyRequested: boolean;
+    helperVerifyFee: number;
+    totalSettlement: number;
+    toolCheckCompleted: boolean;
+    cleaningCompleted: boolean;
+    wasteDisposalCompleted: boolean;
+    checkoutPhoto1: string | null;
+    checkoutPhoto2: string | null;
+    completedAt: string;
+  } | null;
+  statusLogs: Array<{
+    id: string;
+    fromStatus: AdminReservationStatus | null;
+    toStatus: AdminReservationStatus;
+    actorType: "SYSTEM" | "USER" | "PARTNER" | "ADMIN";
+    actorUserId: string | null;
+    reason: string | null;
+    metadata: Record<string, unknown>;
+    createdAt: string;
+  }>;
 }
 
 function toNumber(value: number | string | null | undefined): number {
@@ -258,6 +316,132 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
     helperVerifyFee: toNumber(reservation.helper_verify_fee),
     createdAt: reservation.created_at,
   }));
+}
+
+export async function getAdminReservationDetail(
+  reservationId: string,
+): Promise<AdminReservationDetail | null> {
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
+    return null;
+  }
+
+  const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all([
+    getPartnerMap(),
+    getBayMap(),
+    getVehicleMap(),
+    supabaseAdmin
+      .from("reservations")
+      .select(
+        "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
+      )
+      .eq("id", reservationId)
+      .maybeSingle<AdminReservationRow>(),
+  ]);
+
+  if (reservationResult.error) {
+    console.error("ADMIN RESERVATION DETAIL LOOKUP ERROR:", reservationResult.error);
+    return null;
+  }
+
+  const reservation = reservationResult.data;
+
+  if (!reservation) {
+    return null;
+  }
+
+  const [checkinResult, checkoutResult, statusLogsResult] = await Promise.all([
+    supabaseAdmin
+      .from("checkins")
+      .select(
+        "reservation_id, front_img, rear_img, left_img, right_img, checked_in_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .maybeSingle<AdminCheckinRow>(),
+    supabaseAdmin
+      .from("checkouts")
+      .select(
+        "id, reservation_id, base_price, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, checkout_photo_1, checkout_photo_2, completed_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .maybeSingle<AdminCheckoutRow>(),
+    supabaseAdmin
+      .from("reservation_status_logs")
+      .select(
+        "id, reservation_id, from_status, to_status, actor_type, actor_user_id, reason, metadata, created_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .order("created_at", { ascending: true })
+      .returns<AdminStatusLogRow[]>(),
+  ]);
+
+  if (checkinResult.error) {
+    console.error("ADMIN CHECKIN DETAIL LOOKUP ERROR:", checkinResult.error);
+  }
+
+  if (checkoutResult.error) {
+    console.error("ADMIN CHECKOUT DETAIL LOOKUP ERROR:", checkoutResult.error);
+  }
+
+  if (statusLogsResult.error) {
+    console.error("ADMIN STATUS LOG DETAIL LOOKUP ERROR:", statusLogsResult.error);
+  }
+
+  return {
+    reservation: {
+      id: reservation.id,
+      partnerName: partnerMap.get(reservation.partner_id) ?? "Unknown partner",
+      bayName: reservation.bay_id
+        ? bayMap.get(reservation.bay_id) ?? "Unknown bay"
+        : "-",
+      vehicleLabel: reservation.vehicle_id
+        ? vehicleMap.get(reservation.vehicle_id) ?? "Unknown vehicle"
+        : "-",
+      reservationType: reservation.reservation_type,
+      packageId: reservation.package_id,
+      startTime: reservation.start_time,
+      endTime: reservation.end_time,
+      blockedUntil: reservation.blocked_until,
+      status: reservation.status,
+      totalPrice: toNumber(reservation.total_price),
+      helperVerifyRequested: reservation.helper_verify_requested,
+      helperVerifyFee: toNumber(reservation.helper_verify_fee),
+      createdAt: reservation.created_at,
+    },
+    checkin: checkinResult.data
+      ? {
+          frontImg: checkinResult.data.front_img,
+          rearImg: checkinResult.data.rear_img,
+          leftImg: checkinResult.data.left_img,
+          rightImg: checkinResult.data.right_img,
+          checkedInAt: checkinResult.data.checked_in_at,
+        }
+      : null,
+    checkout: checkoutResult.data
+      ? {
+          basePrice: toNumber(checkoutResult.data.base_price),
+          extraFee: toNumber(checkoutResult.data.extra_fee),
+          helperVerifyRequested: checkoutResult.data.helper_verify_requested,
+          helperVerifyFee: toNumber(checkoutResult.data.helper_verify_fee),
+          totalSettlement: toNumber(checkoutResult.data.total_settlement),
+          toolCheckCompleted: checkoutResult.data.tool_check_completed,
+          cleaningCompleted: checkoutResult.data.cleaning_completed,
+          wasteDisposalCompleted: checkoutResult.data.waste_disposal_completed,
+          checkoutPhoto1: checkoutResult.data.checkout_photo_1 ?? null,
+          checkoutPhoto2: checkoutResult.data.checkout_photo_2 ?? null,
+          completedAt: checkoutResult.data.completed_at,
+        }
+      : null,
+    statusLogs: (statusLogsResult.data ?? []).map((log) => ({
+      id: log.id,
+      fromStatus: log.from_status,
+      toStatus: log.to_status,
+      actorType: log.actor_type,
+      actorUserId: log.actor_user_id ?? null,
+      reason: log.reason,
+      metadata: log.metadata ?? {},
+      createdAt: log.created_at,
+    })),
+  };
 }
 
 export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {

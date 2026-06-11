@@ -5,6 +5,7 @@ import {
   type AdminReservationStatus,
   type AdminReservationType,
 } from "../_lib/admin-data";
+import Link from "next/link";
 
 function statusClass(status: AdminReservationStatus): string {
   if (status === "CONFIRMED") {
@@ -92,7 +93,12 @@ export default async function AdminReservationsPage() {
                     {formatAdminCurrency(reservation.totalPrice)}
                   </td>
                   <td className="max-w-48 truncate px-4 py-4 font-mono text-xs text-slate-400">
-                    {reservation.id}
+                    <Link
+                      href={`/admin/reservations/${reservation.id}`}
+                      className="text-cyan-300 hover:text-cyan-200"
+                    >
+                      {reservation.id}
+                    </Link>
                   </td>
                 </tr>
               ))

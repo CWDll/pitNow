@@ -3,6 +3,7 @@ import {
   formatAdminDateTime,
   getAdminSettlements,
 } from "../_lib/admin-data";
+import Link from "next/link";
 
 export default async function AdminSettlementPage() {
   const settlements = await getAdminSettlements();
@@ -65,7 +66,8 @@ export default async function AdminSettlementPage() {
                     {formatAdminCurrency(settlement.totalSettlement)}
                   </td>
                   <td className="px-4 py-4">
-                    <span
+                    <Link
+                      href={`/admin/reservations/${settlement.reservationId}`}
                       className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
                         settlement.evidenceComplete
                           ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30"
@@ -73,7 +75,7 @@ export default async function AdminSettlementPage() {
                       }`}
                     >
                       {settlement.evidenceComplete ? "Complete" : "Review"}
-                    </span>
+                    </Link>
                   </td>
                 </tr>
               ))

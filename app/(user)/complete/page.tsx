@@ -498,12 +498,12 @@ function CompletePageContent() {
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700"
+        <Link
+          href={`/receipt?reservationId=${encodeURIComponent(reservationId)}`}
+          className="rounded-2xl bg-zinc-100 py-3 text-center text-lg font-medium text-zinc-700"
         >
           영수증
-        </button>
+        </Link>
         <Link
           href="/"
           className="rounded-2xl bg-blue-600 py-3 text-center text-lg font-semibold text-white"

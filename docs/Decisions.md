@@ -447,3 +447,21 @@ Rules:
 
 Reason:
 예약 내역이 mock garage/package 데이터를 참조하면 실제 Supabase seed나 운영 데이터와 이름이 어긋날 수 있다. 목록부터 DB 원천을 사용해야 예약 상세, 체크인, 체크아웃, 완료 화면의 hydrate 전략과 일관된다.
+
+---
+
+## 2026-06-11
+
+Decision:
+사용자 영수증과 Admin 예약 drill-down은 예약/체크아웃 DB row를 원천으로 표시한다.
+
+Rules:
+
+- 사용자 영수증은 `/receipt?reservationId=...`에서 예약 상세 API와 체크아웃 상세 API를 함께 hydrate한다.
+- 완료 화면의 영수증 버튼은 `/receipt`로 연결한다.
+- Admin 예약 목록과 정산 목록은 `/admin/reservations/:id` 상세로 진입할 수 있어야 한다.
+- Admin 상세는 예약 기본 정보, 체크인 사진 4장, 체크아웃 체크리스트, 체크아웃 사진 2장, 정산 breakdown, 상태 전환 로그를 한 화면에 표시한다.
+- Admin 상세는 기존 Admin token 보호를 그대로 따른다.
+
+Reason:
+MVP 운영에서 분쟁/누락 확인은 “예약 상태, 증적 사진, 체크리스트, 정산 금액, 상태 로그”를 한 번에 보는 능력이 중요하다. 사용자에게는 완료 후 확인 가능한 영수증을 제공하고, 운영자에게는 동일한 DB row 기반의 증적 drill-down을 제공한다.

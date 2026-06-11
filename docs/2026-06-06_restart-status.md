@@ -611,3 +611,24 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - `GET /reservation` 200 응답 확인.
 - `npm run lint` 성공.
 - `npm run build` 성공.
+
+## 27. 2026-06-11 사용자 영수증 / Admin 증적 drill-down
+
+사용자 영수증 화면과 Admin 예약 상세 drill-down을 추가했다.
+
+- `/receipt?reservationId=...` 추가.
+- 완료 화면의 `영수증` 버튼을 `/receipt`로 연결.
+- 영수증 화면은 예약 상세 API와 체크아웃 상세 API를 함께 hydrate해 이용 정보와 정산 breakdown을 표시한다.
+- `getAdminReservationDetail()` 추가.
+- `/admin/reservations/:id` 추가.
+- Admin 예약 목록의 Reservation ID를 상세 링크로 전환.
+- Admin 정산 목록의 Evidence badge를 상세 링크로 전환.
+- Admin 상세에서 예약 정보, 체크인 사진 4장, 체크아웃 체크리스트, 체크아웃 사진 2장, 정산, 상태 전환 로그를 확인할 수 있다.
+
+검증:
+
+- `GET /receipt?reservationId=05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 200 응답 확인.
+- Admin token 쿠키 포함 `GET /admin/reservations/05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 200 응답 확인.
+- Admin token 없이 동일 URL 요청 시 `/admin-login` 307 리다이렉트 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.
