@@ -232,7 +232,44 @@ totalSettlement: number
 
 ⸻
 
-6. POST /api/reviews
+6. GET /api/checkouts?reservationId=:id
+
+⸻
+
+기능:
+로그인 사용자의 체크아웃/정산 상세 조회
+
+검증:
+• Authorization Bearer session 또는 local dev fallback 필요
+• reservation.user_id = auth user id
+• checkouts.reservation_id = reservation.id
+
+응답:
+{
+checkout: {
+id,
+reservationId,
+basePrice,
+extraFee,
+helperVerifyRequested,
+helperVerifyFee,
+totalSettlement,
+toolCheckCompleted,
+cleaningCompleted,
+wasteDisposalCompleted,
+checkoutPhoto1,
+checkoutPhoto2,
+completedAt
+}
+}
+
+용도:
+• 완료 화면 새로고침/재진입 시 query 대신 DB 정산 row로 결제 요약 복원
+• 영수증/정산 상세 화면의 기반 데이터
+
+⸻
+
+7. POST /api/reviews
 
 ⸻
 

@@ -564,3 +564,50 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - `GET /in-use?reservationId=05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 200 응답 확인.
 - `npm run lint` 성공.
 - `npm run build` 성공.
+
+## 24. 2026-06-11 체크아웃 화면 DB hydrate
+
+`/checkout` 화면을 `reservationId` 기준 DB 상세와 checkout API 확정 금액 기준으로 복원하도록 보강했다.
+
+- `/checkout`은 `GET /api/reservations/:id`로 지점, 베이, 차량, 작업, KST 시간, 상태, 금액을 hydrate한다.
+- 체크아웃 버튼은 `CHECKED_IN` 또는 `IN_USE` 상태에서만 활성화된다.
+- 완료 화면으로 넘기는 예약 정보는 hydrate된 상세값을 사용한다.
+- `basePrice`, `extraFee`, `helperVerifyFee`, `totalSettlement`는 `/api/checkout` 응답값을 우선 사용한다.
+
+검증:
+
+- `GET /checkout?reservationId=05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 200 응답 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.
+
+## 25. 2026-06-11 완료 화면 DB hydrate
+
+`/complete` 화면을 `reservationId` 기준 예약 상세와 체크아웃 정산 row 기준으로 복원하도록 보강했다.
+
+- `GET /api/checkouts?reservationId=...` 추가.
+- API는 로그인 사용자 소유 예약의 `checkouts` row만 반환한다.
+- `/complete`는 예약 상세 API로 지점, 차량, 작업, 시간, 상태를 hydrate한다.
+- 결제 요약은 체크아웃 상세 API의 `basePrice`, `extraFee`, `helperVerifyFee`, `totalSettlement`를 우선 사용한다.
+- API hydrate 실패 시 URL fallback을 유지하되 오류 메시지를 표시한다.
+
+검증:
+
+- `GET /api/checkouts?reservationId=05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 성공 응답 확인.
+- `GET /complete?reservationId=05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 200 응답 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.
+
+## 26. 2026-06-11 예약 내역 목록 DB 표시 정합성
+
+`/reservation` 목록의 지점/베이/패키지/작업명을 mock 데이터가 아니라 Supabase DB 기준으로 조립하도록 보강했다.
+
+- 예약 목록 조회 후 파트너, 베이, 패키지, 예약 작업, 작업 카탈로그를 ID map으로 추가 조회한다.
+- Self Service 목록 작업명은 `reservation_tasks -> self_maintenance_tasks` 기준으로 표시한다.
+- Shop Service 목록 작업명은 `service_packages` 기준으로 표시한다.
+- 예약 카드 링크는 query fallback을 유지하되, 이후 화면들은 `reservationId` 기준 DB hydrate를 우선 사용한다.
+
+검증:
+
+- `GET /reservation` 200 응답 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.

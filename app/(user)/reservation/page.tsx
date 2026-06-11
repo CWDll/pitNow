@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { garageList, getShopPackageById } from "@/app/(user)/_data/mock-garages";
 import { supabase } from "@/src/lib/supabase";
 import { formatKstDateTimeRange } from "@/src/lib/timezone";
 
@@ -23,7 +22,7 @@ interface ReservationRow {
   end_time: string;
   reserved_end_time: string;
   status: ReservationStatus;
-  total_price: number;
+  total_price: number | string;
   vehicles:
     | {
         plate_number: string;
@@ -38,18 +37,61 @@ interface ReservationRow {
     | null;
 }
 
-function mapReservationItem(reservation: ReservationRow): ReservationListItem {
-  const garage = garageList.find((item) => item.id === reservation.partner_id);
+interface PartnerRow {
+  id: string;
+  name: string;
+}
+
+interface BayRow {
+  id: string;
+  name: string;
+}
+
+interface ServicePackageRow {
+  id: string;
+  name: string;
+}
+
+interface ReservationTaskRow {
+  reservation_id: string;
+  task_id: string;
+}
+
+interface SelfMaintenanceTaskRow {
+  id: string;
+  name: string;
+}
+
+function toNumber(value: number | string): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function uniqueValues(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function mapReservationItem(
+  reservation: ReservationRow,
+  maps: {
+    partnerNames: Map<string, string>;
+    bayNames: Map<string, string>;
+    packageNames: Map<string, string>;
+    taskLabels: Map<string, string>;
+  },
+): ReservationListItem {
   const vehicle = Array.isArray(reservation.vehicles)
     ? reservation.vehicles[0] ?? null
     : reservation.vehicles;
+  const taskLabel = maps.taskLabels.get(reservation.id);
   const workTitle =
     reservation.reservation_type === "SELF_SERVICE"
-      ? "셀프 정비"
-      : getShopPackageById(reservation.package_id ?? "")?.name ?? "전문가 맡기기";
-  const bayIndex = garage?.bayIds.findIndex((bayId) => bayId === reservation.bay_id) ?? -1;
+      ? taskLabel ?? "셀프 정비"
+      : maps.packageNames.get(reservation.package_id ?? "") ?? "전문가 맡기기";
   const bayLabel =
-    reservation.reservation_type === "SELF_SERVICE" && bayIndex >= 0 ? `${bayIndex + 1}번 베이` : undefined;
+    reservation.reservation_type === "SELF_SERVICE"
+      ? maps.bayNames.get(reservation.bay_id) ?? undefined
+      : undefined;
   const blockedMinutes = Math.max(
     30,
     Math.round(
@@ -60,13 +102,13 @@ function mapReservationItem(reservation: ReservationRow): ReservationListItem {
 
   return {
     id: reservation.id,
-    garageName: garage?.name ?? "정비소",
+    garageName: maps.partnerNames.get(reservation.partner_id) ?? "정비소",
     workTitle,
     dateLabel: formatKstDateTimeRange(reservation.start_time, reservation.end_time),
     bayLabel,
     reservationType: reservation.reservation_type,
     status: reservation.status,
-    totalPrice: reservation.total_price,
+    totalPrice: toNumber(reservation.total_price),
     startTime: reservation.start_time,
     endTime: reservation.end_time,
     blockedMinutes,
@@ -113,7 +155,138 @@ export default function ReservationListPage() {
         return;
       }
 
-      setReservations((data ?? []).map(mapReservationItem));
+      const reservationRows = data ?? [];
+      const partnerIds = uniqueValues(
+        reservationRows.map((reservation) => reservation.partner_id),
+      );
+      const bayIds = uniqueValues(
+        reservationRows.map((reservation) => reservation.bay_id),
+      );
+      const packageIds = uniqueValues(
+        reservationRows.map((reservation) => reservation.package_id),
+      );
+      const reservationIds = reservationRows.map((reservation) => reservation.id);
+
+      const [
+        partnerResult,
+        bayResult,
+        packageResult,
+        reservationTaskResult,
+      ] = await Promise.all([
+        partnerIds.length > 0
+          ? supabase
+              .from("partners")
+              .select("id,name")
+              .in("id", partnerIds)
+              .returns<PartnerRow[]>()
+          : Promise.resolve({ data: [], error: null }),
+        bayIds.length > 0
+          ? supabase
+              .from("bays")
+              .select("id,name")
+              .in("id", bayIds)
+              .returns<BayRow[]>()
+          : Promise.resolve({ data: [], error: null }),
+        packageIds.length > 0
+          ? supabase
+              .from("service_packages")
+              .select("id,name")
+              .in("id", packageIds)
+              .returns<ServicePackageRow[]>()
+          : Promise.resolve({ data: [], error: null }),
+        reservationIds.length > 0
+          ? supabase
+              .from("reservation_tasks")
+              .select("reservation_id,task_id")
+              .in("reservation_id", reservationIds)
+              .returns<ReservationTaskRow[]>()
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (
+        partnerResult.error ||
+        bayResult.error ||
+        packageResult.error ||
+        reservationTaskResult.error
+      ) {
+        console.error("RESERVATION LIST RELATED LOOKUP ERROR:", {
+          partnerError: partnerResult.error,
+          bayError: bayResult.error,
+          packageError: packageResult.error,
+          reservationTaskError: reservationTaskResult.error,
+        });
+        setError("예약 연관 정보를 불러오지 못했습니다.");
+        setIsLoading(false);
+        return;
+      }
+
+      const reservationTaskRows = reservationTaskResult.data ?? [];
+      const taskIds = uniqueValues(
+        reservationTaskRows.map((taskRow) => taskRow.task_id),
+      );
+      const taskResult =
+        taskIds.length > 0
+          ? await supabase
+              .from("self_maintenance_tasks")
+              .select("id,name")
+              .in("id", taskIds)
+              .returns<SelfMaintenanceTaskRow[]>()
+          : { data: [], error: null };
+
+      if (cancelled) {
+        return;
+      }
+
+      if (taskResult.error) {
+        console.error("RESERVATION LIST TASK LOOKUP ERROR:", taskResult.error);
+        setError("예약 작업 정보를 불러오지 못했습니다.");
+        setIsLoading(false);
+        return;
+      }
+
+      const partnerNames = new Map(
+        (partnerResult.data ?? []).map((partner) => [partner.id, partner.name]),
+      );
+      const bayNames = new Map((bayResult.data ?? []).map((bay) => [bay.id, bay.name]));
+      const packageNames = new Map(
+        (packageResult.data ?? []).map((servicePackage) => [
+          servicePackage.id,
+          servicePackage.name,
+        ]),
+      );
+      const taskNames = new Map(
+        (taskResult.data ?? []).map((task) => [task.id, task.name]),
+      );
+      const taskLabels = new Map<string, string>();
+
+      reservationTaskRows.forEach((taskRow) => {
+        const taskName = taskNames.get(taskRow.task_id);
+
+        if (!taskName) {
+          return;
+        }
+
+        const currentLabel = taskLabels.get(taskRow.reservation_id);
+        taskLabels.set(
+          taskRow.reservation_id,
+          currentLabel ? `${currentLabel}, ${taskName}` : taskName,
+        );
+      });
+
+      setReservations(
+        reservationRows.map((reservation) =>
+          mapReservationItem(reservation, {
+            partnerNames,
+            bayNames,
+            packageNames,
+            taskLabels,
+          }),
+        ),
+      );
       setIsLoading(false);
     }
 

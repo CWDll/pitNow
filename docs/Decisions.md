@@ -396,3 +396,54 @@ Rules:
 
 Reason:
 이용 중 화면은 타이머와 초과요금 계산의 중심이므로, URL query와 로컬 시계만으로 유지하면 새로고침/딥링크/예약 내역 진입에서 정보가 흔들린다. DB 상세와 start API를 결합해야 서버 시간 기반 타이머와 화면 정보가 같은 예약 row를 기준으로 맞춰진다.
+
+---
+
+## 2026-06-11
+
+Decision:
+체크아웃 화면도 `reservationId` 기준 DB 상세 API로 hydrate한다.
+
+Rules:
+
+- `/checkout`은 `reservationId`가 있으면 `GET /api/reservations/:id`를 호출해 예약 상세를 복원한다.
+- 체크아웃 화면의 지점, 베이, 차량, 작업, 시간, 상태, 금액은 DB 상세값을 우선 사용한다.
+- 체크아웃 실행 가능 상태는 `CHECKED_IN` 또는 `IN_USE`로 제한한다.
+- 완료 화면으로 넘기는 query는 hydrate된 상세값과 `/api/checkout`이 확정한 서버 정산 금액을 사용한다.
+
+Reason:
+체크아웃은 사진 증적, 상태 전환, 초과요금, 검수비가 한 번에 확정되는 단계다. URL query만 믿으면 새로고침이나 딥링크에서 잘못된 예약 정보로 정산 화면이 열릴 수 있으므로, 예약 상세는 DB 원천을 사용하고 최종 금액은 체크아웃 API 응답을 사용한다.
+
+---
+
+## 2026-06-11
+
+Decision:
+완료 화면은 `reservationId` 기준 예약 상세와 체크아웃 정산 정보를 hydrate한다.
+
+Rules:
+
+- `GET /api/checkouts?reservationId=...`는 로그인 사용자 소유 예약의 체크아웃 row만 반환한다.
+- `/complete`는 예약 상세 API로 지점, 차량, 작업, 시간, 상태를 복원한다.
+- `/complete`의 결제 요약은 체크아웃 상세 API의 `basePrice`, `extraFee`, `helperVerifyFee`, `totalSettlement`를 우선 사용한다.
+- API hydrate 실패 시 URL fallback 값을 유지하되 오류 안내를 표시한다.
+
+Reason:
+완료 화면은 리뷰 작성과 영수증/정산 확인의 기준점이다. query 값만 사용하면 체크아웃 이후 새로고침하거나 예약 내역에서 재진입할 때 정산 결과가 사라질 수 있으므로, 예약 row와 체크아웃 row를 DB 원천으로 다시 읽는다.
+
+---
+
+## 2026-06-11
+
+Decision:
+예약 내역 목록의 지점/베이/패키지/작업명은 mock이 아니라 DB row에서 조립한다.
+
+Rules:
+
+- `/reservation`은 예약 목록 조회 후 파트너, 베이, 패키지, 예약 작업, 작업 카탈로그를 ID map으로 추가 조회한다.
+- Self Service 작업명은 `reservation_tasks -> self_maintenance_tasks` 기준으로 표시한다.
+- Shop Service 작업명은 `service_packages` 기준으로 표시한다.
+- 예약 카드 링크는 기존 query fallback을 유지하되, 상세 화면들은 `reservationId`로 DB hydrate한다.
+
+Reason:
+예약 내역이 mock garage/package 데이터를 참조하면 실제 Supabase seed나 운영 데이터와 이름이 어긋날 수 있다. 목록부터 DB 원천을 사용해야 예약 상세, 체크인, 체크아웃, 완료 화면의 hydrate 전략과 일관된다.

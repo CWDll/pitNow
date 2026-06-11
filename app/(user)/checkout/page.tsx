@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
+import type { ReservationStatus, ReservationType } from "@/src/domain/types";
+import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
 import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
@@ -32,25 +34,64 @@ function extractError(payload: unknown): string | null {
   return null;
 }
 
+interface ReservationDetail {
+  id: string;
+  reservationType: ReservationType;
+  bookingMode: "SELF" | "PACKAGE";
+  partnerId: string;
+  garageName: string;
+  bayId: string;
+  bayLabel: string;
+  carId: string;
+  carLabel: string;
+  startTime: string;
+  endTime: string;
+  dateLabel: string;
+  status: ReservationStatus;
+  totalPrice: number;
+  workTitle: string;
+  taskIds: string;
+  taskLabels: string;
+  selectedTaskCount: string;
+}
+
+interface ReservationDetailResponse {
+  success: boolean;
+  reservation?: ReservationDetail;
+}
+
 function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId") ?? "";
-  const reservationType = searchParams.get("reservationType") ?? "SELF_SERVICE";
-  const partnerId = searchParams.get("partnerId") ?? "";
-  const carId = searchParams.get("carId") ?? "";
-  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
-  const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
-  const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
-  const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
   const previewFee = Number(searchParams.get("previewFee") ?? "0");
   const overdueMinutes = Number(searchParams.get("overdueMinutes") ?? "0");
-  const taskIds = searchParams.get("taskIds") ?? "";
-  const taskLabels = searchParams.get("taskLabels") ?? workTitle;
-  const selectedTaskCount = Number(
-    searchParams.get("selectedTaskCount") ?? "1",
-  );
+  const fallbackWorkTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
+
+  const [detail, setDetail] = useState<ReservationDetail>(() => ({
+    id: reservationId,
+    reservationType:
+      searchParams.get("reservationType") === "SHOP_SERVICE"
+        ? "SHOP_SERVICE"
+        : "SELF_SERVICE",
+    bookingMode: searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF",
+    partnerId: searchParams.get("partnerId") ?? "",
+    garageName: searchParams.get("garageName") ?? "강남 셀프정비소",
+    bayId: "",
+    bayLabel: searchParams.get("bayLabel") ?? "3번 베이",
+    carId: searchParams.get("carId") ?? "",
+    carLabel: searchParams.get("carLabel") ?? "현대 아반떼 CN7 (2022)",
+    startTime: searchParams.get("startTime") ?? "",
+    endTime: searchParams.get("endTime") ?? "",
+    dateLabel: searchParams.get("dateLabel") ?? "",
+    status: "IN_USE",
+    totalPrice: Number(searchParams.get("totalPrice") ?? "15000"),
+    workTitle: fallbackWorkTitle,
+    taskIds: searchParams.get("taskIds") ?? "",
+    taskLabels: searchParams.get("taskLabels") ?? fallbackWorkTitle,
+    selectedTaskCount: searchParams.get("selectedTaskCount") ?? "1",
+  }));
 
   const [checks, setChecks] = useState<boolean[]>([false, false, false]);
   const [photo1, setPhoto1] = useState<File | null>(null);
@@ -59,7 +100,60 @@ function CheckoutPageContent() {
     useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isDetailLoading, setIsDetailLoading] = useState<boolean>(
+    Boolean(reservationId),
+  );
   const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadReservationDetail() {
+      if (!reservationId) {
+        setIsDetailLoading(false);
+        return;
+      }
+
+      setIsDetailLoading(true);
+
+      try {
+        const response = await authFetch(`/api/reservations/${reservationId}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as ReservationDetailResponse;
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!response.ok || !payload.success || !payload.reservation) {
+          setError(
+            extractApiErrorMessage(
+              payload,
+              "예약 상세 정보를 불러오지 못했습니다.",
+            ),
+          );
+          setIsDetailLoading(false);
+          return;
+        }
+
+        setDetail(payload.reservation);
+        setIsDetailLoading(false);
+      } catch {
+        if (!isCancelled) {
+          setError("예약 상세 정보를 불러오지 못했습니다.");
+          setIsDetailLoading(false);
+        }
+      }
+    }
+
+    void loadReservationDetail();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [reservationId]);
 
   const additionalFee = useMemo(() => {
     if (!Number.isFinite(previewFee) || previewFee <= 0) {
@@ -69,11 +163,16 @@ function CheckoutPageContent() {
     return previewFee;
   }, [previewFee]);
 
+  const totalPrice = Number.isFinite(detail.totalPrice) ? detail.totalPrice : 0;
+  const canCheckoutStatus =
+    detail.status === "CHECKED_IN" || detail.status === "IN_USE";
   const canSubmitBase =
     reservationId.length > 0 &&
     checks.every(Boolean) &&
     photo1 !== null &&
-    photo2 !== null;
+    photo2 !== null &&
+    !isDetailLoading &&
+    canCheckoutStatus;
   const canSubmit = canSubmitBase;
 
   async function handleComplete() {
@@ -163,19 +262,19 @@ function CheckoutPageContent() {
 
       const query = new URLSearchParams({
         reservationId,
-        reservationType,
-        partnerId,
-        carId,
-        carLabel,
-        garageName,
-        workTitle: taskLabels,
+        reservationType: detail.reservationType,
+        partnerId: detail.partnerId,
+        carId: detail.carId,
+        carLabel: detail.carLabel,
+        garageName: detail.garageName,
+        workTitle: detail.taskLabels || detail.workTitle,
         totalPrice: String(basePrice),
         extraFee: String(extraFee),
         helperVerifyFee: String(helperVerifyFee),
         totalSettlement: String(totalSettlement),
-        taskIds,
-        taskLabels,
-        selectedTaskCount: String(selectedTaskCount),
+        taskIds: detail.taskIds,
+        taskLabels: detail.taskLabels || detail.workTitle,
+        selectedTaskCount: detail.selectedTaskCount,
         checkoutPhoto1,
         checkoutPhoto2,
       });
@@ -192,7 +291,7 @@ function CheckoutPageContent() {
     }
   }
 
-  if (reservationType === "SHOP_SERVICE") {
+  if (detail.reservationType === "SHOP_SERVICE") {
     return (
       <section className="space-y-4">
         <h1 className="text-3xl font-semibold text-zinc-900">체크아웃</h1>
@@ -216,6 +315,42 @@ function CheckoutPageContent() {
         </button>
         <h1 className="text-3xl font-semibold text-zinc-900">체크아웃</h1>
       </header>
+
+      <div className="mb-5 rounded-3xl bg-zinc-100 p-4 text-base text-zinc-700">
+        <h2 className="mb-3 text-xl font-semibold text-zinc-900">예약 정보</h2>
+        <dl className="space-y-2">
+          <div className="flex justify-between gap-4">
+            <dt>날짜/시간</dt>
+            <dd className="text-right text-zinc-900">
+              {detail.dateLabel || "-"}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt>지점</dt>
+            <dd className="text-right text-zinc-900">{detail.garageName}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt>작업</dt>
+            <dd className="text-right text-zinc-900">
+              {detail.taskLabels || detail.workTitle}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt>베이</dt>
+            <dd className="text-right text-zinc-900">{detail.bayLabel}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt>차량</dt>
+            <dd className="text-right text-zinc-900">{detail.carLabel}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt>상태</dt>
+            <dd className="text-right font-semibold text-blue-600">
+              {isDetailLoading ? "불러오는 중" : detail.status}
+            </dd>
+          </div>
+        </dl>
+      </div>
 
       <div className="space-y-3">
         <h2 className="text-xl font-semibold">정리 체크리스트</h2>
@@ -310,6 +445,11 @@ function CheckoutPageContent() {
       {error ? (
         <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
           {error}
+        </p>
+      ) : null}
+      {!isDetailLoading && !canCheckoutStatus ? (
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          체크인 또는 이용 중 상태의 예약만 체크아웃할 수 있습니다.
         </p>
       ) : null}
 
