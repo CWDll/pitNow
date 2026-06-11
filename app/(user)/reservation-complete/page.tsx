@@ -1,57 +1,144 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import type { ReservationType } from "@/src/domain/types";
+import { extractApiErrorMessage } from "@/src/lib/api-error";
+import { authFetch } from "@/src/lib/auth-fetch";
 
 function parseMode(value: string | null): ReservationType {
   return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
+}
+
+interface ReservationDetail {
+  id: string;
+  reservationType: ReservationType;
+  bookingMode: "SELF" | "PACKAGE";
+  partnerId: string;
+  garageName: string;
+  bayId: string;
+  bayLabel: string;
+  carId: string;
+  carLabel: string;
+  startTime: string;
+  endTime: string;
+  dateLabel: string;
+  totalPrice: number;
+  workTitle: string;
+  taskIds: string;
+  taskLabels: string;
+  selectedTaskCount: string;
+  packageId: string;
+  packageTitle: string;
+}
+
+interface ReservationDetailResponse {
+  success: boolean;
+  reservation?: ReservationDetail;
 }
 
 function ReservationCompletePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const reservationType = parseMode(searchParams.get("reservationType"));
-  const reservationId = searchParams.get("reservationId") ?? "";
-  const bookingMode =
-    searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
-  const partnerId = searchParams.get("partnerId") ?? "";
-  const carId = searchParams.get("carId") ?? "";
-  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
-  const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
-  const dateLabel = searchParams.get("dateLabel") ?? "";
-  const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
-  const startTime = searchParams.get("startTime") ?? "";
-  const endTime = searchParams.get("endTime") ?? "";
-  const totalPrice = searchParams.get("totalPrice") ?? "15000";
-  const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
-  const taskIds = searchParams.get("taskIds") ?? "";
-  const taskLabels = searchParams.get("taskLabels") ?? workTitle;
-  const selectedTaskCount = searchParams.get("selectedTaskCount") ?? "1";
-  const packageId = searchParams.get("packageId") ?? "";
-  const packageTitle = searchParams.get("packageTitle") ?? "";
+  const [detail, setDetail] = useState<ReservationDetail>(() => {
+    const reservationType = parseMode(searchParams.get("reservationType"));
+    const bookingMode =
+      searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF";
+    const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
 
-  const query = new URLSearchParams({
-    reservationId,
-    reservationType,
-    bookingMode,
-    partnerId,
-    carId,
-    carLabel,
-    garageName,
-    bayLabel,
-    startTime,
-    endTime,
-    totalPrice,
-    workTitle,
-    taskIds,
-    taskLabels,
-    selectedTaskCount,
-    packageId,
-    packageTitle,
-  }).toString();
+    return {
+      id: searchParams.get("reservationId") ?? "",
+      reservationType,
+      bookingMode,
+      partnerId: searchParams.get("partnerId") ?? "",
+      garageName: searchParams.get("garageName") ?? "강남 셀프정비소",
+      bayId: "",
+      bayLabel: searchParams.get("bayLabel") ?? "3번 베이",
+      carId: searchParams.get("carId") ?? "",
+      carLabel: searchParams.get("carLabel") ?? "아반떼 CN7",
+      startTime: searchParams.get("startTime") ?? "",
+      endTime: searchParams.get("endTime") ?? "",
+      dateLabel: searchParams.get("dateLabel") ?? "",
+      totalPrice: Number(searchParams.get("totalPrice") ?? "15000"),
+      workTitle,
+      taskIds: searchParams.get("taskIds") ?? "",
+      taskLabels: searchParams.get("taskLabels") ?? workTitle,
+      selectedTaskCount: searchParams.get("selectedTaskCount") ?? "1",
+      packageId: searchParams.get("packageId") ?? "",
+      packageTitle: searchParams.get("packageTitle") ?? "",
+    };
+  });
+  const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadReservationDetail() {
+      if (!detail.id) {
+        return;
+      }
+
+      try {
+        const response = await authFetch(`/api/reservations/${detail.id}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as ReservationDetailResponse;
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!response.ok || !payload.success || !payload.reservation) {
+          setError(
+            extractApiErrorMessage(
+              payload,
+              "예약 상세 정보를 다시 불러오지 못했습니다.",
+            ),
+          );
+          return;
+        }
+
+        setDetail(payload.reservation);
+      } catch {
+        if (!isCancelled) {
+          setError("예약 상세 정보를 다시 불러오지 못했습니다.");
+        }
+      }
+    }
+
+    void loadReservationDetail();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [detail.id]);
+
+  const query = useMemo(
+    () =>
+      new URLSearchParams({
+        reservationId: detail.id,
+        reservationType: detail.reservationType,
+        bookingMode: detail.bookingMode,
+        partnerId: detail.partnerId,
+        carId: detail.carId,
+        carLabel: detail.carLabel,
+        garageName: detail.garageName,
+        bayLabel: detail.bayLabel,
+        startTime: detail.startTime,
+        endTime: detail.endTime,
+        totalPrice: String(detail.totalPrice),
+        workTitle: detail.workTitle,
+        taskIds: detail.taskIds,
+        taskLabels: detail.taskLabels,
+        selectedTaskCount: detail.selectedTaskCount,
+        packageId: detail.packageId,
+        packageTitle: detail.packageTitle,
+      }).toString(),
+    [detail],
+  );
 
   return (
     <section className="pb-24 pt-6">
@@ -73,29 +160,34 @@ function ReservationCompletePageContent() {
       </div>
 
       <div className="mt-4 rounded-2xl bg-zinc-100 p-4 text-base text-zinc-700">
+        {error ? (
+          <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            {error}
+          </p>
+        ) : null}
         <p className="flex justify-between">
           <span>날짜/시간</span>
-          <span>{dateLabel}</span>
+          <span>{detail.dateLabel}</span>
         </p>
         <p className="mt-2 flex justify-between">
           <span>지점</span>
-          <span>{garageName}</span>
+          <span>{detail.garageName}</span>
         </p>
         <p className="mt-2 flex justify-between">
           <span>선택 작업</span>
-          <span>{taskLabels}</span>
+          <span>{detail.taskLabels}</span>
         </p>
         <p className="mt-2 flex justify-between">
           <span>베이</span>
-          <span>{bayLabel}</span>
+          <span>{detail.bayLabel}</span>
         </p>
         <p className="mt-2 flex justify-between">
           <span>차량</span>
-          <span>{carLabel}</span>
+          <span>{detail.carLabel}</span>
         </p>
         <p className="mt-2 flex justify-between">
           <span>예약 ID</span>
-          <span className="max-w-55 truncate">{reservationId || "(없음)"}</span>
+          <span className="max-w-55 truncate">{detail.id || "(없음)"}</span>
         </p>
       </div>
 
@@ -129,12 +221,12 @@ function ReservationCompletePageContent() {
           type="button"
           onClick={() =>
             router.push(
-              `/${reservationType === "SELF_SERVICE" ? "checkin" : "in-use"}?${query}`,
+              `/${detail.reservationType === "SELF_SERVICE" ? "checkin" : "in-use"}?${query}`,
             )
           }
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
         >
-          {reservationType === "SELF_SERVICE"
+          {detail.reservationType === "SELF_SERVICE"
             ? "체크인 하러 가기"
             : "진행 상태 보기"}
         </button>

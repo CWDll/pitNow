@@ -76,7 +76,50 @@ helperVerifyFee: number
 
 ⸻
 
-2. POST /api/checkin
+2. GET /api/reservations/:id
+
+⸻
+
+기능:
+로그인 사용자의 예약 상세 조회
+
+검증:
+• Authorization Bearer session 또는 local dev fallback 필요
+• reservation.user_id = auth user id
+
+응답:
+{
+reservation: {
+id,
+reservationType,
+bookingMode,
+partnerId,
+garageName,
+bayId,
+bayLabel,
+carId,
+carLabel,
+startTime,
+endTime,
+dateLabel,
+status,
+totalPrice,
+workTitle,
+taskIds,
+taskLabels,
+selectedTaskCount,
+packageId,
+packageTitle
+}
+}
+
+용도:
+• 예약 완료 화면 새로고침/재진입 시 URL query 대신 DB 원천으로 화면 복원
+• 예약 내역에서 상세/체크인으로 진입할 때 예약 ID 기준 hydrate
+
+⸻
+
+3. POST /api/checkin
 
 ⸻
 
@@ -109,7 +152,7 @@ status: “CHECKED_IN”
 
 ⸻
 
-3. POST /api/reservations/:id/start
+4. POST /api/reservations/:id/start
 
 ⸻
 
@@ -139,7 +182,7 @@ totalPrice: number
 
 ⸻
 
-4. POST /api/checkout
+5. POST /api/checkout
 
 ⸻
 
@@ -189,7 +232,7 @@ totalSettlement: number
 
 ⸻
 
-5. POST /api/reviews
+6. POST /api/reviews
 
 ⸻
 

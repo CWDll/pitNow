@@ -39,20 +39,23 @@ export function formatKstDateTimeRange(startIso: string, endIso: string): string
     return "예약 시간 정보 없음";
   }
 
-  const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  const dateParts = new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     month: "numeric",
     day: "numeric",
     weekday: "short",
-  });
+  }).formatToParts(start);
   const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
+  const month = dateParts.find((part) => part.type === "month")?.value ?? "";
+  const day = dateParts.find((part) => part.type === "day")?.value ?? "";
+  const weekday = dateParts.find((part) => part.type === "weekday")?.value ?? "";
 
-  return `${dateFormatter.format(start)} ${timeFormatter.format(start)} - ${timeFormatter.format(end)}`;
+  return `${month}/${day}(${weekday}) ${timeFormatter.format(start)} - ${timeFormatter.format(end)}`;
 }
 
 export function formatKstAdminDateTime(value: string | null): string {

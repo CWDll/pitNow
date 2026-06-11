@@ -518,3 +518,18 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 
 - 원격 Supabase에는 `db/migrations/20260611_reservation_vehicle_link.sql` 적용이 필요하다.
 - 기존 예약 row는 `vehicle_id`가 null일 수 있으므로 화면에서는 `등록 차량` 또는 `-` fallback을 유지한다.
+
+## 21. 2026-06-11 예약 상세 DB hydrate
+
+예약 완료/상세 화면을 `reservationId` 기준 DB 원천으로 복원하도록 보강했다.
+
+- `GET /api/reservations/:id` 추가.
+- 로그인 사용자 소유 예약만 상세 조회 가능하다.
+- API는 지점, 베이, 차량, 작업/패키지, KST 날짜 라벨, 금액을 화면용으로 조립한다.
+- `/reservation-complete`는 URL query를 초기 fallback으로 쓰되, 상세 API 결과로 화면과 다음 단계 query를 덮어쓴다.
+
+검증:
+
+- `GET /api/reservations/05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 응답 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.

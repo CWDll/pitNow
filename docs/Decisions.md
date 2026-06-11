@@ -345,3 +345,20 @@ Rules:
 
 Reason:
 Supabase `timestamptz`는 UTC instant로 저장된다. 프론트에서 사용자가 고른 한국 영업시간을 UTC wall-clock으로 전송하면 실제 예약 시간이 9시간 밀려 체크인 가능 시간, 타이머, 초과요금이 모두 어긋난다.
+
+---
+
+## 2026-06-11
+
+Decision:
+예약 완료/상세 화면은 `reservationId` 기준 DB 상세 API로 hydrate한다.
+
+Rules:
+
+- `GET /api/reservations/:id`는 로그인 사용자 소유 예약만 반환한다.
+- 응답은 지점, 베이, 차량, 작업/패키지, KST 날짜 라벨, 금액을 화면용으로 조립한다.
+- 예약 완료 화면은 URL query 값을 초기 fallback으로 사용하되, `reservationId`가 있으면 API 결과로 덮어쓴다.
+- 체크인/진행 화면으로 넘기는 query도 hydrate된 DB 상세 값을 우선 사용한다.
+
+Reason:
+예약 생성 이후 화면 데이터가 URL query에만 의존하면 새로고침, 예약 내역 재진입, 공유된 딥링크에서 정보가 누락되거나 오래된 값이 남을 수 있다. 예약 ID를 기준으로 DB 원천을 다시 읽어야 상태 전환과 증적 흐름이 안정적이다.
