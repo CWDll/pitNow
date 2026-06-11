@@ -379,3 +379,20 @@ Rules:
 
 Reason:
 체크인은 사진 증적과 상태 전환의 시작점이므로 URL query만 믿으면 안 된다. 예약 내역이나 딥링크에서 바로 진입해도 DB의 현재 예약 상태와 상세 정보를 기준으로 진행해야 한다.
+
+---
+
+## 2026-06-11
+
+Decision:
+이용 중 화면도 `reservationId` 기준 DB 상세 API로 hydrate한다.
+
+Rules:
+
+- `/in-use`는 `reservationId`가 있으면 `GET /api/reservations/:id`를 호출해 지점, 베이, 차량, 작업, 상태, 금액을 복원한다.
+- `/api/reservations/:id/start` 응답은 서버 기준 `serverNow`, `startTime`, `endTime`, `totalPrice` 보정에 사용한다.
+- `/checkout`과 완료 직행 query는 hydrate된 상세값을 우선 사용한다.
+- 상세 hydrate 실패 시 화면은 URL fallback으로 유지하되 오류 메시지를 표시한다.
+
+Reason:
+이용 중 화면은 타이머와 초과요금 계산의 중심이므로, URL query와 로컬 시계만으로 유지하면 새로고침/딥링크/예약 내역 진입에서 정보가 흔들린다. DB 상세와 start API를 결합해야 서버 시간 기반 타이머와 화면 정보가 같은 예약 row를 기준으로 맞춰진다.

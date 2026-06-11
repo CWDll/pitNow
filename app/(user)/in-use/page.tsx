@@ -8,9 +8,10 @@ import {
   calculateRemainingTimeAt,
   formatRemainingTime,
 } from "@/src/lib/timer";
+import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
-import type { ReservationType } from "@/src/domain/types";
+import type { ReservationStatus, ReservationType } from "@/src/domain/types";
 
 function parseMode(value: string | null): ReservationType {
   return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
@@ -23,6 +24,32 @@ function fallbackWindow(): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+interface ReservationDetail {
+  id: string;
+  reservationType: ReservationType;
+  bookingMode: "SELF" | "PACKAGE";
+  partnerId: string;
+  garageName: string;
+  bayId: string;
+  bayLabel: string;
+  carId: string;
+  carLabel: string;
+  startTime: string;
+  endTime: string;
+  dateLabel: string;
+  status: ReservationStatus;
+  totalPrice: number;
+  workTitle: string;
+  taskIds: string;
+  taskLabels: string;
+  selectedTaskCount: string;
+}
+
+interface ReservationDetailResponse {
+  success: boolean;
+  reservation?: ReservationDetail;
+}
+
 function InUsePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -30,21 +57,33 @@ function InUsePageContent() {
   const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
   const [startError, setStartError] = useState<string>("");
 
-  const reservationType = parseMode(searchParams.get("reservationType"));
   const reservationId = searchParams.get("reservationId") ?? "";
-  const partnerId = searchParams.get("partnerId") ?? "";
-  const carId = searchParams.get("carId") ?? "";
-  const carLabel = searchParams.get("carLabel") ?? "아반떼 CN7";
-  const garageName = searchParams.get("garageName") ?? "강남 셀프정비소";
-  const bayLabel = searchParams.get("bayLabel") ?? "3번 베이";
-  const totalPrice = Number(searchParams.get("totalPrice") ?? "15000");
-  const workTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
-  const taskIds = searchParams.get("taskIds") ?? "";
-  const taskLabels = searchParams.get("taskLabels") ?? workTitle;
-  const selectedTaskCount = searchParams.get("selectedTaskCount") ?? "1";
+  const reservationTypeFromQuery = parseMode(searchParams.get("reservationType"));
+  const workTitleFromQuery = searchParams.get("workTitle") ?? "엔진오일 교환";
   const blockedMinutes = Number(searchParams.get("blockedMinutes") ?? "60");
 
   const fallback = useMemo(() => fallbackWindow(), []);
+  const [detail, setDetail] = useState<ReservationDetail>(() => ({
+    id: reservationId,
+    reservationType: reservationTypeFromQuery,
+    bookingMode: searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF",
+    partnerId: searchParams.get("partnerId") ?? "",
+    garageName: searchParams.get("garageName") ?? "강남 셀프정비소",
+    bayId: "",
+    bayLabel: searchParams.get("bayLabel") ?? "3번 베이",
+    carId: searchParams.get("carId") ?? "",
+    carLabel: searchParams.get("carLabel") ?? "아반떼 CN7",
+    startTime: searchParams.get("startTime") ?? fallback.start,
+    endTime: searchParams.get("endTime") ?? fallback.end,
+    dateLabel: "",
+    status: "IN_USE",
+    totalPrice: Number(searchParams.get("totalPrice") ?? "15000"),
+    workTitle: workTitleFromQuery,
+    taskIds: searchParams.get("taskIds") ?? "",
+    taskLabels: searchParams.get("taskLabels") ?? workTitleFromQuery,
+    selectedTaskCount: searchParams.get("selectedTaskCount") ?? "1",
+  }));
+  const [detailError, setDetailError] = useState<string>("");
   const [startTime, setStartTime] = useState<string>(
     () => searchParams.get("startTime") ?? fallback.start,
   );
@@ -52,7 +91,7 @@ function InUsePageContent() {
     () => searchParams.get("endTime") ?? fallback.end,
   );
   const [confirmedTotalPrice, setConfirmedTotalPrice] =
-    useState<number>(totalPrice);
+    useState<number>(detail.totalPrice);
 
   useEffect(() => {
     const id = window.setInterval(() => setTick(Date.now()), 1000);
@@ -61,6 +100,43 @@ function InUsePageContent() {
 
   useEffect(() => {
     let isCancelled = false;
+
+    async function hydrateReservationDetail() {
+      if (!reservationId) {
+        return;
+      }
+
+      try {
+        const response = await authFetch(`/api/reservations/${reservationId}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as ReservationDetailResponse;
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!response.ok || !payload.success || !payload.reservation) {
+          setDetailError(
+            extractApiErrorMessage(
+              payload,
+              "예약 상세 정보를 불러오지 못했습니다.",
+            ),
+          );
+          return;
+        }
+
+        setDetail(payload.reservation);
+        setStartTime(payload.reservation.startTime);
+        setEndTime(payload.reservation.endTime);
+        setConfirmedTotalPrice(payload.reservation.totalPrice);
+      } catch {
+        if (!isCancelled) {
+          setDetailError("예약 상세 정보를 불러오지 못했습니다.");
+        }
+      }
+    }
 
     async function startReservation() {
       if (!reservationId) {
@@ -126,6 +202,7 @@ function InUsePageContent() {
       }
     }
 
+    void hydrateReservationDetail();
     void startReservation();
 
     return () => {
@@ -153,19 +230,20 @@ function InUsePageContent() {
   function goCheckout() {
     const query = new URLSearchParams({
       reservationId,
-      reservationType,
-      partnerId,
-      carId,
-      carLabel,
-      garageName,
-      bayLabel,
-      workTitle,
+      reservationType: detail.reservationType,
+      bookingMode: detail.bookingMode,
+      partnerId: detail.partnerId,
+      carId: detail.carId,
+      carLabel: detail.carLabel,
+      garageName: detail.garageName,
+      bayLabel: detail.bayLabel,
+      workTitle: detail.taskLabels || detail.workTitle,
       startTime,
       endTime,
       totalPrice: String(confirmedTotalPrice),
-      taskIds,
-      taskLabels,
-      selectedTaskCount,
+      taskIds: detail.taskIds,
+      taskLabels: detail.taskLabels,
+      selectedTaskCount: detail.selectedTaskCount,
       overdueMinutes: String(overdue.overdueMinutes),
       previewFee: String(overdue.previewFee),
     });
@@ -194,17 +272,23 @@ function InUsePageContent() {
     const data = (await response.json()) as { extraFee?: number };
     const query = new URLSearchParams({
       reservationId,
-      garageName,
-      carLabel,
-      workTitle,
+      reservationType: detail.reservationType,
+      partnerId: detail.partnerId,
+      carId: detail.carId,
+      garageName: detail.garageName,
+      carLabel: detail.carLabel,
+      workTitle: detail.taskLabels || detail.workTitle,
       totalPrice: String(confirmedTotalPrice),
       extraFee: String(data.extraFee ?? 0),
+      taskIds: detail.taskIds,
+      taskLabels: detail.taskLabels,
+      selectedTaskCount: detail.selectedTaskCount,
     });
 
     router.push(`/complete?${query.toString()}`);
   }
 
-  if (reservationType === "SHOP_SERVICE") {
+  if (detail.reservationType === "SHOP_SERVICE") {
     return (
       <section className="pb-24 pt-8">
         <p className="text-lg text-zinc-500">작업 진행 중</p>
@@ -214,7 +298,7 @@ function InUsePageContent() {
             Shop Service
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-zinc-900">
-            {workTitle}
+            {detail.workTitle}
           </h1>
           <p className="mt-3 text-base text-zinc-700">
             업장에서 패키지 작업을 진행 중입니다. 예약 시간은 {blockedMinutes}
@@ -226,16 +310,19 @@ function InUsePageContent() {
           <div className="space-y-3 text-base text-zinc-700">
             <p className="flex justify-between">
               <span>업장</span>
-              <span>{garageName}</span>
+              <span>{detail.garageName}</span>
             </p>
             <p className="flex justify-between">
               <span>차량</span>
-              <span>{carLabel}</span>
+              <span>{detail.carLabel}</span>
             </p>
             <p className="flex justify-between">
               <span>현재 상태</span>
-              <span>정비 진행 중</span>
+              <span>{detail.status}</span>
             </p>
+            {detailError ? (
+              <p className="text-sm text-red-500">{detailError}</p>
+            ) : null}
             <p className="flex justify-between">
               <span>안내</span>
               <span className="text-right">
@@ -268,7 +355,7 @@ function InUsePageContent() {
       </div>
 
       <p className="mt-6 text-lg text-zinc-600">
-        {garageName} · {bayLabel}
+        {detail.garageName} · {detail.bayLabel}
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3">
@@ -287,7 +374,13 @@ function InUsePageContent() {
       </div>
 
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4 text-left">
-        <p className="text-xl font-semibold text-zinc-900">{workTitle}</p>
+        <p className="text-xl font-semibold text-zinc-900">{detail.workTitle}</p>
+        <p className="mt-1 text-sm text-zinc-500">
+          {detail.carLabel} · {detail.status}
+        </p>
+        {detailError ? (
+          <p className="mt-2 text-sm text-red-500">{detailError}</p>
+        ) : null}
         {startError ? (
           <p className="mt-2 text-sm text-red-500">{startError}</p>
         ) : null}

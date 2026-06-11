@@ -549,3 +549,18 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - `GET /checkin` 200 응답 확인.
 - `npm run lint` 성공.
 - `npm run build` 성공.
+
+## 23. 2026-06-11 이용 중 화면 DB hydrate
+
+`/in-use` 화면을 `reservationId` 기준 DB 상세와 start API 기준으로 복원하도록 보강했다.
+
+- `/in-use`는 `GET /api/reservations/:id`로 지점, 베이, 차량, 작업, 상태, 금액을 hydrate한다.
+- `/api/reservations/:id/start`는 서버 기준 `serverNow`, `startTime`, `endTime`, `totalPrice` 보정에 사용한다.
+- `/checkout` 이동 query와 Shop Service 완료 직행 query는 hydrate된 상세값을 우선 사용한다.
+- 상세 hydrate 실패 시 URL fallback 화면을 유지하되 오류 메시지를 표시한다.
+
+검증:
+
+- `GET /in-use?reservationId=05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 200 응답 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.
