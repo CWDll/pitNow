@@ -776,3 +776,20 @@ Admin 예약 상세에서 증적 누락 사유와 고객 리뷰를 함께 확인
 
 - E2E 스크립트는 실제 Supabase DB에 테스트 유저/차량/완료 예약 row를 남긴다.
 - 사진 업로드 자체는 수행하지 않고 증적 URL 문자열을 API에 전달한다.
+
+## 32. 2026-06-11 결제 MVP 상태 모델 설계
+
+결제 연동 전 `payments` 테이블/API 상태 모델과 예약 확정 순서를 문서화했다.
+
+- `docs/Payment_MVP.md` 추가.
+- `docs/DB_MVP.md`에 `payments` 스키마/RLS 기준 추가.
+- `docs/API_MVP.md`에 `/api/payments/prepare`, `/api/payments/confirm`, `/api/payments/fail` 추가.
+- 예약 `CONFIRMED` row는 결제 승인 검증 이후에만 생성하는 payment-first flow로 고정했다.
+- 결제 전 임시 예약 hold는 MVP에서 제외하고, 결제 승인 후 slot race가 생기면 자동 취소/환불 또는 `REFUND_PENDING`으로 기록한다.
+- Local/E2E는 `PITNOW_PAYMENT_PROVIDER=FAKE`로 실제 결제 없이 prepare/confirm 흐름을 검증한다.
+- Toss test/live provider는 fake provider 이후 붙이는 순서로 정리했다.
+
+검증:
+
+- 문서 간 `payments`, 결제 상태, MVP 제외 항목 충돌 검색.
+- `npm run lint` 성공.

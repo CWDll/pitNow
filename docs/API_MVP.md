@@ -298,7 +298,132 @@ completedAt
 
 ⸻
 
-8. POST /api/reviews
+8. POST /api/payments/prepare
+
+⸻
+
+기능:
+결제 준비 row 생성 + provider checkout 정보 반환
+
+입력:
+{
+method: 'CARD' | 'KAKAO_PAY' | 'NAVER_PAY' | 'TOSS_PAY',
+reservation: {
+reservationType: 'SELF_SERVICE' | 'SHOP_SERVICE',
+bayId: string,
+vehicleId: string,
+packageId?: string,
+taskIds?: string[],
+agreeOnlySelectedTasks?: boolean,
+consentMethod?: 'CHECKBOX' | 'SIGNATURE',
+signatureImageUrl?: string,
+helperVerifyRequested: boolean,
+startTime: string,
+endTime: string
+}
+}
+
+검증:
+• Authorization Bearer session 또는 local dev fallback 필요
+• 예약 생성과 같은 서버 검증/가격 계산 경로 사용
+• 클라이언트 결제 금액을 신뢰하지 않음
+• 이 단계에서는 reservations row를 만들지 않음
+
+로직:
+• server-calculated amount 확정
+• payments insert(status = READY)
+• reservation_snapshot에 검증된 예약 payload/amount 저장
+• PITNOW_PAYMENT_PROVIDER=FAKE 이면 외부 결제창 없이 테스트 checkout 데이터 반환
+• PITNOW_PAYMENT_PROVIDER=TOSS_TEST/TOSS_LIVE 이면 Toss checkout 데이터 반환
+
+성공 응답:
+{
+paymentId: string,
+provider: 'FAKE' | 'TOSS',
+providerOrderId: string,
+amount: number,
+currency: 'KRW',
+checkout: object
+}
+
+⸻
+
+9. POST /api/payments/confirm
+
+⸻
+
+기능:
+provider 승인 검증 후 예약 확정
+
+입력:
+{
+paymentId: string,
+providerPaymentKey?: string,
+providerOrderId: string,
+amount: number
+}
+
+검증:
+• Authorization Bearer session 또는 local dev fallback 필요
+• payments.user_id = auth user id
+• payments.status = READY
+• 입력 amount = payments.amount
+• provider 승인 결과를 서버에서 검증
+
+로직:
+• payments.status → APPROVED
+• reservation_snapshot 기준으로 reservations insert(status = CONFIRMED)
+• reservation_status_logs에 null → CONFIRMED 기록
+• payments.reservation_id 저장
+• payments.status → RESERVATION_CONFIRMED
+• 예약 생성이 DB overlap으로 실패하면 provider cancel/refund 시도 후 REFUNDED 또는 REFUND_PENDING 저장
+
+성공 응답:
+{
+paymentStatus: 'RESERVATION_CONFIRMED',
+reservationId: string
+}
+
+예약 overlap after approval 응답:
+{
+paymentStatus: 'REFUNDED' | 'REFUND_PENDING',
+message: string
+}
+
+⸻
+
+10. POST /api/payments/fail
+
+⸻
+
+기능:
+provider 실패/사용자 결제 취소 기록
+
+입력:
+{
+paymentId: string,
+code?: string,
+message?: string
+}
+
+검증:
+• Authorization Bearer session 또는 local dev fallback 필요
+• payments.user_id = auth user id
+• payments.status = READY
+
+로직:
+• 사용자가 취소한 경우 status = CANCELLED
+• provider 오류이면 status = FAILED
+• failure_code/failure_message 저장
+
+성공 응답:
+{
+paymentStatus: 'FAILED' | 'CANCELLED'
+}
+
+⸻
+
+11. POST /api/reviews
 
 ⸻
 
@@ -333,6 +458,17 @@ reviewId: string
 
 상태 전환 규칙
 
+결제 상태:
+
+READY → APPROVED
+APPROVED → RESERVATION_CONFIRMED
+APPROVED → REFUND_PENDING
+REFUND_PENDING → REFUNDED
+READY → FAILED
+READY → CANCELLED
+
+예약 상태:
+
 허용:
 
 CONFIRMED → CHECKED_IN
@@ -348,12 +484,12 @@ CONFIRMED → CANCELLED
 중요 원칙 1. 예약 겹침은 반드시 DB 레벨. 2. 체크인은 4장 사진 필수. 3. 타이머는 서버 시간 기준. 4. 초과요금은 서버에서 계산. 5. 프론트 상태만 믿지 않는다.
 
 추가 원칙 6. Self 정비는 법적 허용 작업만 선택 가능. 7. 선택 작업 외 작업 금지 동의(체크박스/서명) 증적을 저장. 8. 베이 점유 충돌은 start_time ~ blocked_until(end+1h) 기준으로 판단.
+9. 예약 `CONFIRMED`는 결제 승인 검증 이후에만 생성한다. 10. 개발/E2E는 `PITNOW_PAYMENT_PROVIDER=FAKE`로 실제 결제 없이 검증한다.
 
 ⸻
 
 MVP 제외
-• 결제 API
-• 환불
+• 사용자/관리자 주도 환불 기능
 • 헬퍼 대행 작업 모드
 • 관리자 API
 • 노쇼 자동 취소

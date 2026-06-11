@@ -354,11 +354,59 @@ Migration:
 
 ⸻
 
-MVP 제외 (향후 확장용)
-• payments
+## payments
 
-지금은 최소 스키마만 유지한다.
+Payment intent and provider approval ledger.
+
+Reservations are confirmed only after payment approval. Payment waiting state is stored here, not in `reservations`.
+
+```sql
+create table payments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete restrict,
+  reservation_id uuid references reservations(id) on delete set null,
+  provider text not null check (provider in ('TOSS', 'FAKE')),
+  provider_payment_key text,
+  provider_order_id text not null unique,
+  method text not null,
+  status text not null check (
+    status in (
+      'READY',
+      'APPROVED',
+      'RESERVATION_CONFIRMED',
+      'FAILED',
+      'CANCELLED',
+      'REFUND_PENDING',
+      'REFUNDED'
+    )
+  ),
+  amount numeric not null check (amount >= 0),
+  currency text not null default 'KRW',
+  reservation_snapshot jsonb not null,
+  failure_code text,
+  failure_message text,
+  metadata jsonb not null default '{}'::jsonb,
+  approved_at timestamptz,
+  refunded_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index idx_payments_user_created on payments(user_id, created_at desc);
+create index idx_payments_reservation on payments(reservation_id);
+create index idx_payments_status on payments(status);
 ```
+
+RLS:
+
+- Authenticated users may select their own payment rows.
+- Users do not directly insert/update payments from the client.
+- Payment prepare/confirm APIs write through server route handlers.
+- Admin/service role may read payment rows for operations and refunds.
+
+Detailed flow:
+
+- `docs/Payment_MVP.md`
 
 ---
 

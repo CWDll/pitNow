@@ -574,3 +574,35 @@ Rules:
 
 Reason:
 결제 연동 전 MVP에서는 사용자가 확정 예약을 취소하는 흐름이 필요하지만, 체크인 이후나 완료 이후 취소는 점유/정산/환불 영향이 크다. 결제 정책 확정 전까지는 본인 `CONFIRMED` 예약 취소로 범위를 제한한다.
+
+---
+
+## 2026-06-11
+
+Decision:
+결제 MVP는 Toss Payments를 1차 provider로 두고, 예약 확정은 결제 승인 검증 이후에만 생성하는 payment-first flow로 고정한다.
+
+Rules:
+
+- 결제 대기/승인/실패 상태는 `payments` 테이블에 저장한다.
+- `reservations`에는 결제 대기 상태를 추가하지 않는다.
+- `/api/payments/prepare`는 예약 검증/가격 계산 후 `payments.status = READY` row만 생성한다.
+- `/api/payments/confirm`은 provider 승인 검증 후 `reservations.status = CONFIRMED` row를 생성하고 `payments.status = RESERVATION_CONFIRMED`로 전환한다.
+- 결제 승인 후 예약 insert가 DB overlap으로 실패하면 즉시 취소/환불을 시도하고 `REFUNDED` 또는 `REFUND_PENDING`으로 기록한다.
+- Local/E2E는 `PITNOW_PAYMENT_PROVIDER=FAKE`로 실제 결제 없이 prepare/confirm 흐름을 검증한다.
+- Vercel Preview/출시 전 Production은 Toss test mode를 사용하고, live key는 출시 직전 별도 전환한다.
+
+Reason:
+예약을 결제 전에 `CONFIRMED`로 만들면 미결제 예약이 베이를 점유하고, 별도 hold 상태를 만들면 abandoned hold cleanup과 overlap 정책이 복잡해진다. MVP에서는 결제 승인 후 예약 확정으로 단순화하고, rare race는 자동 환불/운영 로그로 처리하는 편이 구현과 운영 리스크가 낮다.
+
+Options considered:
+
+1. 결제 전 임시 예약 hold 생성
+
+- 장점: 사용자가 결제 중인 슬롯을 잠시 보호할 수 있다.
+- 단점: hold 만료 배치, abandoned payment 정리, hold 상태의 overlap 포함 여부, UI 복구가 추가된다.
+
+2. 결제 승인 후 예약 확정 (선택)
+
+- 장점: 미결제 점유가 없고 MVP 구현이 단순하다. 테스트도 fake provider로 반복 가능하다.
+- 단점: 결제 승인 직후 slot race가 발생하면 자동 환불/운영 처리가 필요하다.
