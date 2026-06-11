@@ -533,3 +533,19 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - `GET /api/reservations/05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 응답 확인.
 - `npm run lint` 성공.
 - `npm run build` 성공.
+
+## 22. 2026-06-11 체크인 화면 DB hydrate
+
+체크인 화면을 `reservationId` 기준 DB 원천으로 복원하도록 보강했다.
+
+- `/checkin`은 `reservationId`가 있으면 `GET /api/reservations/:id`를 호출한다.
+- 지점, 베이, 차량, 작업, KST 시간, 상태를 체크인 화면에 표시한다.
+- 체크인 완료 후 `/in-use`로 넘기는 query는 hydrate된 상세값을 사용한다.
+- `CONFIRMED`가 아닌 예약은 체크인 버튼을 비활성화하고 상태 안내를 표시한다.
+
+검증:
+
+- `GET /checkin?reservationId=05d446b2-9e8b-4bab-aa7f-50116d2f14c8` 200 응답 확인.
+- `GET /checkin` 200 응답 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.
