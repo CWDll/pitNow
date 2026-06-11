@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import type { FormEvent } from "react";
 import Link from "next/link";
+
+import { authFetch } from "@/src/lib/auth-fetch";
 
 type ReservationStatus = "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
@@ -92,10 +95,85 @@ function buildReservationHref(item: ReservationListItem): string {
   return `/complete?${query.toString()}`;
 }
 
-function ReservationCard({ item }: { item: ReservationListItem }) {
+interface ReservationCardProps {
+  item: ReservationListItem;
+  onCancelled: (reservationId: string) => void;
+}
+
+function extractErrorMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const error = (payload as { error?: unknown }).error;
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return null;
+}
+
+function ReservationCard({ item, onCancelled }: ReservationCardProps) {
+  const [showCancelForm, setShowCancelForm] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const canCancel = item.status === "CONFIRMED";
+
+  async function handleCancelSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCancelError("");
+
+    const normalizedReason = cancelReason.trim();
+
+    if (!normalizedReason) {
+      setCancelError("취소 사유를 입력해 주세요.");
+      return;
+    }
+
+    setIsCancelling(true);
+
+    try {
+      const response = await authFetch(`/api/reservations/${item.id}/cancel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          reason: normalizedReason,
+        }),
+      });
+      const payload: unknown = await response.json();
+
+      if (!response.ok) {
+        setCancelError(
+          extractErrorMessage(payload) ?? "예약 취소에 실패했습니다.",
+        );
+        return;
+      }
+
+      setShowCancelForm(false);
+      setCancelReason("");
+      onCancelled(item.id);
+    } catch {
+      setCancelError("예약 취소 처리 중 네트워크 오류가 발생했습니다.");
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
   return (
-    <Link href={buildReservationHref(item)} className="block">
-      <article className="rounded-2xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-300">
+    <article className="rounded-2xl border border-zinc-200 bg-white p-4 transition hover:border-zinc-300">
+      <Link href={buildReservationHref(item)} className="block">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-2xl font-semibold text-zinc-900">{item.garageName}</h3>
@@ -116,8 +194,61 @@ function ReservationCard({ item }: { item: ReservationListItem }) {
           {item.dateLabel}
           {item.bayLabel ? ` · ${item.bayLabel}` : ""}
         </p>
-      </article>
-    </Link>
+      </Link>
+
+      {canCancel ? (
+        <div className="mt-4 border-t border-zinc-100 pt-4">
+          {!showCancelForm ? (
+            <button
+              type="button"
+              onClick={() => setShowCancelForm(true)}
+              className="h-10 rounded-2xl bg-zinc-100 px-4 text-sm font-semibold text-zinc-700"
+            >
+              예약 취소
+            </button>
+          ) : (
+            <form onSubmit={handleCancelSubmit} className="space-y-3">
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-700">
+                  취소 사유
+                </span>
+                <textarea
+                  value={cancelReason}
+                  onChange={(event) => setCancelReason(event.target.value)}
+                  maxLength={500}
+                  className="mt-2 min-h-20 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none ring-blue-200 focus:ring-4"
+                  placeholder="예: 일정 변경으로 취소"
+                />
+              </label>
+              {cancelError ? (
+                <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {cancelError}
+                </p>
+              ) : null}
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={isCancelling}
+                  className="h-10 rounded-2xl bg-zinc-950 px-4 text-sm font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
+                >
+                  {isCancelling ? "취소 처리 중..." : "취소 확정"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCancelForm(false);
+                    setCancelError("");
+                  }}
+                  className="h-10 rounded-2xl bg-zinc-100 px-4 text-sm font-semibold text-zinc-700"
+                >
+                  닫기
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      ) : null}
+    </article>
   );
 }
 
@@ -133,8 +264,30 @@ export default function ReservationListClient(props: {
   upcomingReservations: ReservationListItem[];
   pastReservations: ReservationListItem[];
 }) {
-  const { upcomingReservations, pastReservations } = props;
+  const [upcomingReservations, setUpcomingReservations] = useState(
+    props.upcomingReservations,
+  );
+  const [pastReservations, setPastReservations] = useState(
+    props.pastReservations,
+  );
   const [activeTab, setActiveTab] = useState<ReservationTab>("upcoming");
+
+  function handleReservationCancelled(reservationId: string) {
+    setUpcomingReservations((current) => {
+      const cancelledReservation = current.find((item) => item.id === reservationId);
+
+      if (!cancelledReservation) {
+        return current;
+      }
+
+      setPastReservations((pastCurrent) => [
+        { ...cancelledReservation, status: "CANCELLED" },
+        ...pastCurrent,
+      ]);
+
+      return current.filter((item) => item.id !== reservationId);
+    });
+  }
 
   const tabs: Array<{ id: ReservationTab; label: string; count: number }> = [
     { id: "upcoming", label: "다가오는 예약", count: upcomingReservations.length },
@@ -179,7 +332,13 @@ export default function ReservationListClient(props: {
             }
           />
         ) : (
-          activeItems.map((item) => <ReservationCard key={item.id} item={item} />)
+          activeItems.map((item) => (
+            <ReservationCard
+              key={item.id}
+              item={item}
+              onCancelled={handleReservationCancelled}
+            />
+          ))
         )}
       </section>
     </section>

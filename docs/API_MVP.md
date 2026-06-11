@@ -182,7 +182,36 @@ totalPrice: number
 
 ⸻
 
-5. POST /api/checkout
+5. POST /api/reservations/:id/cancel
+
+⸻
+
+기능:
+사용자가 본인 예약을 취소
+
+입력:
+{
+reason?: string
+}
+
+검증:
+• Authorization Bearer session 또는 local dev fallback 필요
+• reservation.user_id = auth user id
+• status = CONFIRMED
+
+로직:
+• reservations.status → CANCELLED
+• reservation_status_logs에 상태 전환 로그 저장
+• 취소 사유는 metadata.reason에 저장
+
+성공 응답:
+{
+status: “CANCELLED”
+}
+
+⸻
+
+6. POST /api/checkout
 
 ⸻
 
@@ -232,7 +261,7 @@ totalSettlement: number
 
 ⸻
 
-6. GET /api/checkouts?reservationId=:id
+7. GET /api/checkouts?reservationId=:id
 
 ⸻
 
@@ -269,7 +298,7 @@ completedAt
 
 ⸻
 
-7. POST /api/reviews
+8. POST /api/reviews
 
 ⸻
 

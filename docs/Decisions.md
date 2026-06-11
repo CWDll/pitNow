@@ -555,3 +555,22 @@ Rules:
 
 Reason:
 운영자는 예약 상세에서 분쟁 가능성, 증적 누락, 고객 불만을 한 번에 판단해야 한다. 증적과 리뷰를 분리된 화면으로 흩어두면 누락 대응이 늦어지므로 예약 상세 drill-down에 함께 모은다.
+
+---
+
+## 2026-06-11
+
+Decision:
+사용자 예약 취소 1차 액션은 본인 `CONFIRMED` 예약만 허용한다.
+
+Rules:
+
+- 사용자 취소 API는 `POST /api/reservations/:id/cancel`로 제공한다.
+- 로그인 사용자는 본인 소유 예약만 취소할 수 있다.
+- `CONFIRMED` 상태에서만 `CANCELLED`로 전환할 수 있다.
+- 취소 시 `transitionReservationStatus()`를 사용해 상태 변경과 `reservation_status_logs` 기록을 함께 처리한다.
+- 취소 사유는 상태 로그 metadata에 저장한다.
+- `/reservation` 목록의 `CONFIRMED` 카드에서만 취소 form을 노출한다.
+
+Reason:
+결제 연동 전 MVP에서는 사용자가 확정 예약을 취소하는 흐름이 필요하지만, 체크인 이후나 완료 이후 취소는 점유/정산/환불 영향이 크다. 결제 정책 확정 전까지는 본인 `CONFIRMED` 예약 취소로 범위를 제한한다.
