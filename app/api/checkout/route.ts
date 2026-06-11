@@ -400,11 +400,7 @@ export async function POST(req: Request) {
 
   const startTime = parseIsoDate(reservation.start_time);
   const endTime = parseIsoDate(reservation.end_time);
-  const reservedEndTime = parseIsoDate(
-    reservation.reserved_end_time ??
-      reservation.blocked_until ??
-      reservation.end_time,
-  );
+  const reservedEndTime = parseIsoDate(reservation.end_time);
   const reservationType = normalizeReservationType(
     reservation.reservation_type,
   );

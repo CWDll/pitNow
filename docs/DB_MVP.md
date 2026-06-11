@@ -93,8 +93,9 @@ create index idx_partner_package_prices_partner on partner_package_prices(partne
 
 ## reservations
 
-`reserved_end_time` is the actual blocked end time.
-For `SHOP_SERVICE`, it is computed by rounding package duration up to 30-minute units.
+`end_time` is the user-facing reservation end time and checkout extra fee 기준이다.
+`reserved_end_time` is kept as a compatibility alias for `end_time`.
+`blocked_until` is the bay occupancy end time and is always `end_time + interval '1 hour'`.
 
 ```sql
 create table reservations (
@@ -105,6 +106,8 @@ bay_id uuid references bays(id) on delete cascade,
 start_time timestamptz not null,
 end_time timestamptz not null,
 blocked_until timestamptz not null,
+reserved_end_time timestamptz not null,
+duration_minutes int not null,
 selected_task_count int not null default 0,
 helper_verify_requested boolean not null default false,
 helper_verify_fee numeric not null default 0,
@@ -133,6 +136,10 @@ add constraint chk_blocked_until_buffer
 check (blocked_until = end_time + interval '1 hour');
 
 alter table reservations
+add constraint chk_reserved_end_time_matches_end_time
+check (reserved_end_time = end_time);
+
+alter table reservations
 add constraint chk_helper_verify_fee
 check (
 (helper_verify_requested = false and helper_verify_fee = 0)
@@ -142,7 +149,9 @@ or (helper_verify_requested = true and helper_verify_fee >= 5000)
 create index idx_reservations_bay on reservations(bay_id);
 create index idx_reservations_user on reservations(user_id);
 create index idx_reservations_vehicle on reservations(vehicle_id);
-create index idx_reservations_time on reservations(start_time, reserved_end_time);
+create index idx_reservations_active_window
+on reservations(partner_id, bay_id, start_time, blocked_until)
+where status in ('CONFIRMED', 'CHECKED_IN', 'IN_USE');
 ```
 
 ---
@@ -158,7 +167,7 @@ add constraint no_overlap
 exclude using gist (
 bay_id with =,
 tstzrange(start_time, blocked_until) with &&
-);
+) where (status in ('CONFIRMED', 'CHECKED_IN', 'IN_USE'));
 
 ⸻
 

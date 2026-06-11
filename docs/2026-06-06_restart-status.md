@@ -533,6 +533,23 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - invalid Bearer token 사용자 API smoke test
 - `/admin` no-cookie redirect smoke test
 
+## 22. 2026-06-11 예약 시간창/중복 방지 hardening
+
+예약 시간 기준을 `end_time`과 `blocked_until`으로 분리해 정리했다.
+
+- `db/migrations/20260611_reservation_time_window_hardening.sql` 추가.
+- `reserved_end_time`은 호환 컬럼으로 유지하되 `end_time`과 같도록 constraint를 둔다.
+- `blocked_until`은 `end_time + 1 hour`이며 DB exclusion constraint의 겹침 판단 기준으로 고정한다.
+- 스케줄 화면 예약 조회는 `blocked_until > dayStart`를 사용해 전날 예약 버퍼가 당일 슬롯을 침범하는 경우도 비활성화한다.
+- 체크아웃 초과요금은 `blocked_until`이 아니라 사용자 예약 종료 시각인 `end_time` 기준으로 계산한다.
+
+검증:
+
+- `npm run lint`
+- `npm run build`
+- 스케줄 페이지 HTTP smoke test
+- invalid Bearer token 사용자 API smoke test
+
 주의:
 
 - 원격 Supabase에는 `db/migrations/20260611_user_vehicles.sql` 적용이 필요하다.

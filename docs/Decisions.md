@@ -298,6 +298,24 @@ Reason:
 ## 2026-06-11
 
 Decision:
+예약 시간 기준은 `end_time`과 `blocked_until`으로 분리하고, DB 겹침 방지는 active 예약의 `start_time ~ blocked_until` 범위로 고정한다.
+
+Rules:
+
+- `end_time`은 사용자 예약 종료 시각이며 체크아웃 초과요금 계산 기준이다.
+- `reserved_end_time`은 기존 화면/API 호환을 위해 `end_time`과 같은 값으로 유지한다.
+- `blocked_until`은 베이 점유 종료 시각이며 항상 `end_time + 1 hour`다.
+- 스케줄 화면은 예약 조회 시 `blocked_until > dayStart`를 사용해 전날 예약의 버퍼가 당일로 넘어오는 경우도 막는다.
+- DB exclusion constraint `no_overlap`은 active 상태(`CONFIRMED`, `CHECKED_IN`, `IN_USE`)에서 `tstzrange(start_time, blocked_until, '[)')` 겹침을 차단한다.
+
+Reason:
+예약 표시/정산/베이 점유가 서로 다른 종료 기준을 사용하면 전날 버퍼, 초과요금, 중복 예약 판단이 어긋날 수 있다. 결제 전 시간 기준을 분리해 고정한다.
+
+---
+
+## 2026-06-11
+
+Decision:
 사용자 Auth 1차 UI는 Supabase email/password 로그인과 회원가입으로 제공한다.
 
 Rules:

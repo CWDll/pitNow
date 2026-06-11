@@ -240,7 +240,7 @@ function PartnerSchedulePageContent() {
         .eq("partner_id", safeGarage.id)
         .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
         .lt("start_time", dayEndIso)
-        .gt("end_time", dayStartIso)
+        .gt("blocked_until", dayStartIso)
         .returns<ReservationRangeRow[]>();
 
       if (error || isCancelled) {
