@@ -328,3 +328,20 @@ Rules:
 
 Reason:
 Self Service 총액은 `파트너 시간요금 × 예약시간 + 검수비`로 계산된다. 시간요금이 비어 있으면 프론트에서는 검수비만 보이고 서버에서는 예약이 거부되어 사용자 흐름이 깨지므로 DB 제약으로 원천 차단한다.
+
+---
+
+## 2026-06-11
+
+Decision:
+사용자 예약 시간 선택은 KST wall-clock 기준으로 해석하고, DB에는 UTC `timestamptz`로 저장한다.
+
+Rules:
+
+- 사용자가 화면에서 `6/11 09:00`을 선택하면 한국시간 `2026-06-11 09:00 Asia/Seoul`로 해석한다.
+- DB 저장 값은 동일 시각의 UTC ISO, 예: `2026-06-11T00:00:00.000Z`로 전송한다.
+- 예약 내역과 Admin 시간 표시는 `Asia/Seoul` 기준으로 formatter를 고정한다.
+- 서버 타이머/초과요금 계산은 UTC instant 기반 ISO 문자열로 계산한다.
+
+Reason:
+Supabase `timestamptz`는 UTC instant로 저장된다. 프론트에서 사용자가 고른 한국 영업시간을 UTC wall-clock으로 전송하면 실제 예약 시간이 9시간 밀려 체크인 가능 시간, 타이머, 초과요금이 모두 어긋난다.

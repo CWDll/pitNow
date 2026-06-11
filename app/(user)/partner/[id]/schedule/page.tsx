@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { selfMaintenanceTaskOptions } from "../../../_data/mock-garages";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
+import { kstWallTimeToUtcIso } from "@/src/lib/timezone";
 
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
 const timeBoundaries = [
@@ -65,18 +66,7 @@ function addDays(date: Date, days: number): Date {
 }
 
 function toIsoByDateAndTime(date: Date, time: string): string {
-  const [hour, minute] = time.split(":").map((value) => Number(value));
-  return new Date(
-    Date.UTC(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-      hour,
-      minute,
-      0,
-      0,
-    ),
-  ).toISOString();
+  return kstWallTimeToUtcIso(date, time);
 }
 
 function parsePositiveNumber(value: string | null, fallback: number): number {

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { garageList, getShopPackageById } from "@/app/(user)/_data/mock-garages";
 import { supabase } from "@/src/lib/supabase";
+import { formatKstDateTimeRange } from "@/src/lib/timezone";
 
 import ReservationListClient, { type ReservationListItem } from "./reservation-list-client";
 
@@ -37,21 +38,6 @@ interface ReservationRow {
     | null;
 }
 
-function formatDateLabel(startTime: string, endTime: string): string {
-  const start = new Date(startTime);
-  const end = new Date(endTime);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return "예약 시간 정보 없음";
-  }
-
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][start.getDay()];
-  const formatTime = (date: Date) =>
-    `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-
-  return `${start.getMonth() + 1}/${start.getDate()}(${weekday}) ${formatTime(start)} - ${formatTime(end)}`;
-}
-
 function mapReservationItem(reservation: ReservationRow): ReservationListItem {
   const garage = garageList.find((item) => item.id === reservation.partner_id);
   const vehicle = Array.isArray(reservation.vehicles)
@@ -76,7 +62,7 @@ function mapReservationItem(reservation: ReservationRow): ReservationListItem {
     id: reservation.id,
     garageName: garage?.name ?? "정비소",
     workTitle,
-    dateLabel: formatDateLabel(reservation.start_time, reservation.end_time),
+    dateLabel: formatKstDateTimeRange(reservation.start_time, reservation.end_time),
     bayLabel,
     reservationType: reservation.reservation_type,
     status: reservation.status,
