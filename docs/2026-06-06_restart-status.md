@@ -707,3 +707,21 @@ Admin에서 `CONFIRMED` 예약을 `CANCELLED`로 변경하는 1차 운영 액션
 
 - 실제 `CONFIRMED` 예약 취소 성공 케이스는 원격 DB 상태를 변경하므로 자동 검증에서 실행하지 않았다.
 - `CHECKED_IN`, `IN_USE`, `COMPLETED` 취소/환불은 결제 정책 확정 후 별도 액션으로 추가한다.
+
+## 29. 2026-06-11 Admin 증적 누락 사유 / 리뷰 표시
+
+Admin 예약 상세에서 증적 누락 사유와 고객 리뷰를 함께 확인할 수 있도록 보강했다.
+
+- `getAdminReservationDetail()`이 리뷰 row를 함께 조회한다.
+- 체크인 row, 체크인 사진 4장, 체크아웃 row, 체크아웃 체크리스트, 체크아웃 사진 2장을 기준으로 `evidenceIssues`를 계산한다.
+- Admin 상세 상단에 `Evidence status` 요약 카드 추가.
+- 누락 사유가 있으면 `Review`와 누락 항목 chip을 표시한다.
+- 고객 리뷰가 있으면 별점, 코멘트, 작성 시각을 표시한다.
+- 리뷰가 없으면 별도 empty state를 표시한다.
+
+검증:
+
+- Admin token 쿠키 포함 `/admin/reservations/:id` 200 응답 확인.
+- Admin token 없이 동일 URL 요청 시 `/admin-login` 307 리다이렉트 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.

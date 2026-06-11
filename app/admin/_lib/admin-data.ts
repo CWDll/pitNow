@@ -81,6 +81,14 @@ interface AdminStatusLogRow {
   created_at: string;
 }
 
+interface AdminReviewRow {
+  id: string;
+  reservation_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+}
+
 interface PartnerPackagePriceRow {
   partner_id: string;
   labor_price: number | string;
@@ -174,6 +182,13 @@ export interface AdminReservationDetail {
     metadata: Record<string, unknown>;
     createdAt: string;
   }>;
+  review: {
+    id: string;
+    rating: number;
+    comment: string | null;
+    createdAt: string;
+  } | null;
+  evidenceIssues: string[];
 }
 
 function toNumber(value: number | string | null | undefined): number {
@@ -349,30 +364,36 @@ export async function getAdminReservationDetail(
     return null;
   }
 
-  const [checkinResult, checkoutResult, statusLogsResult] = await Promise.all([
-    supabaseAdmin
-      .from("checkins")
-      .select(
-        "reservation_id, front_img, rear_img, left_img, right_img, checked_in_at",
-      )
-      .eq("reservation_id", reservation.id)
-      .maybeSingle<AdminCheckinRow>(),
-    supabaseAdmin
-      .from("checkouts")
-      .select(
-        "id, reservation_id, base_price, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, checkout_photo_1, checkout_photo_2, completed_at",
-      )
-      .eq("reservation_id", reservation.id)
-      .maybeSingle<AdminCheckoutRow>(),
-    supabaseAdmin
-      .from("reservation_status_logs")
-      .select(
-        "id, reservation_id, from_status, to_status, actor_type, actor_user_id, reason, metadata, created_at",
-      )
-      .eq("reservation_id", reservation.id)
-      .order("created_at", { ascending: true })
-      .returns<AdminStatusLogRow[]>(),
-  ]);
+  const [checkinResult, checkoutResult, statusLogsResult, reviewResult] =
+    await Promise.all([
+      supabaseAdmin
+        .from("checkins")
+        .select(
+          "reservation_id, front_img, rear_img, left_img, right_img, checked_in_at",
+        )
+        .eq("reservation_id", reservation.id)
+        .maybeSingle<AdminCheckinRow>(),
+      supabaseAdmin
+        .from("checkouts")
+        .select(
+          "id, reservation_id, base_price, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, checkout_photo_1, checkout_photo_2, completed_at",
+        )
+        .eq("reservation_id", reservation.id)
+        .maybeSingle<AdminCheckoutRow>(),
+      supabaseAdmin
+        .from("reservation_status_logs")
+        .select(
+          "id, reservation_id, from_status, to_status, actor_type, actor_user_id, reason, metadata, created_at",
+        )
+        .eq("reservation_id", reservation.id)
+        .order("created_at", { ascending: true })
+        .returns<AdminStatusLogRow[]>(),
+      supabaseAdmin
+        .from("reviews")
+        .select("id, reservation_id, rating, comment, created_at")
+        .eq("reservation_id", reservation.id)
+        .maybeSingle<AdminReviewRow>(),
+    ]);
 
   if (checkinResult.error) {
     console.error("ADMIN CHECKIN DETAIL LOOKUP ERROR:", checkinResult.error);
@@ -385,6 +406,50 @@ export async function getAdminReservationDetail(
   if (statusLogsResult.error) {
     console.error("ADMIN STATUS LOG DETAIL LOOKUP ERROR:", statusLogsResult.error);
   }
+
+  if (reviewResult.error) {
+    console.error("ADMIN REVIEW DETAIL LOOKUP ERROR:", reviewResult.error);
+  }
+
+  const checkin = checkinResult.data
+    ? {
+        frontImg: checkinResult.data.front_img,
+        rearImg: checkinResult.data.rear_img,
+        leftImg: checkinResult.data.left_img,
+        rightImg: checkinResult.data.right_img,
+        checkedInAt: checkinResult.data.checked_in_at,
+      }
+    : null;
+  const checkout = checkoutResult.data
+    ? {
+        basePrice: toNumber(checkoutResult.data.base_price),
+        extraFee: toNumber(checkoutResult.data.extra_fee),
+        helperVerifyRequested: checkoutResult.data.helper_verify_requested,
+        helperVerifyFee: toNumber(checkoutResult.data.helper_verify_fee),
+        totalSettlement: toNumber(checkoutResult.data.total_settlement),
+        toolCheckCompleted: checkoutResult.data.tool_check_completed,
+        cleaningCompleted: checkoutResult.data.cleaning_completed,
+        wasteDisposalCompleted: checkoutResult.data.waste_disposal_completed,
+        checkoutPhoto1: checkoutResult.data.checkout_photo_1 ?? null,
+        checkoutPhoto2: checkoutResult.data.checkout_photo_2 ?? null,
+        completedAt: checkoutResult.data.completed_at,
+      }
+    : null;
+  const evidenceIssues = [
+    !checkin ? "체크인 row 없음" : null,
+    checkin && !checkin.frontImg ? "체크인 전면 사진 없음" : null,
+    checkin && !checkin.rearImg ? "체크인 후면 사진 없음" : null,
+    checkin && !checkin.leftImg ? "체크인 좌측 사진 없음" : null,
+    checkin && !checkin.rightImg ? "체크인 우측 사진 없음" : null,
+    !checkout ? "체크아웃 row 없음" : null,
+    checkout && !checkout.toolCheckCompleted ? "공구 반납 체크 미완료" : null,
+    checkout && !checkout.cleaningCompleted ? "베이 청소 체크 미완료" : null,
+    checkout && !checkout.wasteDisposalCompleted
+      ? "폐유/폐기물 처리 체크 미완료"
+      : null,
+    checkout && !checkout.checkoutPhoto1 ? "체크아웃 사진 1 없음" : null,
+    checkout && !checkout.checkoutPhoto2 ? "체크아웃 사진 2 없음" : null,
+  ].filter((issue): issue is string => issue !== null);
 
   return {
     reservation: {
@@ -407,30 +472,8 @@ export async function getAdminReservationDetail(
       helperVerifyFee: toNumber(reservation.helper_verify_fee),
       createdAt: reservation.created_at,
     },
-    checkin: checkinResult.data
-      ? {
-          frontImg: checkinResult.data.front_img,
-          rearImg: checkinResult.data.rear_img,
-          leftImg: checkinResult.data.left_img,
-          rightImg: checkinResult.data.right_img,
-          checkedInAt: checkinResult.data.checked_in_at,
-        }
-      : null,
-    checkout: checkoutResult.data
-      ? {
-          basePrice: toNumber(checkoutResult.data.base_price),
-          extraFee: toNumber(checkoutResult.data.extra_fee),
-          helperVerifyRequested: checkoutResult.data.helper_verify_requested,
-          helperVerifyFee: toNumber(checkoutResult.data.helper_verify_fee),
-          totalSettlement: toNumber(checkoutResult.data.total_settlement),
-          toolCheckCompleted: checkoutResult.data.tool_check_completed,
-          cleaningCompleted: checkoutResult.data.cleaning_completed,
-          wasteDisposalCompleted: checkoutResult.data.waste_disposal_completed,
-          checkoutPhoto1: checkoutResult.data.checkout_photo_1 ?? null,
-          checkoutPhoto2: checkoutResult.data.checkout_photo_2 ?? null,
-          completedAt: checkoutResult.data.completed_at,
-        }
-      : null,
+    checkin,
+    checkout,
     statusLogs: (statusLogsResult.data ?? []).map((log) => ({
       id: log.id,
       fromStatus: log.from_status,
@@ -441,6 +484,15 @@ export async function getAdminReservationDetail(
       metadata: log.metadata ?? {},
       createdAt: log.created_at,
     })),
+    review: reviewResult.data
+      ? {
+          id: reviewResult.data.id,
+          rating: reviewResult.data.rating,
+          comment: reviewResult.data.comment,
+          createdAt: reviewResult.data.created_at,
+        }
+      : null,
+    evidenceIssues,
   };
 }
 

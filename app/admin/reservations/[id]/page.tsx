@@ -77,6 +77,15 @@ function ChecklistItem(props: { label: string; checked: boolean }) {
   );
 }
 
+function RatingStars({ rating }: { rating: number }) {
+  return (
+    <span className="tracking-widest text-amber-300">
+      {"★".repeat(rating)}
+      <span className="text-slate-700">{"★".repeat(5 - rating)}</span>
+    </span>
+  );
+}
+
 export default async function AdminReservationDetailPage(props: PageProps) {
   const { id } = await props.params;
   const detail = await getAdminReservationDetail(id);
@@ -85,7 +94,8 @@ export default async function AdminReservationDetailPage(props: PageProps) {
     notFound();
   }
 
-  const { reservation, checkin, checkout, statusLogs } = detail;
+  const { reservation, checkin, checkout, statusLogs, review, evidenceIssues } =
+    detail;
 
   return (
     <section className="space-y-6">
@@ -142,6 +152,54 @@ export default async function AdminReservationDetailPage(props: PageProps) {
           이 예약은 이미 취소되었습니다. 상태 전환 로그에서 취소 사유를 확인할 수 있습니다.
         </div>
       ) : null}
+
+      <section
+        className={`rounded-3xl border p-5 ${
+          evidenceIssues.length === 0
+            ? "border-emerald-300/20 bg-emerald-300/10"
+            : "border-amber-300/20 bg-amber-300/10"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p
+              className={`text-sm font-semibold uppercase tracking-[0.2em] ${
+                evidenceIssues.length === 0
+                  ? "text-emerald-200"
+                  : "text-amber-200"
+              }`}
+            >
+              Evidence status
+            </p>
+            <h3 className="mt-2 text-2xl font-semibold text-white">
+              {evidenceIssues.length === 0
+                ? "증적 완료"
+                : `검토 필요 ${evidenceIssues.length}건`}
+            </h3>
+          </div>
+          <span
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              evidenceIssues.length === 0
+                ? "bg-emerald-300 text-slate-950"
+                : "bg-amber-300 text-slate-950"
+            }`}
+          >
+            {evidenceIssues.length === 0 ? "Complete" : "Review"}
+          </span>
+        </div>
+        {evidenceIssues.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {evidenceIssues.map((issue) => (
+              <span
+                key={issue}
+                className="rounded-full bg-slate-950/60 px-3 py-1 text-xs font-semibold text-amber-100 ring-1 ring-amber-200/20"
+              >
+                {issue}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
@@ -269,6 +327,32 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             />
           </div>
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
+        <h3 className="text-2xl font-semibold text-white">Customer Review</h3>
+        {review ? (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xl font-semibold text-white">
+                <RatingStars rating={review.rating} />{" "}
+                <span className="ml-2 text-base text-slate-300">
+                  {review.rating}/5
+                </span>
+              </p>
+              <p className="text-xs text-slate-500">
+                {formatAdminDateTime(review.createdAt)}
+              </p>
+            </div>
+            <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-300">
+              {review.comment || "코멘트 없이 별점만 남긴 리뷰입니다."}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+            아직 작성된 리뷰가 없습니다.
+          </p>
+        )}
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
