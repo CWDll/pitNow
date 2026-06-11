@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ReservationStatus, ReservationType } from "@/src/domain/types";
 import { requireRequestUser } from "@/src/lib/auth";
-import { logReservationStatusChange } from "@/src/lib/reservation-status";
+import { transitionReservationStatus } from "@/src/lib/reservation-status";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
@@ -102,28 +102,7 @@ export async function POST(req: Request, context: Context) {
     );
   }
 
-  const { data: updatedReservation, error: updateError } = await db
-    .from("reservations")
-    .update({ status: "IN_USE" })
-    .eq("id", reservationId)
-    .eq("status", expectedFromStatus)
-    .select("id")
-    .maybeSingle<{ id: string }>();
-
-  if (updateError) {
-    console.error("RESERVATION START UPDATE ERROR:", updateError);
-    return errorResponse(500, "DB_ERROR", "예약 상태 변경 중 오류가 발생했습니다.");
-  }
-
-  if (!updatedReservation) {
-    return errorResponse(
-      409,
-      "STATUS_CONFLICT",
-      "예약 상태가 변경되어 이용 시작을 완료할 수 없습니다.",
-    );
-  }
-
-  const logResult = await logReservationStatusChange({
+  const transitionResult = await transitionReservationStatus({
     reservationId,
     fromStatus: expectedFromStatus,
     toStatus: "IN_USE",
@@ -136,16 +115,14 @@ export async function POST(req: Request, context: Context) {
     },
   });
 
-  if (!logResult.ok && !logResult.skippedMissingTable) {
-    await db
-      .from("reservations")
-      .update({ status: expectedFromStatus })
-      .eq("id", reservationId)
-      .eq("status", "IN_USE");
+  if (!transitionResult.ok) {
+    const status = transitionResult.code === "STATUS_CONFLICT" ? 409 : 500;
     return errorResponse(
-      500,
-      "STATUS_LOG_ERROR",
-      "예약 상태 변경 로그 저장에 실패했습니다.",
+      status,
+      transitionResult.code,
+      transitionResult.code === "STATUS_CONFLICT"
+        ? "예약 상태가 변경되어 이용 시작을 완료할 수 없습니다."
+        : transitionResult.message,
     );
   }
 

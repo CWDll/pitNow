@@ -15,10 +15,45 @@ interface LogReservationStatusChangeParams {
   client?: SupabaseClient;
 }
 
+interface TransitionReservationStatusParams {
+  reservationId: string;
+  fromStatus: ReservationStatus;
+  toStatus: ReservationStatus;
+  actorType?: ReservationStatusActor;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+  actorUserId?: string | null;
+  client?: SupabaseClient;
+}
+
 export interface StatusLogResult {
   ok: boolean;
   skippedMissingTable: boolean;
   message?: string;
+}
+
+export type StatusTransitionResult =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      code: "DB_ERROR" | "STATUS_CONFLICT" | "STATUS_LOG_ERROR";
+      message: string;
+    };
+
+export function isReservationStatusLogFailureFatal(
+  result: StatusLogResult,
+): boolean {
+  if (result.ok) {
+    return false;
+  }
+
+  return (
+    !result.skippedMissingTable ||
+    process.env.NODE_ENV === "production" ||
+    process.env.PITNOW_REQUIRE_STATUS_LOGS === "true"
+  );
 }
 
 export async function logReservationStatusChange({
@@ -91,4 +126,67 @@ export async function logReservationStatusChange({
     skippedMissingTable: false,
     message: error.message,
   };
+}
+
+export async function transitionReservationStatus({
+  reservationId,
+  fromStatus,
+  toStatus,
+  actorType = "SYSTEM",
+  reason,
+  metadata = {},
+  actorUserId = null,
+  client = supabase,
+}: TransitionReservationStatusParams): Promise<StatusTransitionResult> {
+  const { data: updatedReservation, error: updateError } = await client
+    .from("reservations")
+    .update({ status: toStatus })
+    .eq("id", reservationId)
+    .eq("status", fromStatus)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (updateError) {
+    console.error("RESERVATION STATUS UPDATE ERROR:", updateError);
+    return {
+      ok: false,
+      code: "DB_ERROR",
+      message: "예약 상태 변경 중 오류가 발생했습니다.",
+    };
+  }
+
+  if (!updatedReservation) {
+    return {
+      ok: false,
+      code: "STATUS_CONFLICT",
+      message: "예약 상태가 변경되어 요청을 완료할 수 없습니다.",
+    };
+  }
+
+  const logResult = await logReservationStatusChange({
+    reservationId,
+    fromStatus,
+    toStatus,
+    actorType,
+    actorUserId,
+    reason,
+    metadata,
+    client,
+  });
+
+  if (isReservationStatusLogFailureFatal(logResult)) {
+    await client
+      .from("reservations")
+      .update({ status: fromStatus })
+      .eq("id", reservationId)
+      .eq("status", toStatus);
+
+    return {
+      ok: false,
+      code: "STATUS_LOG_ERROR",
+      message: "예약 상태 변경 로그 저장에 실패했습니다.",
+    };
+  }
+
+  return { ok: true };
 }

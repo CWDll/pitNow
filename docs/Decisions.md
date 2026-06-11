@@ -280,6 +280,24 @@ Reason:
 ## 2026-06-11
 
 Decision:
+예약 상태 변경은 API별 직접 update가 아니라 `transitionReservationStatus` 공통 유틸을 경유한다.
+
+Rules:
+
+- 체크인, 이용 시작, 체크아웃은 `fromStatus -> toStatus`를 명시해서 상태를 변경한다.
+- 상태 update 후 `reservation_status_logs` insert가 실패하면 상태를 이전 값으로 되돌린다.
+- 로컬 개발에서는 과거 마이그레이션 미적용 환경을 위해 로그 테이블 누락만 임시 허용한다.
+- production 또는 `PITNOW_REQUIRE_STATUS_LOGS=true`에서는 로그 테이블 누락도 상태 전환 실패로 처리한다.
+- 예약 생성의 `null -> CONFIRMED` 로그도 같은 fatal 판단 기준을 사용한다.
+
+Reason:
+상태 전환 로직이 API마다 흩어져 있으면 취소, 노쇼, 관리자 강제 완료 같은 후속 상태를 추가할 때 로그 누락이나 rollback 정책 차이가 생길 수 있다. 결제 연동 전 상태 머신의 단일 진입점을 먼저 고정한다.
+
+---
+
+## 2026-06-11
+
+Decision:
 사용자 Auth 1차 UI는 Supabase email/password 로그인과 회원가입으로 제공한다.
 
 Rules:

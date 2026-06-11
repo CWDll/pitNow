@@ -516,6 +516,23 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - 잘못된 Bearer token으로 사용자 API가 `401 INVALID_AUTH_TOKEN`을 반환하는지 HTTP smoke test
 - admin cookie 없이 `/admin` 접근이 `/admin-login`으로 redirect 되는지 HTTP smoke test
 
+## 21. 2026-06-11 상태 전환 공통 유틸 정리
+
+예약 상태 머신 진입점을 `src/lib/reservation-status.ts`로 모았다.
+
+- `transitionReservationStatus` 추가.
+- 체크인 `CONFIRMED -> CHECKED_IN`, 이용 시작 `CHECKED_IN/CONFIRMED -> IN_USE`, 체크아웃 `CHECKED_IN/IN_USE -> COMPLETED`가 공통 유틸을 경유한다.
+- 상태 변경 로그 저장 실패 시 예약 상태를 이전 상태로 rollback한다.
+- production 또는 `PITNOW_REQUIRE_STATUS_LOGS=true`에서는 `reservation_status_logs` 누락도 상태 전환 실패로 처리한다.
+- 예약 생성의 `null -> CONFIRMED` 로그도 같은 fatal 판단 기준을 사용한다.
+
+검증:
+
+- `npm run lint`
+- `npm run build`
+- invalid Bearer token 사용자 API smoke test
+- `/admin` no-cookie redirect smoke test
+
 주의:
 
 - 원격 Supabase에는 `db/migrations/20260611_user_vehicles.sql` 적용이 필요하다.

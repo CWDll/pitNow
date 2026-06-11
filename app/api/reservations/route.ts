@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 
 import type { ReservationType } from "@/src/domain/types";
 import { requireRequestUser } from "@/src/lib/auth";
-import { logReservationStatusChange } from "@/src/lib/reservation-status";
+import {
+  isReservationStatusLogFailureFatal,
+  logReservationStatusChange,
+} from "@/src/lib/reservation-status";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
@@ -721,7 +724,7 @@ export async function POST(req: Request) {
     },
   });
 
-  if (!logResult.ok && !logResult.skippedMissingTable) {
+  if (isReservationStatusLogFailureFatal(logResult)) {
     await db.from("reservations").delete().eq("id", data.id);
     return jsonError(
       500,
