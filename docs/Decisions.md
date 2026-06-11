@@ -262,6 +262,24 @@ Reason:
 ## 2026-06-11
 
 Decision:
+Auth/RLS hardening 기준은 "사용자 쓰기는 Supabase Auth 세션, 관리자 조회는 서버 service-role, 로컬 fallback은 개발 전용"으로 고정한다.
+
+Rules:
+
+- 사용자 소유 데이터 API는 Supabase `Authorization: Bearer <access_token>`을 기준으로 `auth.users.id`와 `reservations.user_id`를 매칭한다.
+- 로컬 개발 fallback은 production에서 비활성화되며, 운영/검증 환경에서는 `PITNOW_DISABLE_DEV_AUTH_FALLBACK=true`로 끈다.
+- `reservation-photos` storage는 MVP 동안 public read를 유지하지만, insert는 authenticated 사용자이고 경로의 reservation id 소유자일 때만 허용한다.
+- 초기 storage migration의 anonymous insert policy는 `20260611_auth_rls_hardening.sql`에서 다시 제거해 부분 적용 환경도 보정한다.
+- Admin console은 모바일 사용자 세션과 분리하고, RLS 이후 조회는 서버 전용 `SUPABASE_SERVICE_ROLE_KEY` client에서만 수행한다.
+
+Reason:
+결제 모듈을 붙이기 전 예약/사진/상태 전환의 소유권 경계를 먼저 잠가야 결제 승인, 환불, 관리자 조치가 같은 보안 모델 위에서 확장된다.
+
+---
+
+## 2026-06-11
+
+Decision:
 사용자 Auth 1차 UI는 Supabase email/password 로그인과 회원가입으로 제공한다.
 
 Rules:

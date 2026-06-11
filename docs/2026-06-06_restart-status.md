@@ -499,6 +499,23 @@ Supabase Auth 로그인/세션 UI를 연결했다.
 - `/partner/[id]/work`는 localStorage mock 차량 대신 로그인 사용자의 `vehicles`를 읽는다.
 - 차량이 없으면 예약 진행을 막고 `/my-car` 등록으로 안내한다.
 
+## 20. 2026-06-11 Auth/RLS hardening 정리
+
+스키마/API 정합성 이후 보안 경계를 재점검하고 Auth/RLS 기준을 고정했다.
+
+- 사용자 소유 API는 Supabase Bearer token을 우선 검증하고 `auth.users.id`를 예약/차량 소유권 기준으로 사용한다.
+- 운영에서는 인증 없는 사용자 API fallback이 차단되며, 검증 환경은 `PITNOW_DISABLE_DEV_AUTH_FALLBACK=true` 사용을 권장한다.
+- `/admin`은 모바일 사용자 Auth와 분리된 cookie guard를 사용하고, RLS 적용 후 조회는 service-role client로 제한한다.
+- `reservation-photos` storage의 anonymous insert policy를 hardening migration에서 다시 제거한다.
+- 사진 bucket은 MVP 표시 호환성을 위해 public read를 유지하지만, check-in/checkout 사진 업로드는 authenticated reservation owner만 가능하게 고정한다.
+
+검증해야 할 항목:
+
+- `npm run lint`
+- `npm run build`
+- 잘못된 Bearer token으로 사용자 API가 `401 INVALID_AUTH_TOKEN`을 반환하는지 HTTP smoke test
+- admin cookie 없이 `/admin` 접근이 `/admin-login`으로 redirect 되는지 HTTP smoke test
+
 주의:
 
 - 원격 Supabase에는 `db/migrations/20260611_user_vehicles.sql` 적용이 필요하다.
