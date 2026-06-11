@@ -749,3 +749,30 @@ Admin 예약 상세에서 증적 누락 사유와 고객 리뷰를 함께 확인
 
 - 실제 `CONFIRMED` 예약 취소 성공 케이스는 원격 DB 상태를 변경하므로 자동 검증에서 실행하지 않았다.
 - 체크인 이후 취소/환불은 결제 정책 확정 후 별도 액션으로 추가한다.
+
+## 31. 2026-06-11 체크아웃 E2E 검증 스크립트
+
+결제 연동 전 예약 루프 회귀 검증을 위한 체크아웃 E2E 스크립트와 문서를 추가했다.
+
+- `scripts/e2e-checkout-loop.mjs` 추가.
+- `npm run e2e:checkout` script 추가.
+- `docs/Checkout_E2E.md` 추가.
+- 스크립트는 Supabase Auth 테스트 유저를 생성/재사용하고 실제 Bearer token으로 API를 호출한다.
+- 테스트 차량, active bay, legal self task를 준비한다.
+- API 순서: 예약 생성 → 체크인 → 이용 시작 → 체크아웃.
+- DB 검증: `reservations`, `checkins`, `checkouts`, `reservation_status_logs`.
+
+검증:
+
+- `npm run e2e:checkout` 성공.
+- 생성된 검증 예약 ID: `19846a7e-0ad2-4d9d-a346-64820b5dc212`.
+- 최종 상태 `COMPLETED` 확인.
+- 체크인 사진 4개, 체크아웃 체크리스트 3개, 체크아웃 사진 2개 DB 저장 확인.
+- 상태 로그 `NULL -> CONFIRMED -> CHECKED_IN -> IN_USE -> COMPLETED` 확인.
+- `npm run lint` 성공.
+- `npm run build` 성공.
+
+주의:
+
+- E2E 스크립트는 실제 Supabase DB에 테스트 유저/차량/완료 예약 row를 남긴다.
+- 사진 업로드 자체는 수행하지 않고 증적 URL 문자열을 API에 전달한다.
