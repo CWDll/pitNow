@@ -814,11 +814,14 @@ Admin 예약 상세에서 증적 누락 사유와 고객 리뷰를 함께 확인
 
 - `npm run lint` 성공.
 - `npm run build` 성공.
-- `PITNOW_PAYMENT_PROVIDER=FAKE npm run e2e:checkout` 실행 결과, 원격 Supabase에 `payments` 테이블이 없어 `MISSING_PAYMENTS_TABLE`에서 정상 차단됨.
-- service role 조회로 `public.payments`가 schema cache에 없음을 확인했다.
+- Supabase SQL Editor에 `db/migrations/20260611_payments_foundation.sql` 적용 완료 후 `payments` 테이블 조회 성공.
+- `PITNOW_PAYMENT_PROVIDER=FAKE npm run e2e:checkout` 성공.
+- 생성된 검증 payment ID: `a7f0a11e-5062-41a3-b1ed-e5486a7711c2`.
+- 생성된 검증 reservation ID: `48c6dfe9-2852-49e4-ac20-d85031997fde`.
+- 결제 상태 `RESERVATION_CONFIRMED`, 예약 최종 상태 `COMPLETED` 확인.
+- paymentAmount/totalPrice/totalSettlement 모두 `30000` 확인.
+- 상태 로그 `NULL -> CONFIRMED -> CHECKED_IN -> IN_USE -> COMPLETED` 확인.
 
 다음 조치:
 
-- Supabase SQL Editor에서 `db/migrations/20260611_payments_foundation.sql` 전체 적용.
-- 적용 후 `PITNOW_PAYMENT_PROVIDER=FAKE npm run e2e:checkout` 재실행.
 - fake E2E 통과 후 Toss test adapter 구현.
