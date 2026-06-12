@@ -182,19 +182,18 @@ Response:
 ```json
 {
   "paymentId": "uuid",
-  "provider": "TOSS",
+  "provider": "FAKE",
   "providerOrderId": "pitnow_...",
   "amount": 30000,
   "currency": "KRW",
   "checkout": {
-    "clientKey": "...",
-    "orderId": "pitnow_...",
-    "orderName": "PitNow 예약",
-    "successUrl": "https://...",
-    "failUrl": "https://..."
+    "mode": "FAKE",
+    "type": "FAKE"
   }
 }
 ```
+
+Toss test/live adapter will replace the `checkout` payload with Toss checkout parameters.
 
 ### POST /api/payments/confirm
 
@@ -281,11 +280,26 @@ Manual payment QA should be limited to:
 
 ## Implementation Order
 
-1. Add `payments` migration and TypeScript payment domain types.
-2. Extract reservation validation/price calculation so reservations and payments share one server path.
-3. Add `PITNOW_PAYMENT_PROVIDER=FAKE` prepare/confirm APIs.
-4. Change `/payment` page to call prepare/confirm instead of direct reservation creation.
-5. Update checkout E2E to include fake payment before reservation confirmation.
+1. Add `payments` migration and TypeScript payment domain types. Done in code. Apply `db/migrations/20260611_payments_foundation.sql` to Supabase before runtime E2E.
+2. Extract reservation validation/price calculation so reservations and payments share one server path. Done.
+3. Add `PITNOW_PAYMENT_PROVIDER=FAKE` prepare/confirm APIs. Done.
+4. Change `/payment` page to call prepare/confirm instead of direct reservation creation. Done.
+5. Update checkout E2E to include fake payment before reservation confirmation. Done, but requires the remote `payments` table.
 6. Add Toss test provider adapter.
 7. Add Toss live env only after sandbox flow is stable.
 
+---
+
+## Current Runtime Blocker
+
+If `npm run e2e:checkout` fails with `MISSING_PAYMENTS_TABLE`, run this migration in Supabase SQL Editor first:
+
+```text
+db/migrations/20260611_payments_foundation.sql
+```
+
+After applying it, run:
+
+```bash
+PITNOW_PAYMENT_PROVIDER=FAKE npm run e2e:checkout
+```

@@ -3,7 +3,11 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
-import type { CreateReservationPayload } from "@/src/domain/types";
+import type {
+  CreateReservationPayload,
+  PaymentMethod,
+  PreparePaymentPayload,
+} from "@/src/domain/types";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
@@ -15,13 +19,24 @@ const paymentMethods = [
   "토스페이",
 ] as const;
 
-function parseReservationId(payload: unknown): string | null {
-  if (payload && typeof payload === "object" && "id" in payload) {
-    const id = (payload as { id?: unknown }).id;
-    return typeof id === "string" ? id : null;
+const paymentMethodMap: Record<
+  (typeof paymentMethods)[number],
+  PaymentMethod
+> = {
+  "신용/체크카드": "CARD",
+  "카카오페이": "KAKAO_PAY",
+  "네이버페이": "NAVER_PAY",
+  "토스페이": "TOSS_PAY",
+};
+
+function parseStringField(payload: unknown, fieldName: string): string | null {
+  if (!payload || typeof payload !== "object" || !(fieldName in payload)) {
+    return null;
   }
 
-  return null;
+  const value = (payload as Record<string, unknown>)[fieldName];
+
+  return typeof value === "string" ? value : null;
 }
 
 function parseNumberField(payload: unknown, fieldName: string): number | null {
@@ -31,11 +46,7 @@ function parseNumberField(payload: unknown, fieldName: string): number | null {
 
   const value = (payload as Record<string, unknown>)[fieldName];
 
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return null;
-  }
-
-  return value;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function PaymentPageContent() {
@@ -132,7 +143,7 @@ function PaymentPageContent() {
         return;
       }
 
-      const body: CreateReservationPayload = {
+      const reservation: CreateReservationPayload = {
         reservationType,
         bayId,
         vehicleId: carId,
@@ -151,34 +162,77 @@ function PaymentPageContent() {
         endTime,
       };
 
-      const response = await authFetch("/api/reservations", {
+      const prepareBody: PreparePaymentPayload = {
+        method: paymentMethodMap[method],
+        reservation,
+      };
+
+      const prepareResponse = await authFetch("/api/payments/prepare", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(prepareBody),
       });
 
-      const data: unknown = await response.json();
+      const prepareData: unknown = await prepareResponse.json();
 
-      if (!response.ok) {
+      if (!prepareResponse.ok) {
         setError(
           extractApiErrorMessage(
-            data,
-            "결제 처리 중 예약 생성에 실패했습니다.",
+            prepareData,
+            "결제 준비 중 오류가 발생했습니다.",
           ),
         );
         return;
       }
 
-      const reservationId = parseReservationId(data);
+      const paymentId = parseStringField(prepareData, "paymentId");
+      const providerOrderId = parseStringField(prepareData, "providerOrderId");
+      const preparedAmount =
+        parseNumberField(prepareData, "amount") ?? totalPrice;
+
+      if (!paymentId || !providerOrderId) {
+        setError("결제 준비 정보를 확인할 수 없습니다.");
+        return;
+      }
+
+      const confirmResponse = await authFetch("/api/payments/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paymentId,
+          providerOrderId,
+          amount: preparedAmount,
+        }),
+      });
+
+      const confirmData: unknown = await confirmResponse.json();
+
+      if (!confirmResponse.ok) {
+        setError(
+          extractApiErrorMessage(
+            confirmData,
+            "결제 승인 후 예약 확정에 실패했습니다.",
+          ),
+        );
+        return;
+      }
+
+      const reservationId = parseStringField(confirmData, "reservationId");
       if (!reservationId) {
         setError("예약 ID를 확인할 수 없습니다.");
         return;
       }
 
+      const reservationResult =
+        confirmData && typeof confirmData === "object" && "reservation" in confirmData
+          ? (confirmData as { reservation?: unknown }).reservation
+          : null;
       const confirmedTotalPrice =
-        parseNumberField(data, "totalPrice") ?? totalPrice;
+        parseNumberField(reservationResult, "totalPrice") ?? preparedAmount;
 
       const query = new URLSearchParams({
         reservationId,

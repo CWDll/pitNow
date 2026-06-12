@@ -220,7 +220,7 @@ async function apiRequest({ baseUrl, token, path, method = "GET", body }) {
   return payload;
 }
 
-async function createReservationWithFreeWindow(params) {
+async function createPaidReservationWithFreeWindow(params) {
   const { baseUrl, token, bayId, vehicleId, taskCode } = params;
   const startBase = addHours(new Date(), 24 * 30);
 
@@ -230,26 +230,43 @@ async function createReservationWithFreeWindow(params) {
     const end = addHours(start, 2);
 
     try {
-      const payload = await apiRequest({
+      const reservation = {
+        reservationType: "SELF_SERVICE",
+        bayId,
+        vehicleId,
+        taskIds: [taskCode],
+        agreeOnlySelectedTasks: true,
+        consentMethod: "CHECKBOX",
+        helperVerifyRequested: false,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+      };
+      const preparedPayment = await apiRequest({
         baseUrl,
         token,
-        path: "/api/reservations",
+        path: "/api/payments/prepare",
         method: "POST",
         body: {
-          reservationType: "SELF_SERVICE",
-          bayId,
-          vehicleId,
-          taskIds: [taskCode],
-          agreeOnlySelectedTasks: true,
-          consentMethod: "CHECKBOX",
-          helperVerifyRequested: false,
-          startTime: start.toISOString(),
-          endTime: end.toISOString(),
+          method: "CARD",
+          reservation,
+        },
+      });
+
+      const confirmedPayment = await apiRequest({
+        baseUrl,
+        token,
+        path: "/api/payments/confirm",
+        method: "POST",
+        body: {
+          paymentId: preparedPayment.paymentId,
+          providerOrderId: preparedPayment.providerOrderId,
+          amount: preparedPayment.amount,
         },
       });
 
       return {
-        reservationId: payload.id,
+        paymentId: preparedPayment.paymentId,
+        reservationId: confirmedPayment.reservationId,
         startTime: start.toISOString(),
         endTime: end.toISOString(),
       };
@@ -266,6 +283,7 @@ async function createReservationWithFreeWindow(params) {
 async function verifyDatabase({ admin, reservationId }) {
   const [
     reservationResult,
+    paymentResult,
     checkinResult,
     checkoutResult,
     statusLogResult,
@@ -274,6 +292,11 @@ async function verifyDatabase({ admin, reservationId }) {
       .from("reservations")
       .select("id,status,total_price")
       .eq("id", reservationId)
+      .maybeSingle(),
+    admin
+      .from("payments")
+      .select("id,status,amount,reservation_id")
+      .eq("reservation_id", reservationId)
       .maybeSingle(),
     admin
       .from("checkins")
@@ -298,6 +321,10 @@ async function verifyDatabase({ admin, reservationId }) {
     throw new Error(`예약 검증 실패: ${reservationResult.error.message}`);
   }
 
+  if (paymentResult.error) {
+    throw new Error(`결제 검증 실패: ${paymentResult.error.message}`);
+  }
+
   if (checkinResult.error) {
     throw new Error(`체크인 검증 실패: ${checkinResult.error.message}`);
   }
@@ -311,12 +338,19 @@ async function verifyDatabase({ admin, reservationId }) {
   }
 
   const reservation = reservationResult.data;
+  const payment = paymentResult.data;
   const checkin = checkinResult.data;
   const checkout = checkoutResult.data;
   const statusLogs = statusLogResult.data ?? [];
 
   if (reservation?.status !== "COMPLETED") {
     throw new Error(`최종 예약 상태가 COMPLETED가 아닙니다: ${reservation?.status}`);
+  }
+
+  if (payment?.status !== "RESERVATION_CONFIRMED") {
+    throw new Error(
+      `최종 결제 상태가 RESERVATION_CONFIRMED가 아닙니다: ${payment?.status}`,
+    );
   }
 
   if (
@@ -355,6 +389,7 @@ async function verifyDatabase({ admin, reservationId }) {
   }
 
   return {
+    paymentAmount: Number(payment.amount),
     totalPrice: Number(reservation.total_price),
     totalSettlement: Number(checkout.total_settlement),
     transitions,
@@ -393,13 +428,14 @@ async function main() {
   formatStep("테스트 베이 선택", bayId);
   formatStep("테스트 작업 선택", taskCode);
 
-  const reservation = await createReservationWithFreeWindow({
+  const reservation = await createPaidReservationWithFreeWindow({
     baseUrl,
     token,
     bayId,
     vehicleId,
     taskCode,
   });
+  formatStep("FAKE 결제 승인", reservation.paymentId);
   formatStep("예약 생성", reservation.reservationId);
 
   await apiRequest({
@@ -453,8 +489,10 @@ async function main() {
       {
         success: true,
         reservationId: reservation.reservationId,
+        paymentId: reservation.paymentId,
         startTime: reservation.startTime,
         endTime: reservation.endTime,
+        paymentAmount: verification.paymentAmount,
         totalPrice: verification.totalPrice,
         totalSettlement: verification.totalSettlement,
         transitions: verification.transitions,

@@ -18,7 +18,12 @@
 ⸻
 
 기능:
-예약 생성
+예약 생성 legacy endpoint
+
+상태:
+• 결제 도입 이후 기본 비활성화
+• `PITNOW_ALLOW_DIRECT_RESERVATION_CREATE=true`일 때만 개발/마이그레이션 검증용으로 허용
+• 사용자 예약 확정은 `/api/payments/prepare` → `/api/payments/confirm` 흐름을 사용해야 함
 
 입력:
 {

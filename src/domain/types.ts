@@ -7,6 +7,21 @@ export type ReservationStatus =
 
 export type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 
+export type PaymentProvider = "TOSS" | "FAKE";
+
+export type PaymentProviderMode = "FAKE" | "TOSS_TEST" | "TOSS_LIVE";
+
+export type PaymentMethod = "CARD" | "KAKAO_PAY" | "NAVER_PAY" | "TOSS_PAY";
+
+export type PaymentStatus =
+  | "READY"
+  | "APPROVED"
+  | "RESERVATION_CONFIRMED"
+  | "FAILED"
+  | "CANCELLED"
+  | "REFUND_PENDING"
+  | "REFUNDED";
+
 export interface Reservation {
   id: string;
   userId: string;
@@ -69,6 +84,25 @@ export interface Vehicle {
   createdAt: string;
 }
 
+export interface Payment {
+  id: string;
+  userId: string;
+  reservationId: string | null;
+  provider: PaymentProvider;
+  providerPaymentKey: string | null;
+  providerOrderId: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  amount: number;
+  currency: "KRW";
+  reservationSnapshot: CreateReservationPayload & {
+    amount: number;
+  };
+  failureCode: string | null;
+  failureMessage: string | null;
+  createdAt: string;
+}
+
 export interface CreateReservationPayload {
   reservationType: ReservationType;
   bayId: string;
@@ -81,6 +115,25 @@ export interface CreateReservationPayload {
   signatureImageUrl?: string;
   startTime: string;
   endTime: string;
+}
+
+export interface PreparePaymentPayload {
+  method: PaymentMethod;
+  reservation: CreateReservationPayload;
+}
+
+export interface ConfirmPaymentPayload {
+  paymentId: string;
+  providerPaymentKey?: string;
+  providerOrderId: string;
+  amount: number;
+}
+
+export interface FailPaymentPayload {
+  paymentId: string;
+  code?: string;
+  message?: string;
+  cancelled?: boolean;
 }
 
 export interface CheckInPayload {

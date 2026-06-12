@@ -1,14 +1,15 @@
 # Checkout E2E Validation
 
-결제 연동 전에 예약 루프가 DB 원천 기준으로 끝까지 이어지는지 확인하는 검증 절차입니다.
+결제 연동 전에 fake 결제부터 체크아웃까지 예약 루프가 DB 원천 기준으로 끝까지 이어지는지 확인하는 검증 절차입니다.
 
 검증 대상:
 
-- 예약 생성: `POST /api/reservations`
+- 결제 준비: `POST /api/payments/prepare`
+- 결제 승인/예약 확정: `POST /api/payments/confirm`
 - 체크인: `POST /api/checkin`
 - 이용 시작: `POST /api/reservations/:id/start`
 - 체크아웃: `POST /api/checkout`
-- DB 검증: `reservations`, `checkins`, `checkouts`, `reservation_status_logs`
+- DB 검증: `payments`, `reservations`, `checkins`, `checkouts`, `reservation_status_logs`
 
 ## 실행 전 조건
 
@@ -17,6 +18,13 @@
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- 원격 Supabase에 `db/migrations/20260611_payments_foundation.sql` 적용
+
+로컬/E2E는 실제 결제를 하지 않도록 fake provider를 사용합니다.
+
+```bash
+PITNOW_PAYMENT_PROVIDER=FAKE
+```
 
 기본 실행:
 
@@ -50,14 +58,17 @@ PITNOW_E2E_EMAIL=pitnow-e2e@example.com PITNOW_E2E_PASSWORD='...' npm run e2e:ch
 2. 테스트 유저로 Supabase Auth 로그인하여 Bearer token을 발급받습니다.
 3. 테스트 차량을 생성하거나 재사용합니다.
 4. 시간당 요금이 있는 active bay와 legal self task를 선택합니다.
-5. 미래 시간대에 Self Service 예약을 생성합니다.
-6. 체크인 사진 URL 4개로 체크인을 호출합니다.
-7. 이용 시작 API를 호출합니다.
-8. 체크아웃 체크리스트 3개와 체크아웃 사진 URL 2개로 체크아웃을 호출합니다.
-9. DB에서 아래 결과를 검증합니다.
+5. 미래 시간대 예약 payload로 fake 결제를 준비합니다.
+6. fake 결제를 승인하고 예약을 `CONFIRMED`로 확정합니다.
+7. 체크인 사진 URL 4개로 체크인을 호출합니다.
+8. 이용 시작 API를 호출합니다.
+9. 체크아웃 체크리스트 3개와 체크아웃 사진 URL 2개로 체크아웃을 호출합니다.
+10. DB에서 아래 결과를 검증합니다.
 
 DB 검증 조건:
 
+- `payments.status = RESERVATION_CONFIRMED`
+- `payments.reservation_id = reservations.id`
 - `reservations.status = COMPLETED`
 - `checkins` row 존재
 - 체크인 사진 4개 존재
@@ -76,4 +87,4 @@ DB 검증 조건:
 - 예약 시간은 미래 시간대를 사용하고, 겹침이 있으면 다음 시간대로 재시도합니다.
 - 사진 업로드 자체는 수행하지 않고, API에 증적 URL 문자열을 전달합니다.
 - Storage 업로드 검증은 사용자 화면 업로드 플로우에서 별도로 확인합니다.
-- 결제 연동 전까지는 이 스크립트가 예약 루프 회귀 검증의 기준입니다.
+- Toss live/test adapter를 붙이기 전까지는 이 스크립트가 결제 포함 예약 루프 회귀 검증의 기준입니다.

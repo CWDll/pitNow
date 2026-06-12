@@ -793,3 +793,32 @@ Admin 예약 상세에서 증적 누락 사유와 고객 리뷰를 함께 확인
 
 - 문서 간 `payments`, 결제 상태, MVP 제외 항목 충돌 검색.
 - `npm run lint` 성공.
+
+## 33. 2026-06-11 FAKE 결제 기반 구현
+
+결제 설계에 맞춰 실제 코드 경로를 fake provider 기준으로 1차 구현했다.
+
+- `db/migrations/20260611_payments_foundation.sql` 추가.
+- `src/domain/types.ts`에 결제 provider/method/status/payload 타입 추가.
+- `src/lib/reservation-create.ts` 추가: 예약 payload parse, 소유 차량 검증, bay/partner 가격 검증, self task/package 검증, 가격 계산, 예약 확정 insert를 공통화했다.
+- 기존 `POST /api/reservations`는 공통 예약 생성 유틸을 사용하는 얇은 wrapper로 정리했다.
+- `POST /api/payments/prepare` 추가: 예약 검증/가격 계산 후 `payments.status = READY` row 생성.
+- `POST /api/payments/confirm` 추가: fake 승인 후 `APPROVED -> RESERVATION_CONFIRMED`, 예약 `CONFIRMED` 생성.
+- `POST /api/payments/fail` 추가: `READY -> FAILED/CANCELLED` 기록.
+- `/payment` 화면은 직접 예약 생성 대신 `prepare -> confirm -> reservation-complete` 흐름을 사용한다.
+- `POST /api/reservations` direct 예약 생성은 기본 비활성화하고, `PITNOW_ALLOW_DIRECT_RESERVATION_CREATE=true`일 때만 legacy/dev 용도로 허용한다.
+- `scripts/e2e-checkout-loop.mjs`는 fake 결제 준비/승인 후 체크인/이용시작/체크아웃을 검증하도록 변경했다.
+- `docs/Checkout_E2E.md`와 `docs/Payment_MVP.md`를 fake 결제 기준으로 갱신했다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- `PITNOW_PAYMENT_PROVIDER=FAKE npm run e2e:checkout` 실행 결과, 원격 Supabase에 `payments` 테이블이 없어 `MISSING_PAYMENTS_TABLE`에서 정상 차단됨.
+- service role 조회로 `public.payments`가 schema cache에 없음을 확인했다.
+
+다음 조치:
+
+- Supabase SQL Editor에서 `db/migrations/20260611_payments_foundation.sql` 전체 적용.
+- 적용 후 `PITNOW_PAYMENT_PROVIDER=FAKE npm run e2e:checkout` 재실행.
+- fake E2E 통과 후 Toss test adapter 구현.
