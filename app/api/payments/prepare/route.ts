@@ -5,6 +5,7 @@ import {
   assertPaymentMethod,
   createProviderOrderId,
   getPaymentProviderMode,
+  getTossClientKey,
   providerFromMode,
 } from "@/src/lib/payments";
 import {
@@ -88,12 +89,14 @@ export async function POST(req: Request) {
   const mode = getPaymentProviderMode();
   const provider = providerFromMode(mode);
 
-  if (provider !== "FAKE") {
+  const tossClientKey = provider === "TOSS" ? getTossClientKey() : null;
+
+  if (provider === "TOSS" && !tossClientKey) {
     return jsonError(
       apiError(
-        501,
-        "PAYMENT_PROVIDER_NOT_IMPLEMENTED",
-        "Toss 결제 어댑터는 fake 결제 흐름 검증 후 연결합니다.",
+        503,
+        "TOSS_CLIENT_KEY_REQUIRED",
+        "Toss test 결제를 위해 NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY가 필요합니다.",
       ),
     );
   }
@@ -149,6 +152,12 @@ export async function POST(req: Request) {
     );
   }
 
+  const origin = new URL(req.url).origin;
+  const successUrl = new URL("/payment/success", origin);
+  successUrl.searchParams.set("paymentId", data.id);
+  const failUrl = new URL("/payment/fail", origin);
+  failUrl.searchParams.set("paymentId", data.id);
+
   return NextResponse.json({
     success: true,
     paymentId: data.id,
@@ -156,9 +165,21 @@ export async function POST(req: Request) {
     providerOrderId: data.provider_order_id,
     amount: Number(data.amount),
     currency: data.currency,
-    checkout: {
-      mode,
-      type: "FAKE",
-    },
+    checkout:
+      provider === "FAKE"
+        ? {
+            mode,
+            type: "FAKE",
+          }
+        : {
+            mode,
+            type: "TOSS_PAYMENT_WINDOW",
+            clientKey: tossClientKey,
+            customerKey: auth.userId,
+            orderId: data.provider_order_id,
+            orderName: "PitNow 예약",
+            successUrl: successUrl.toString(),
+            failUrl: failUrl.toString(),
+          },
   });
 }

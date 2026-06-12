@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 
 import type { ConfirmPaymentPayload } from "@/src/domain/types";
 import { requireRequestUser } from "@/src/lib/auth";
-import { getPaymentProviderMode, toPaymentAmount } from "@/src/lib/payments";
+import {
+  getPaymentProviderMode,
+  getTossApiBaseUrl,
+  getTossBasicAuthorization,
+  getTossSecretKey,
+  toPaymentAmount,
+} from "@/src/lib/payments";
 import {
   apiError,
   createConfirmedReservation,
@@ -66,6 +72,64 @@ function parsePayload(payload: unknown): ConfirmPaymentPayload | null {
       typeof providerPaymentKey === "string"
         ? providerPaymentKey.trim()
         : undefined,
+  };
+}
+
+async function confirmTossPayment(params: {
+  paymentKey: string;
+  orderId: string;
+  amount: number;
+}) {
+  const secretKey = getTossSecretKey();
+
+  if (!secretKey) {
+    return {
+      ok: false as const,
+      status: 503,
+      code: "TOSS_SECRET_KEY_REQUIRED",
+      message: "Toss 결제 승인을 위해 TOSS_PAYMENTS_SECRET_KEY가 필요합니다.",
+      providerPayload: null,
+    };
+  }
+
+  const response = await fetch(`${getTossApiBaseUrl()}/v1/payments/confirm`, {
+    method: "POST",
+    headers: {
+      Authorization: getTossBasicAuthorization(secretKey),
+      "Content-Type": "application/json",
+      "Idempotency-Key": `pitnow-confirm-${params.orderId}`,
+    },
+    body: JSON.stringify({
+      paymentKey: params.paymentKey,
+      orderId: params.orderId,
+      amount: params.amount,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const providerError = payload as
+      | { code?: unknown; message?: unknown }
+      | null;
+
+    return {
+      ok: false as const,
+      status: response.status,
+      code:
+        typeof providerError?.code === "string"
+          ? providerError.code
+          : "TOSS_CONFIRM_FAILED",
+      message:
+        typeof providerError?.message === "string"
+          ? providerError.message
+          : "Toss 결제 승인에 실패했습니다.",
+      providerPayload: payload,
+    };
+  }
+
+  return {
+    ok: true as const,
+    providerPayload: payload,
   };
 }
 
@@ -155,13 +219,17 @@ export async function POST(req: Request) {
     );
   }
 
-  if (payment.provider !== "FAKE" || getPaymentProviderMode() !== "FAKE") {
+  const providerMode = getPaymentProviderMode();
+
+  if (payment.provider === "FAKE" && providerMode !== "FAKE") {
     return jsonError(
-      apiError(
-        501,
-        "PAYMENT_PROVIDER_NOT_IMPLEMENTED",
-        "Toss 결제 승인 검증은 fake 결제 흐름 검증 후 연결합니다.",
-      ),
+      apiError(400, "PAYMENT_PROVIDER_MISMATCH", "결제 provider가 일치하지 않습니다."),
+    );
+  }
+
+  if (payment.provider === "TOSS" && providerMode === "FAKE") {
+    return jsonError(
+      apiError(400, "PAYMENT_PROVIDER_MISMATCH", "결제 provider가 일치하지 않습니다."),
     );
   }
 
@@ -181,13 +249,66 @@ export async function POST(req: Request) {
   }
 
   const approvedAt = new Date().toISOString();
+  let providerPayload: unknown = {
+    mode: "FAKE",
+  };
+  const providerPaymentKey =
+    body.providerPaymentKey || `fake_${payment.provider_order_id}`;
+
+  if (payment.provider === "TOSS") {
+    if (!body.providerPaymentKey) {
+      return jsonError(
+        apiError(
+          400,
+          "TOSS_PAYMENT_KEY_REQUIRED",
+          "Toss 결제 승인에는 paymentKey가 필요합니다.",
+        ),
+      );
+    }
+
+    const tossConfirmResult = await confirmTossPayment({
+      paymentKey: body.providerPaymentKey,
+      orderId: payment.provider_order_id,
+      amount: storedAmount,
+    });
+
+    if (!tossConfirmResult.ok) {
+      await supabaseAdmin
+        .from("payments")
+        .update({
+          status: "FAILED",
+          failure_code: tossConfirmResult.code,
+          failure_message: tossConfirmResult.message,
+          metadata: {
+            tossConfirmError: tossConfirmResult.providerPayload,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id)
+        .eq("status", "READY");
+
+      return jsonError(
+        apiError(
+          tossConfirmResult.status,
+          tossConfirmResult.code,
+          tossConfirmResult.message,
+        ),
+      );
+    }
+
+    providerPayload = tossConfirmResult.providerPayload;
+  }
+
   const { error: approveError } = await supabaseAdmin
     .from("payments")
     .update({
       status: "APPROVED",
-      provider_payment_key:
-        body.providerPaymentKey || `fake_${payment.provider_order_id}`,
+      provider_payment_key: providerPaymentKey,
       approved_at: approvedAt,
+      metadata: {
+        mode: providerMode,
+        providerPayload,
+      },
       updated_at: approvedAt,
     })
     .eq("id", payment.id)
@@ -308,4 +429,3 @@ export async function POST(req: Request) {
     reservation: createResult.value,
   });
 }
-

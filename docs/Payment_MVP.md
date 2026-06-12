@@ -193,7 +193,27 @@ Response:
 }
 ```
 
-Toss test/live adapter will replace the `checkout` payload with Toss checkout parameters.
+Toss test/live adapter replaces the `checkout` payload with Toss checkout parameters:
+
+```json
+{
+  "paymentId": "uuid",
+  "provider": "TOSS",
+  "providerOrderId": "pitnow_...",
+  "amount": 30000,
+  "currency": "KRW",
+  "checkout": {
+    "mode": "TOSS_TEST",
+    "type": "TOSS_PAYMENT_WINDOW",
+    "clientKey": "test_ck_...",
+    "customerKey": "auth-user-id",
+    "orderId": "pitnow_...",
+    "orderName": "PitNow 예약",
+    "successUrl": "http://localhost:3000/payment/success?paymentId=...",
+    "failUrl": "http://localhost:3000/payment/fail?paymentId=..."
+  }
+}
+```
 
 ### POST /api/payments/confirm
 
@@ -261,6 +281,14 @@ Use three modes:
 - `PITNOW_PAYMENT_PROVIDER=TOSS_TEST`: manual sandbox integration with Toss test keys and test cards. No real settlement.
 - `PITNOW_PAYMENT_PROVIDER=TOSS_LIVE`: production only.
 
+Toss env vars:
+
+- `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY`: browser SDK client key.
+- `TOSS_PAYMENTS_SECRET_KEY`: server-only secret key for `/v1/payments/confirm`.
+- `TOSS_PAYMENTS_API_BASE_URL`: optional override. Defaults to `https://api.tosspayments.com`.
+
+After changing `.env.local`, restart `npm run dev`. A running Next dev server does not pick up shell-only env overrides for already-started route handlers.
+
 Recommended environments:
 
 - Local `.env.local`: `FAKE`
@@ -285,7 +313,7 @@ Manual payment QA should be limited to:
 3. Add `PITNOW_PAYMENT_PROVIDER=FAKE` prepare/confirm APIs. Done.
 4. Change `/payment` page to call prepare/confirm instead of direct reservation creation. Done.
 5. Update checkout E2E to include fake payment before reservation confirmation. Done, but requires the remote `payments` table.
-6. Add Toss test provider adapter.
+6. Add Toss test provider adapter. Done in code. Requires Toss test keys for manual browser QA.
 7. Add Toss live env only after sandbox flow is stable.
 
 ---

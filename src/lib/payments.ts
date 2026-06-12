@@ -58,6 +58,27 @@ export function toPaymentAmount(value: number | string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+export function getTossClientKey(): string | null {
+  const key = process.env.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY;
+
+  return key?.trim() ? key.trim() : null;
+}
+
+export function getTossSecretKey(): string | null {
+  const key = process.env.TOSS_PAYMENTS_SECRET_KEY;
+
+  return key?.trim() ? key.trim() : null;
+}
+
+export function getTossApiBaseUrl(): string {
+  return process.env.TOSS_PAYMENTS_API_BASE_URL?.trim() ||
+    "https://api.tosspayments.com";
+}
+
+export function getTossBasicAuthorization(secretKey: string): string {
+  return `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`;
+}
+
 export function assertPaymentMethod(value: unknown): PaymentMethod | null {
   return typeof value === "string" &&
     paymentMethods.includes(value as PaymentMethod)
@@ -89,4 +110,3 @@ export async function markPaymentFailed(params: {
     .select("id, status")
     .maybeSingle<{ id: string; status: PaymentStatus }>();
 }
-

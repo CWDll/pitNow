@@ -824,4 +824,31 @@ Admin 예약 상세에서 증적 누락 사유와 고객 리뷰를 함께 확인
 
 다음 조치:
 
-- fake E2E 통과 후 Toss test adapter 구현.
+- Toss test adapter 구현.
+
+## 34. 2026-06-12 Toss test adapter 1차 구현
+
+FAKE 결제 루프를 유지한 상태에서 Toss test 결제창/승인 adapter를 추가했다.
+
+- `PITNOW_PAYMENT_PROVIDER=TOSS_TEST` 또는 `TOSS_LIVE`이면 `payments.provider = TOSS`로 준비한다.
+- `POST /api/payments/prepare`는 Toss 결제창용 checkout payload를 반환한다.
+- `/payment` 화면은 Toss checkout payload를 받으면 `https://js.tosspayments.com/v2/standard` SDK를 로드하고 `payment.requestPayment()`를 호출한다.
+- `/payment/success` 추가: Toss redirect query의 `paymentKey/orderId/amount`와 `paymentId`로 `/api/payments/confirm`을 호출한다.
+- `/payment/fail` 추가: 실패/취소 query를 `/api/payments/fail`로 기록한다.
+- `POST /api/payments/confirm`은 Toss mode에서 `TOSS_PAYMENTS_SECRET_KEY`로 Toss `/v1/payments/confirm`을 호출한 뒤 예약을 확정한다.
+- Toss env vars: `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY`, `TOSS_PAYMENTS_SECRET_KEY`, optional `TOSS_PAYMENTS_API_BASE_URL`.
+- `.env.local` 변경 후에는 `npm run dev` 재시작이 필요하다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- `PITNOW_PAYMENT_PROVIDER=FAKE npm run e2e:checkout` 성공. Toss adapter 추가 후에도 fake 회귀 검증이 유지됨.
+- 생성된 검증 payment ID: `00447226-934e-449b-88c9-4e922d179492`.
+- 생성된 검증 reservation ID: `106899db-c69a-4fb4-92d5-8991e279d407`.
+- adapter smoke test 중 생성된 미승인 payment 2건은 `CANCELLED`로 정리함.
+
+남은 수동 검증:
+
+- Toss test client/secret key를 `.env.local`과 Vercel Preview에 설정.
+- dev server 재시작 후 실제 브라우저에서 test 결제창 success/fail 각 1회 확인.

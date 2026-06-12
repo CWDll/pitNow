@@ -29,6 +29,37 @@ const paymentMethodMap: Record<
   "토스페이": "TOSS_PAY",
 };
 
+interface TossCheckoutPayload {
+  type: "TOSS_PAYMENT_WINDOW";
+  clientKey: string;
+  customerKey: string;
+  orderId: string;
+  orderName: string;
+  successUrl: string;
+  failUrl: string;
+}
+
+declare global {
+  interface Window {
+    TossPayments?: (clientKey: string) => {
+      payment: (params: { customerKey: string }) => {
+        requestPayment: (params: {
+          method: "CARD";
+          amount: {
+            value: number;
+            currency: "KRW";
+          };
+          orderId: string;
+          orderName: string;
+          successUrl: string;
+          failUrl: string;
+          windowTarget?: "self" | "iframe";
+        }) => Promise<void>;
+      };
+    };
+  }
+}
+
 function parseStringField(payload: unknown, fieldName: string): string | null {
   if (!payload || typeof payload !== "object" || !(fieldName in payload)) {
     return null;
@@ -47,6 +78,77 @@ function parseNumberField(payload: unknown, fieldName: string): number | null {
   const value = (payload as Record<string, unknown>)[fieldName];
 
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function parseTossCheckoutPayload(payload: unknown): TossCheckoutPayload | null {
+  if (!payload || typeof payload !== "object" || !("checkout" in payload)) {
+    return null;
+  }
+
+  const checkout = (payload as { checkout?: unknown }).checkout;
+
+  if (!checkout || typeof checkout !== "object") {
+    return null;
+  }
+
+  const fields = checkout as Record<string, unknown>;
+
+  if (fields.type !== "TOSS_PAYMENT_WINDOW") {
+    return null;
+  }
+
+  const clientKey = fields.clientKey;
+  const customerKey = fields.customerKey;
+  const orderId = fields.orderId;
+  const orderName = fields.orderName;
+  const successUrl = fields.successUrl;
+  const failUrl = fields.failUrl;
+
+  if (
+    typeof clientKey !== "string" ||
+    typeof customerKey !== "string" ||
+    typeof orderId !== "string" ||
+    typeof orderName !== "string" ||
+    typeof successUrl !== "string" ||
+    typeof failUrl !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    type: "TOSS_PAYMENT_WINDOW",
+    clientKey,
+    customerKey,
+    orderId,
+    orderName,
+    successUrl,
+    failUrl,
+  };
+}
+
+async function loadTossPaymentsSdk(): Promise<void> {
+  if (window.TossPayments) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      'script[src="https://js.tosspayments.com/v2/standard"]',
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://js.tosspayments.com/v2/standard";
+    script.async = true;
+    script.addEventListener("load", () => resolve(), { once: true });
+    script.addEventListener("error", () => reject(), { once: true });
+    document.head.appendChild(script);
+  });
 }
 
 function PaymentPageContent() {
@@ -194,6 +296,36 @@ function PaymentPageContent() {
 
       if (!paymentId || !providerOrderId) {
         setError("결제 준비 정보를 확인할 수 없습니다.");
+        return;
+      }
+
+      const tossCheckout = parseTossCheckoutPayload(prepareData);
+
+      if (tossCheckout) {
+        await loadTossPaymentsSdk();
+
+        if (!window.TossPayments) {
+          setError("Toss 결제창을 초기화하지 못했습니다.");
+          return;
+        }
+
+        const tossPayments = window.TossPayments(tossCheckout.clientKey);
+        const payment = tossPayments.payment({
+          customerKey: tossCheckout.customerKey,
+        });
+
+        await payment.requestPayment({
+          method: "CARD",
+          amount: {
+            value: preparedAmount,
+            currency: "KRW",
+          },
+          orderId: tossCheckout.orderId,
+          orderName: tossCheckout.orderName,
+          successUrl: tossCheckout.successUrl,
+          failUrl: tossCheckout.failUrl,
+          windowTarget: "self",
+        });
         return;
       }
 
