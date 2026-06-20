@@ -126,6 +126,18 @@ function parseTossCheckoutPayload(payload: unknown): TossCheckoutPayload | null 
   };
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return "Toss 결제창에서 결제가 완료되지 않았습니다.";
+}
+
 async function loadTossPaymentsSdk(): Promise<void> {
   if (window.TossPayments) {
     return;
@@ -314,18 +326,38 @@ function PaymentPageContent() {
           customerKey: tossCheckout.customerKey,
         });
 
-        await payment.requestPayment({
-          method: "CARD",
-          amount: {
-            value: preparedAmount,
-            currency: "KRW",
-          },
-          orderId: tossCheckout.orderId,
-          orderName: tossCheckout.orderName,
-          successUrl: tossCheckout.successUrl,
-          failUrl: tossCheckout.failUrl,
-          windowTarget: "self",
-        });
+        try {
+          await payment.requestPayment({
+            method: "CARD",
+            amount: {
+              value: preparedAmount,
+              currency: "KRW",
+            },
+            orderId: tossCheckout.orderId,
+            orderName: tossCheckout.orderName,
+            successUrl: tossCheckout.successUrl,
+            failUrl: tossCheckout.failUrl,
+            windowTarget: "self",
+          });
+        } catch (requestPaymentError) {
+          const message = getErrorMessage(requestPaymentError);
+
+          await authFetch("/api/payments/fail", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              paymentId,
+              code: "TOSS_PAYMENT_WINDOW_CLOSED",
+              message,
+              cancelled: true,
+            }),
+          }).catch(() => null);
+          setError(
+            "테스트 결제가 완료되지 않았습니다. 노트북에서 카드/간편결제 앱 인증이 막히면 정상적으로 취소 처리됩니다.",
+          );
+        }
         return;
       }
 
