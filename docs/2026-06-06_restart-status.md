@@ -331,6 +331,27 @@ npm run build
 - 예약 선결제 payment ID: `64a5f6ea-0004-4cf6-87ac-1f3eb36881b0`.
 - 사후정산 payment ID: `b0bf23cd-911b-4bc6-a65f-22a12e391e02`.
 
+## 42. 2026-06-21 확정 예약 취소 시 예약 선결제 환불 ledger 연결
+
+`CONFIRMED` 예약 취소가 예약 상태만 바꾸고 선결제 payment를 남겨두는 문제를 막기 위해 취소 API에 환불 상태 전환을 연결했다.
+
+- `src/lib/payments.ts`에 Toss `/v1/payments/{paymentKey}/cancel` 호출 helper를 추가했다.
+- `src/lib/payment-refunds.ts` 추가: 예약 선결제 payment를 `REFUNDED` 또는 `REFUND_PENDING`으로 전환한다.
+- 사용자 취소 `POST /api/reservations/:id/cancel`은 service role로 예약 소유권을 확인한 뒤 상태 전환과 환불 ledger 처리를 수행한다.
+- 관리자 취소 `POST /api/admin/reservations/:id/cancel`도 동일한 공통 환불 로직을 사용한다.
+- FAKE provider는 즉시 `REFUNDED`로 처리한다.
+- TOSS provider는 `provider_payment_key`로 Toss cancel API를 호출하고, 실패/키 누락 시 `REFUND_PENDING`으로 남겨 운영 확인 대상으로 만든다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- `PITNOW_PAYMENT_PROVIDER=FAKE PORT=3010 npm run start`로 임시 서버 실행.
+- FAKE 예약 선결제 생성 후 `POST /api/reservations/:id/cancel` 호출 성공.
+- 검증 reservation ID: `39ca9eda-c218-4529-8d46-80ae1f996807`.
+- 검증 payment ID: `fe3396b1-569a-41db-abb2-8d85a6afc9b0`.
+- 최종 예약 상태 `CANCELLED`, payment 상태 `REFUNDED`, `refunded_at` 저장 확인.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

@@ -6,6 +6,7 @@ import {
   supabaseAdmin,
 } from "@/src/lib/supabase";
 import { transitionReservationStatus } from "@/src/lib/reservation-status";
+import { refundReservationPayment } from "@/src/lib/payment-refunds";
 
 interface Context {
   params: Promise<{ id: string }>;
@@ -107,8 +108,16 @@ export async function POST(req: Request, context: Context) {
     return jsonError(409, result.code, result.message);
   }
 
+  const refund = await refundReservationPayment({
+    db: supabaseAdmin,
+    reservationId,
+    reason,
+    actorType: "ADMIN",
+  });
+
   return NextResponse.json({
     success: true,
     status: "CANCELLED",
+    refund,
   });
 }

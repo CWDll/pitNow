@@ -4,8 +4,11 @@ import { requireRequestUser } from "@/src/lib/auth";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
+  hasSupabaseServiceRoleEnv,
+  supabaseAdmin,
 } from "@/src/lib/supabase";
 import { transitionReservationStatus } from "@/src/lib/reservation-status";
+import { refundReservationPayment } from "@/src/lib/payment-refunds";
 
 interface Context {
   params: Promise<{ id: string }>;
@@ -43,6 +46,14 @@ export async function POST(req: Request, context: Context) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
   }
 
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
+    return jsonError(
+      503,
+      "SUPABASE_SERVICE_ROLE_MISSING",
+      "예약 취소/환불 처리에는 SUPABASE_SERVICE_ROLE_KEY가 필요합니다.",
+    );
+  }
+
   const authResult = await requireRequestUser(req);
 
   if (!authResult.ok) {
@@ -65,8 +76,7 @@ export async function POST(req: Request, context: Context) {
   }
 
   const reason = parseReason((payload as { reason?: unknown }).reason);
-  const db = authResult.auth.client;
-  const { data: reservation, error: reservationError } = await db
+  const { data: reservation, error: reservationError } = await supabaseAdmin
     .from("reservations")
     .select("id,user_id,status")
     .eq("id", reservationId)
@@ -100,15 +110,23 @@ export async function POST(req: Request, context: Context) {
     metadata: {
       reason,
     },
-    client: db,
+    client: supabaseAdmin,
   });
 
   if (!result.ok) {
     return jsonError(409, result.code, result.message);
   }
 
+  const refund = await refundReservationPayment({
+    db: supabaseAdmin,
+    reservationId,
+    reason,
+    actorType: "USER",
+  });
+
   return NextResponse.json({
     success: true,
     status: "CANCELLED",
+    refund,
   });
 }
