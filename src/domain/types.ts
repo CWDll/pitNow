@@ -17,10 +17,13 @@ export type PaymentStatus =
   | "READY"
   | "APPROVED"
   | "RESERVATION_CONFIRMED"
+  | "SETTLEMENT_CONFIRMED"
   | "FAILED"
   | "CANCELLED"
   | "REFUND_PENDING"
   | "REFUNDED";
+
+export type PaymentPurpose = "RESERVATION" | "CHECKOUT_SETTLEMENT";
 
 export interface Reservation {
   id: string;
@@ -88,6 +91,8 @@ export interface Payment {
   id: string;
   userId: string;
   reservationId: string | null;
+  checkoutId: string | null;
+  paymentPurpose: PaymentPurpose;
   provider: PaymentProvider;
   providerPaymentKey: string | null;
   providerOrderId: string;
@@ -134,6 +139,11 @@ export interface FailPaymentPayload {
   code?: string;
   message?: string;
   cancelled?: boolean;
+}
+
+export interface PrepareSettlementPaymentPayload {
+  reservationId: string;
+  method: PaymentMethod;
 }
 
 export interface CheckInPayload {

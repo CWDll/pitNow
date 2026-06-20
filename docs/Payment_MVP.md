@@ -66,6 +66,7 @@ Payment statuses:
 - `READY`: payment intent row exists, provider payment has not been approved.
 - `APPROVED`: provider payment approval has been verified.
 - `RESERVATION_CONFIRMED`: payment is approved and reservation row was created.
+- `SETTLEMENT_CONFIRMED`: payment is approved and checkout settlement was paid.
 - `FAILED`: provider payment failed or was abandoned.
 - `CANCELLED`: user cancelled before approval.
 - `REFUND_PENDING`: payment was approved but needs refund/cancel handling.
@@ -90,6 +91,9 @@ create table payments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete restrict,
   reservation_id uuid references reservations(id) on delete set null,
+  checkout_id uuid references checkouts(id) on delete set null,
+  payment_purpose text not null default 'RESERVATION'
+    check (payment_purpose in ('RESERVATION', 'CHECKOUT_SETTLEMENT')),
   provider text not null check (provider in ('TOSS', 'FAKE')),
   provider_payment_key text,
   provider_order_id text not null unique,
@@ -99,6 +103,7 @@ create table payments (
       'READY',
       'APPROVED',
       'RESERVATION_CONFIRMED',
+      'SETTLEMENT_CONFIRMED',
       'FAILED',
       'CANCELLED',
       'REFUND_PENDING',
@@ -119,8 +124,24 @@ create table payments (
 
 create index idx_payments_user_created on payments(user_id, created_at desc);
 create index idx_payments_reservation on payments(reservation_id);
+create index idx_payments_checkout on payments(checkout_id);
+create index idx_payments_purpose on payments(payment_purpose);
 create index idx_payments_status on payments(status);
 ```
+
+## Checkout Settlement Payment
+
+Checkout can create extra fees after the initial reservation payment.
+
+Rules:
+
+- Initial reservation payment uses `payment_purpose = RESERVATION`.
+- Post-checkout settlement payment uses `payment_purpose = CHECKOUT_SETTLEMENT`.
+- Settlement amount due is `checkouts.total_settlement - reservations.total_price`.
+- `checkouts.total_settlement` is the full settlement amount, not the additional amount due.
+- On success, `payments.status = SETTLEMENT_CONFIRMED`.
+- MVP keeps `reservations.status = COMPLETED`, but user navigation sends pending settlement payment to `/settlement-payment` before `/complete`.
+- `/complete` is reserved for no-due or `SETTLEMENT_CONFIRMED` completion.
 
 `reservation_snapshot` stores the server-validated reservation request needed to finalize the reservation after approval:
 

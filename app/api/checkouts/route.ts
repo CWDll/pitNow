@@ -8,6 +8,7 @@ import {
 
 interface ReservationRow {
   id: string;
+  total_price: number | string;
 }
 
 interface CheckoutRow {
@@ -24,6 +25,12 @@ interface CheckoutRow {
   checkout_photo_1: string | null;
   checkout_photo_2: string | null;
   completed_at: string;
+}
+
+interface SettlementPaymentRow {
+  id: string;
+  status: string;
+  amount: number | string;
 }
 
 function jsonError(status: number, code: string, message: string) {
@@ -65,7 +72,7 @@ export async function GET(req: Request) {
   const db = authResult.auth.client;
   const { data: reservation, error: reservationError } = await db
     .from("reservations")
-    .select("id")
+    .select("id,total_price")
     .eq("id", reservationId)
     .eq("user_id", authResult.auth.userId)
     .maybeSingle<ReservationRow>();
@@ -104,6 +111,34 @@ export async function GET(req: Request) {
     );
   }
 
+  const paidReservationAmount = toNumber(reservation.total_price);
+  const totalSettlement = toNumber(checkout.total_settlement);
+  const settlementAmountDue = Math.max(
+    0,
+    totalSettlement - paidReservationAmount,
+  );
+  let settlementPaymentStatus: string | null = null;
+
+  const { data: settlementPayment, error: settlementPaymentError } = await db
+    .from("payments")
+    .select("id,status,amount")
+    .eq("checkout_id", checkout.id)
+    .eq("payment_purpose", "CHECKOUT_SETTLEMENT")
+    .in("status", ["READY", "APPROVED", "SETTLEMENT_CONFIRMED"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<SettlementPaymentRow>();
+
+  if (settlementPaymentError) {
+    const message = settlementPaymentError.message ?? "";
+
+    if (!message.includes("checkout_id") && !message.includes("payment_purpose")) {
+      console.error("SETTLEMENT PAYMENT DETAIL LOOKUP ERROR:", settlementPaymentError);
+    }
+  } else if (settlementPayment) {
+    settlementPaymentStatus = settlementPayment.status;
+  }
+
   return NextResponse.json({
     success: true,
     checkout: {
@@ -113,7 +148,10 @@ export async function GET(req: Request) {
       extraFee: toNumber(checkout.extra_fee),
       helperVerifyRequested: checkout.helper_verify_requested,
       helperVerifyFee: toNumber(checkout.helper_verify_fee),
-      totalSettlement: toNumber(checkout.total_settlement),
+      totalSettlement,
+      paidReservationAmount,
+      settlementAmountDue,
+      settlementPaymentStatus,
       toolCheckCompleted: checkout.tool_check_completed,
       cleaningCompleted: checkout.cleaning_completed,
       wasteDisposalCompleted: checkout.waste_disposal_completed,

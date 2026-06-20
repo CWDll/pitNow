@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import type {
@@ -73,6 +73,9 @@ interface CheckoutDetail {
   helperVerifyRequested: boolean;
   helperVerifyFee: number;
   totalSettlement: number;
+  paidReservationAmount?: number;
+  settlementAmountDue?: number;
+  settlementPaymentStatus?: string | null;
   completedAt: string;
 }
 
@@ -105,6 +108,7 @@ function formatUsageDuration(startTime: string, endTime: string): string {
 }
 
 function CompletePageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId") ?? "";
@@ -166,6 +170,16 @@ function CompletePageContent() {
     Number.isFinite(checkout.totalSettlement) && checkout.totalSettlement > 0
       ? checkout.totalSettlement
       : basePrice + extraFee + helperVerifyFee;
+  const paidReservationAmount = Number.isFinite(checkout.paidReservationAmount)
+    ? checkout.paidReservationAmount ?? detail.totalPrice
+    : detail.totalPrice;
+  const settlementAmountDue =
+    typeof checkout.settlementAmountDue === "number" &&
+    Number.isFinite(checkout.settlementAmountDue)
+      ? checkout.settlementAmountDue
+      : Math.max(0, total - paidReservationAmount);
+  const settlementPaymentStatus = checkout.settlementPaymentStatus ?? null;
+  const isSettlementPaid = settlementPaymentStatus === "SETTLEMENT_CONFIRMED";
 
   useEffect(() => {
     let isCancelled = false;
@@ -248,6 +262,29 @@ function CompletePageContent() {
       isCancelled = true;
     };
   }, [reservationId]);
+
+  useEffect(() => {
+    if (
+      !isDetailLoading &&
+      checkout.id &&
+      reservationId &&
+      settlementAmountDue > 0 &&
+      !isSettlementPaid
+    ) {
+      router.replace(
+        `/settlement-payment?reservationId=${encodeURIComponent(
+          reservationId,
+        )}`,
+      );
+    }
+  }, [
+    checkout.id,
+    isDetailLoading,
+    isSettlementPaid,
+    reservationId,
+    router,
+    settlementAmountDue,
+  ]);
 
   async function handleSubmitReview() {
     setReviewError("");
@@ -405,7 +442,11 @@ function CompletePageContent() {
       <div className="mt-4 rounded-2xl bg-zinc-100 p-4">
         <h2 className="text-xl font-semibold text-zinc-900">결제 요약</h2>
         <p className="mt-3 flex justify-between text-base text-zinc-700">
-          <span>기본 요금</span>
+          <span>예약 시 결제</span>
+          <span>{paidReservationAmount.toLocaleString("ko-KR")}원</span>
+        </p>
+        <p className="mt-2 flex justify-between text-base text-zinc-700">
+          <span>정산 기준 기본요금</span>
           <span>{basePrice.toLocaleString("ko-KR")}원</span>
         </p>
         <p className="mt-2 flex justify-between text-base text-zinc-700">
@@ -418,9 +459,15 @@ function CompletePageContent() {
         </p>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-2xl font-semibold text-zinc-900">
-          <span>총 결제</span>
+          <span>총 정산</span>
           <span className="text-blue-600">
             {total.toLocaleString("ko-KR")}원
+          </span>
+        </p>
+        <p className="mt-3 flex justify-between text-lg font-semibold">
+          <span>{isSettlementPaid ? "추가 정산 결제 완료" : "추가 결제 필요"}</span>
+          <span className={isSettlementPaid ? "text-emerald-600" : "text-red-500"}>
+            {settlementAmountDue.toLocaleString("ko-KR")}원
           </span>
         </p>
       </div>

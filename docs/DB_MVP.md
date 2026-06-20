@@ -365,6 +365,9 @@ create table payments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete restrict,
   reservation_id uuid references reservations(id) on delete set null,
+  checkout_id uuid references checkouts(id) on delete set null,
+  payment_purpose text not null default 'RESERVATION'
+    check (payment_purpose in ('RESERVATION', 'CHECKOUT_SETTLEMENT')),
   provider text not null check (provider in ('TOSS', 'FAKE')),
   provider_payment_key text,
   provider_order_id text not null unique,
@@ -374,6 +377,7 @@ create table payments (
       'READY',
       'APPROVED',
       'RESERVATION_CONFIRMED',
+      'SETTLEMENT_CONFIRMED',
       'FAILED',
       'CANCELLED',
       'REFUND_PENDING',
@@ -394,6 +398,8 @@ create table payments (
 
 create index idx_payments_user_created on payments(user_id, created_at desc);
 create index idx_payments_reservation on payments(reservation_id);
+create index idx_payments_checkout on payments(checkout_id);
+create index idx_payments_purpose on payments(payment_purpose);
 create index idx_payments_status on payments(status);
 ```
 

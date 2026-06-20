@@ -894,3 +894,30 @@ Toss test key 환경에서 실제 카카오페이 인증 플로우를 통해 성
 - reservation ID: `a5b1edd3-177a-41c6-afa7-0dfebabd52e4`.
 - reservation total price: `22000`.
 - reservation time: `2026-06-20T00:00:00+00:00` - `2026-06-20T01:00:00+00:00` (KST 09:00 - 10:00).
+
+## 37. 2026-06-20 체크아웃 사후정산 결제 1차 구현
+
+체크아웃 후 초과요금/검수비가 발생해도 결제 수단으로 이어지지 않는 문제를 확인하고, 예약 선결제와 별도의 사후정산 결제 흐름을 추가했다.
+
+- `payments.payment_purpose` 추가: `RESERVATION`, `CHECKOUT_SETTLEMENT`.
+- `payments.checkout_id` 추가.
+- `payments.status`에 `SETTLEMENT_CONFIRMED` 추가.
+- 신규 마이그레이션: `db/migrations/20260620_checkout_settlement_payments.sql`.
+- `GET /api/checkouts` 응답에 `paidReservationAmount`, `settlementAmountDue`, `settlementPaymentStatus` 추가.
+- `POST /api/payments/settlement/prepare` 추가.
+- `POST /api/payments/settlement/confirm` 추가.
+- `/complete`에서 총 정산과 추가 결제 필요 금액을 분리 표시하되, 미결제 추가정산이 남아 있으면 `/settlement-payment`로 자동 이동.
+- `/checkout` 제출 직후 `settlementAmountDue > 0`이면 `/complete`가 아니라 `/settlement-payment`로 이동.
+- `/settlement-payment` 추가: 체크아웃 정산 row 기준으로 추가 결제만 진행.
+- `/settlement-payment/success`, `/settlement-payment/fail` 추가.
+- 체크아웃 초과요금 계산 기준 수정: 예약 총 결제액이 아니라 카 마스터 검수비를 제외한 정비 기본요금을 시간당 기준으로 사용한다.
+
+주의:
+
+- Supabase SQL Editor에 `db/migrations/20260620_checkout_settlement_payments.sql`을 적용해야 런타임 사후정산 결제가 동작한다.
+- 적용 전에는 settlement API가 `MISSING_SETTLEMENT_PAYMENT_SCHEMA`를 반환한다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.

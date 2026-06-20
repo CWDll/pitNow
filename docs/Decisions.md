@@ -606,3 +606,25 @@ Options considered:
 
 - 장점: 미결제 점유가 없고 MVP 구현이 단순하다. 테스트도 fake provider로 반복 가능하다.
 - 단점: 결제 승인 직후 slot race가 발생하면 자동 환불/운영 처리가 필요하다.
+
+---
+
+## 2026-06-20
+
+Decision:
+체크아웃 후 추가요금은 예약 선결제와 분리된 사후정산 결제로 처리한다.
+
+Rules:
+
+- 예약 생성 전 결제는 `payment_purpose = RESERVATION`으로 유지한다.
+- 체크아웃 후 추가 결제는 `payment_purpose = CHECKOUT_SETTLEMENT`로 별도 payment row를 생성한다.
+- 사후정산 결제 금액은 `checkouts.total_settlement - reservations.total_price`로 계산한다.
+- `checkouts.total_settlement`는 전체 정산액이며, 사용자가 추가로 내야 할 금액이 아니다.
+- 체크아웃 초과요금은 예약 선결제 총액이 아니라 카 마스터 검수비를 제외한 정비 기본요금을 시간당 기준으로 계산한다.
+- 사후정산 결제 성공 시 `payments.status = SETTLEMENT_CONFIRMED`로 기록한다.
+- 체크아웃 제출 후 추가 결제 금액이 있으면 `/complete`로 보내지 않고 `/settlement-payment`로 보낸다.
+- `/complete`는 추가 정산 결제가 없거나 `SETTLEMENT_CONFIRMED`까지 끝난 뒤의 진짜 이용 완료 화면으로 사용한다.
+- DB 상태는 MVP에서 `COMPLETED`를 유지하되, 사용자 플로우는 사후정산 결제 완료 전 `/complete` 진입을 막는다.
+
+Reason:
+체크아웃 API는 이미 초과요금과 검수비를 서버 기준으로 계산해 `checkouts`에 저장하지만, 기존 결제 모델은 예약 확정용 선결제만 표현했다. 이 상태에서는 사용자가 큰 추가요금을 확인해도 실제 결제하거나 운영자가 결제 완료 여부를 추적할 수 없다. 또한 결제 전 `/complete`가 뜨면 “이용 완료” 의미가 흐려진다. 결제 목적을 분리하고 체크아웃 화면에서 사후정산을 완료하게 하면 예약 선결제, 추가 정산, 향후 환불/부분취소가 같은 payments ledger 안에서 구분된다.

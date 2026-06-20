@@ -428,7 +428,72 @@ paymentStatus: 'FAILED' | 'CANCELLED'
 
 ⸻
 
-11. POST /api/reviews
+11. POST /api/payments/settlement/prepare
+
+⸻
+
+기능:
+체크아웃 후 발생한 초과요금/검수비 등 사후정산 결제 준비 row를 생성한다.
+
+입력:
+{
+reservationId: string,
+method: 'CARD' | 'KAKAO_PAY' | 'NAVER_PAY' | 'TOSS_PAY'
+}
+
+검증:
+• 로그인 사용자 본인의 COMPLETED 예약만 허용
+• checkouts row가 있어야 함
+• 결제 금액 = checkouts.total_settlement - reservations.total_price
+• 결제 금액이 0 이하이면 NO_SETTLEMENT_DUE
+• 기존 READY 사후정산 payment가 있으면 새 결제 시작 시 기존 READY row는 CANCELLED
+• 이미 SETTLEMENT_CONFIRMED이면 중복 결제 불가
+
+성공 응답:
+{
+success: true,
+paymentId: string,
+provider: 'FAKE' | 'TOSS',
+providerOrderId: string,
+amount: number,
+currency: 'KRW',
+checkout: object
+}
+
+⸻
+
+12. POST /api/payments/settlement/confirm
+
+⸻
+
+기능:
+provider 승인 결과를 검증하고 사후정산 결제를 확정한다.
+
+입력:
+{
+paymentId: string,
+providerPaymentKey?: string,
+providerOrderId: string,
+amount: number
+}
+
+검증:
+• payment_purpose = CHECKOUT_SETTLEMENT
+• payments.status = READY
+• provider/order/amount 일치 필수
+• Toss mode에서는 /v1/payments/confirm 승인 검증 필수
+
+성공 응답:
+{
+success: true,
+paymentStatus: 'SETTLEMENT_CONFIRMED',
+reservationId: string,
+checkoutId: string
+}
+
+⸻
+
+13. POST /api/reviews
 
 ⸻
 
@@ -467,6 +532,7 @@ reviewId: string
 
 READY → APPROVED
 APPROVED → RESERVATION_CONFIRMED
+READY → SETTLEMENT_CONFIRMED
 APPROVED → REFUND_PENDING
 REFUND_PENDING → REFUNDED
 READY → FAILED

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
   PaymentMethod,
+  PaymentPurpose,
   PaymentProvider,
   PaymentProviderMode,
   PaymentStatus,
@@ -18,6 +19,8 @@ export interface PaymentRow {
   id: string;
   user_id: string;
   reservation_id: string | null;
+  checkout_id?: string | null;
+  payment_purpose?: PaymentPurpose;
   provider: PaymentProvider;
   provider_payment_key: string | null;
   provider_order_id: string;
@@ -77,6 +80,64 @@ export function getTossApiBaseUrl(): string {
 
 export function getTossBasicAuthorization(secretKey: string): string {
   return `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`;
+}
+
+export async function confirmTossPayment(params: {
+  paymentKey: string;
+  orderId: string;
+  amount: number;
+}) {
+  const secretKey = getTossSecretKey();
+
+  if (!secretKey) {
+    return {
+      ok: false as const,
+      status: 503,
+      code: "TOSS_SECRET_KEY_REQUIRED",
+      message: "Toss 결제 승인을 위해 TOSS_PAYMENTS_SECRET_KEY가 필요합니다.",
+      providerPayload: null,
+    };
+  }
+
+  const response = await fetch(`${getTossApiBaseUrl()}/v1/payments/confirm`, {
+    method: "POST",
+    headers: {
+      Authorization: getTossBasicAuthorization(secretKey),
+      "Content-Type": "application/json",
+      "Idempotency-Key": `pitnow-confirm-${params.orderId}`,
+    },
+    body: JSON.stringify({
+      paymentKey: params.paymentKey,
+      orderId: params.orderId,
+      amount: params.amount,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const providerError = payload as
+      | { code?: unknown; message?: unknown }
+      | null;
+
+    return {
+      ok: false as const,
+      status: response.status,
+      code:
+        typeof providerError?.code === "string"
+          ? providerError.code
+          : "TOSS_CONFIRM_FAILED",
+      message:
+        typeof providerError?.message === "string"
+          ? providerError.message
+          : "Toss 결제 승인에 실패했습니다.",
+      providerPayload: payload,
+    };
+  }
+
+  return {
+    ok: true as const,
+    providerPayload: payload,
+  };
 }
 
 export function assertPaymentMethod(value: unknown): PaymentMethod | null {

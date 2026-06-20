@@ -211,9 +211,9 @@ function calculateExtraFee(params: {
   now: Date;
   startTime: Date;
   reservedEndTime: Date;
-  totalPrice: number;
+  basePrice: number;
 }): number | null {
-  const { now, startTime, reservedEndTime, totalPrice } = params;
+  const { now, startTime, reservedEndTime, basePrice } = params;
 
   const totalDurationMs = reservedEndTime.getTime() - startTime.getTime();
 
@@ -222,7 +222,7 @@ function calculateExtraFee(params: {
   }
 
   const totalHours = totalDurationMs / (1000 * 60 * 60);
-  const hourlyPrice = totalPrice / totalHours;
+  const hourlyPrice = basePrice / totalHours;
 
   if (!Number.isFinite(hourlyPrice) || hourlyPrice < 0) {
     return null;
@@ -423,6 +423,7 @@ export async function POST(req: Request) {
     );
   }
 
+  const basePrice = Math.max(0, totalPrice - alreadyHelperVerifyFee);
   const now = new Date();
   const extraFee =
     reservationType === "SHOP_SERVICE"
@@ -431,7 +432,7 @@ export async function POST(req: Request) {
           now,
           startTime,
           reservedEndTime,
-          totalPrice,
+          basePrice,
         });
 
   if (extraFee === null) {
@@ -463,9 +464,13 @@ export async function POST(req: Request) {
     reservationType === "SELF_SERVICE" &&
     (Boolean(reservation.helper_verify_requested) ||
       Boolean(body.helperVerifyRequested));
-  const basePrice = Math.max(0, totalPrice - alreadyHelperVerifyFee);
   const totalSettlement = Number(
     (basePrice + extraFee + helperVerifyFee).toFixed(2),
+  );
+  const paidReservationAmount = totalPrice;
+  const settlementAmountDue = Math.max(
+    0,
+    Number((totalSettlement - paidReservationAmount).toFixed(2)),
   );
 
   if (
@@ -556,6 +561,8 @@ export async function POST(req: Request) {
     helperVerifyRequested,
     helperVerifyFee,
     totalSettlement,
+    paidReservationAmount,
+    settlementAmountDue,
   });
 }
 

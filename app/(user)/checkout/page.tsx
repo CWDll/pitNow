@@ -259,6 +259,23 @@ function CheckoutPageContent() {
           "number"
           ? (data as { totalSettlement: number }).totalSettlement
           : basePrice + extraFee + helperVerifyFee;
+      const settlementAmountDue =
+        data &&
+        typeof data === "object" &&
+        "settlementAmountDue" in data &&
+        typeof (data as { settlementAmountDue?: unknown })
+          .settlementAmountDue === "number"
+          ? (data as { settlementAmountDue: number }).settlementAmountDue
+          : Math.max(0, totalSettlement - totalPrice);
+
+      if (settlementAmountDue > 0) {
+        const settlementQuery = new URLSearchParams({
+          reservationId,
+        });
+
+        router.push(`/settlement-payment?${settlementQuery.toString()}`);
+        return;
+      }
 
       const query = new URLSearchParams({
         reservationId,
@@ -440,6 +457,10 @@ function CheckoutPageContent() {
             {(totalPrice + additionalFee).toLocaleString("ko-KR")}원
           </span>
         </p>
+        <p className="mt-2 text-sm text-zinc-500">
+          추가 정산이 있으면 사진 제출 후 결제를 먼저 완료해야 이용 완료로
+          이동합니다.
+        </p>
       </div>
 
       {error ? (
@@ -460,7 +481,7 @@ function CheckoutPageContent() {
           disabled={!canSubmit || isLoading}
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
         >
-          {isLoading ? "완료 처리 중..." : "완료하기"}
+          {isLoading ? "정산 처리 중..." : "체크아웃 및 정산하기"}
         </button>
       </div>
     </section>
