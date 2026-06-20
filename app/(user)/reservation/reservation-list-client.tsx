@@ -22,6 +22,9 @@ export interface ReservationListItem {
   endTime: string;
   blockedMinutes: number;
   carLabel: string;
+  settlementAmountDue: number;
+  settlementPaidAmount: number;
+  settlementPaymentStatus: string | null;
 }
 
 type ReservationTab = "upcoming" | "history";
@@ -66,6 +69,18 @@ function getReservationTypeLabel(type: ReservationType): string {
   return type === "SELF_SERVICE" ? "셀프 정비" : "전문가 맡기기";
 }
 
+function getUnpaidSettlementAmount(item: ReservationListItem): number {
+  if (item.status !== "COMPLETED") {
+    return 0;
+  }
+
+  return Math.max(0, item.settlementAmountDue - item.settlementPaidAmount);
+}
+
+function buildSettlementPaymentHref(item: ReservationListItem): string {
+  return `/settlement-payment?reservationId=${item.id}`;
+}
+
 function buildReservationHref(item: ReservationListItem): string {
   const query = new URLSearchParams({
     reservationId: item.id,
@@ -90,6 +105,10 @@ function buildReservationHref(item: ReservationListItem): string {
 
   if (item.status === "CHECKED_IN" || item.status === "IN_USE") {
     return `/in-use?${query.toString()}`;
+  }
+
+  if (getUnpaidSettlementAmount(item) > 0) {
+    return buildSettlementPaymentHref(item);
   }
 
   return `/complete?${query.toString()}`;
@@ -128,6 +147,11 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const canCancel = item.status === "CONFIRMED";
+  const unpaidSettlementAmount = getUnpaidSettlementAmount(item);
+  const hasUnpaidSettlement = unpaidSettlementAmount > 0;
+  const statusBadgeClass = hasUnpaidSettlement
+    ? "bg-red-50 text-red-600"
+    : statusClass(item.status);
 
   async function handleCancelSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -179,8 +203,8 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
             <h3 className="text-2xl font-semibold text-zinc-900">{item.garageName}</h3>
             <p className="mt-1 text-lg text-zinc-600">{item.workTitle}</p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-sm font-medium ${statusClass(item.status)}`}>
-            {getStatusLabel(item.status)}
+          <span className={`rounded-full px-3 py-1 text-sm font-medium ${statusBadgeClass}`}>
+            {hasUnpaidSettlement ? "정산 미완료" : getStatusLabel(item.status)}
           </span>
         </div>
 
@@ -195,6 +219,23 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
           {item.bayLabel ? ` · ${item.bayLabel}` : ""}
         </p>
       </Link>
+
+      {hasUnpaidSettlement ? (
+        <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-600">
+            추가 정산 {unpaidSettlementAmount.toLocaleString()}원이 아직 남아있습니다.
+          </p>
+          <p className="mt-1 text-xs leading-5 text-red-500">
+            결제창을 닫았거나 테스트 결제가 중단된 경우 여기서 다시 이어갈 수 있습니다.
+          </p>
+          <Link
+            href={buildSettlementPaymentHref(item)}
+            className="mt-3 flex h-11 items-center justify-center rounded-2xl bg-red-500 text-sm font-semibold text-white"
+          >
+            추가 정산 결제하기
+          </Link>
+        </div>
+      ) : null}
 
       {canCancel ? (
         <div className="mt-4 border-t border-zinc-100 pt-4">

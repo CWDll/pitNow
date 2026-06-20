@@ -292,6 +292,25 @@ npm run build
 - `npm run lint` 성공.
 - `npm run build` 성공.
 
+## 40. 2026-06-20 추가 정산 미수 재진입 동선 보강
+
+체크아웃 후 추가 정산 결제창을 닫거나 실패한 경우에도 사용자가 `/reservation`에서 미수 상태를 확인하고 다시 결제할 수 있게 했다.
+
+- `/reservation` 목록이 완료 예약의 `checkouts.total_settlement`와 `payments.payment_purpose = CHECKOUT_SETTLEMENT` 최신 row를 함께 조회한다.
+- 정산 총액에서 예약 선결제액을 뺀 추가 정산액이 남아 있고, 최신 사후정산 결제가 `SETTLEMENT_CONFIRMED`가 아니면 카드에 `정산 미완료`를 표시한다.
+- 미수 카드에는 `추가 정산 결제하기` CTA를 노출하고 `/settlement-payment?reservationId=...`로 바로 재진입한다.
+- 완료 예약 카드 자체를 눌러도 미수 상태라면 `/complete`가 아니라 `/settlement-payment`로 이동한다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- `PITNOW_PAYMENT_PROVIDER=FAKE PITNOW_E2E_BASE_URL=http://localhost:3010 npm run e2e:checkout` 성공.
+- 검증 reservation ID: `52974ca4-2580-49c0-9db0-629d5c405e44`.
+- 예약 선결제 payment ID: `0343ad04-385b-4f09-be61-485a45190400`.
+- 사후정산 payment ID: `eaaef147-2f11-44fa-a163-18f2fbd32472`.
+- 사후정산 금액 `90000`, 총 정산 `120000`, 상태 로그 `NULL -> CONFIRMED -> CHECKED_IN -> IN_USE -> COMPLETED` 확인.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

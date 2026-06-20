@@ -62,6 +62,25 @@ interface SelfMaintenanceTaskRow {
   name: string;
 }
 
+interface CheckoutRow {
+  id: string;
+  reservation_id: string;
+  total_settlement: number | string;
+}
+
+interface SettlementPaymentRow {
+  reservation_id: string;
+  status: string;
+  amount: number | string;
+  created_at: string;
+}
+
+interface SettlementSummary {
+  amountDue: number;
+  paidAmount: number;
+  status: string | null;
+}
+
 function toNumber(value: number | string): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -78,6 +97,7 @@ function mapReservationItem(
     bayNames: Map<string, string>;
     packageNames: Map<string, string>;
     taskLabels: Map<string, string>;
+    settlements: Map<string, SettlementSummary>;
   },
 ): ReservationListItem {
   const vehicle = Array.isArray(reservation.vehicles)
@@ -99,6 +119,7 @@ function mapReservationItem(
         (1000 * 60),
     ),
   );
+  const settlement = maps.settlements.get(reservation.id);
 
   return {
     id: reservation.id,
@@ -112,6 +133,9 @@ function mapReservationItem(
     startTime: reservation.start_time,
     endTime: reservation.end_time,
     blockedMinutes,
+    settlementAmountDue: settlement?.amountDue ?? 0,
+    settlementPaidAmount: settlement?.paidAmount ?? 0,
+    settlementPaymentStatus: settlement?.status ?? null,
     carLabel: vehicle
       ? `${vehicle.model} (${vehicle.year}) · ${vehicle.plate_number}`
       : "등록 차량",
@@ -156,6 +180,9 @@ export default function ReservationListPage() {
       }
 
       const reservationRows = data ?? [];
+      const completedReservationIds = reservationRows
+        .filter((reservation) => reservation.status === "COMPLETED")
+        .map((reservation) => reservation.id);
       const partnerIds = uniqueValues(
         reservationRows.map((reservation) => reservation.partner_id),
       );
@@ -172,6 +199,8 @@ export default function ReservationListPage() {
         bayResult,
         packageResult,
         reservationTaskResult,
+        checkoutResult,
+        settlementPaymentResult,
       ] = await Promise.all([
         partnerIds.length > 0
           ? supabase
@@ -201,6 +230,22 @@ export default function ReservationListPage() {
               .in("reservation_id", reservationIds)
               .returns<ReservationTaskRow[]>()
           : Promise.resolve({ data: [], error: null }),
+        completedReservationIds.length > 0
+          ? supabase
+              .from("checkouts")
+              .select("id,reservation_id,total_settlement")
+              .in("reservation_id", completedReservationIds)
+              .returns<CheckoutRow[]>()
+          : Promise.resolve({ data: [], error: null }),
+        completedReservationIds.length > 0
+          ? supabase
+              .from("payments")
+              .select("reservation_id,status,amount,created_at")
+              .eq("payment_purpose", "CHECKOUT_SETTLEMENT")
+              .in("reservation_id", completedReservationIds)
+              .order("created_at", { ascending: false })
+              .returns<SettlementPaymentRow[]>()
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (cancelled) {
@@ -211,13 +256,17 @@ export default function ReservationListPage() {
         partnerResult.error ||
         bayResult.error ||
         packageResult.error ||
-        reservationTaskResult.error
+        reservationTaskResult.error ||
+        checkoutResult.error ||
+        settlementPaymentResult.error
       ) {
         console.error("RESERVATION LIST RELATED LOOKUP ERROR:", {
           partnerError: partnerResult.error,
           bayError: bayResult.error,
           packageError: packageResult.error,
           reservationTaskError: reservationTaskResult.error,
+          checkoutError: checkoutResult.error,
+          settlementPaymentError: settlementPaymentResult.error,
         });
         setError("예약 연관 정보를 불러오지 못했습니다.");
         setIsLoading(false);
@@ -262,6 +311,13 @@ export default function ReservationListPage() {
         (taskResult.data ?? []).map((task) => [task.id, task.name]),
       );
       const taskLabels = new Map<string, string>();
+      const checkoutTotals = new Map(
+        (checkoutResult.data ?? []).map((checkout) => [
+          checkout.reservation_id,
+          toNumber(checkout.total_settlement),
+        ]),
+      );
+      const latestSettlementPayments = new Map<string, SettlementPaymentRow>();
 
       reservationTaskRows.forEach((taskRow) => {
         const taskName = taskNames.get(taskRow.task_id);
@@ -277,6 +333,39 @@ export default function ReservationListPage() {
         );
       });
 
+      (settlementPaymentResult.data ?? []).forEach((payment) => {
+        if (!latestSettlementPayments.has(payment.reservation_id)) {
+          latestSettlementPayments.set(payment.reservation_id, payment);
+        }
+      });
+
+      const settlements = new Map<string, SettlementSummary>();
+
+      reservationRows.forEach((reservation) => {
+        if (reservation.status !== "COMPLETED") {
+          return;
+        }
+
+        const totalSettlement = checkoutTotals.get(reservation.id);
+
+        if (totalSettlement === undefined) {
+          return;
+        }
+
+        const amountDue = Math.max(0, totalSettlement - toNumber(reservation.total_price));
+        const settlementPayment = latestSettlementPayments.get(reservation.id);
+        const paidAmount =
+          settlementPayment?.status === "SETTLEMENT_CONFIRMED"
+            ? Math.min(amountDue, toNumber(settlementPayment.amount))
+            : 0;
+
+        settlements.set(reservation.id, {
+          amountDue,
+          paidAmount,
+          status: settlementPayment?.status ?? null,
+        });
+      });
+
       setReservations(
         reservationRows.map((reservation) =>
           mapReservationItem(reservation, {
@@ -284,6 +373,7 @@ export default function ReservationListPage() {
             bayNames,
             packageNames,
             taskLabels,
+            settlements,
           }),
         ),
       );
