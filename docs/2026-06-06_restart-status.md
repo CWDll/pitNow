@@ -311,6 +311,26 @@ npm run build
 - 사후정산 payment ID: `eaaef147-2f11-44fa-a163-18f2fbd32472`.
 - 사후정산 금액 `90000`, 총 정산 `120000`, 상태 로그 `NULL -> CONFIRMED -> CHECKED_IN -> IN_USE -> COMPLETED` 확인.
 
+## 41. 2026-06-21 Admin 미수 정산 필터/강조 및 실패 복구 보강
+
+운영자가 사후정산 미수/실패 예약을 빠르게 찾고, 사용자는 추가 정산 실패 후 바로 재시도할 수 있게 보강했다.
+
+- `/admin/settlement`에 요약 카드 추가: `Open due`, `Payment attention`, `Evidence review`, `Visible`.
+- `/admin/settlement`에 query 기반 필터 추가: `All`, `Due only`, `Payment attention`, `Evidence review`.
+- 미수/실패/취소 상태의 settlement row는 붉은 배경과 badge로 강조한다.
+- `SETTLEMENT_CONFIRMED`가 아니고 추가 정산 미수 금액이 남아 있으면 `Payment attention`으로 분류한다.
+- Toss 사후정산 `failUrl`에 `reservationId`를 포함한다.
+- `/settlement-payment/fail`에서 `reservationId`가 있으면 `추가 정산 다시 시도` 버튼으로 바로 `/settlement-payment?reservationId=...`에 재진입한다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- `PITNOW_PAYMENT_PROVIDER=FAKE PITNOW_E2E_BASE_URL=http://localhost:3010 npm run e2e:checkout` 성공.
+- 검증 reservation ID: `29ab62e7-ee40-4745-b96e-2b4492b0967a`.
+- 예약 선결제 payment ID: `64a5f6ea-0004-4cf6-87ac-1f3eb36881b0`.
+- 사후정산 payment ID: `b0bf23cd-911b-4bc6-a65f-22a12e391e02`.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

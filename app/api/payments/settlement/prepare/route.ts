@@ -301,8 +301,10 @@ export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const successUrl = new URL("/settlement-payment/success", origin);
   successUrl.searchParams.set("paymentId", data.id);
+  successUrl.searchParams.set("reservationId", reservation.id);
   const failUrl = new URL("/settlement-payment/fail", origin);
   failUrl.searchParams.set("paymentId", data.id);
+  failUrl.searchParams.set("reservationId", reservation.id);
 
   return NextResponse.json({
     success: true,
