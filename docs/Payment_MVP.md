@@ -82,6 +82,25 @@ Reservation statuses remain:
 
 No new reservation status is added for MVP. Payment waiting state belongs to `payments`, not `reservations`.
 
+## Incomplete Payment Cleanup Policy
+
+MVP keeps payment rows as an audit ledger. Rows are not hard-deleted during normal operation.
+
+Rules:
+
+- `READY` older than 30 minutes is considered abandoned.
+- Admin can mark stale `READY` rows as `CANCELLED` with `failure_code = READY_EXPIRED`.
+- `FAILED` rows are retained for debugging provider/API failures.
+- `CANCELLED` rows are retained to track user-abandoned payment windows.
+- `REFUND_PENDING` rows are retained until an operator confirms provider-side refund/cancel status.
+- Cleanup must not modify `RESERVATION_CONFIRMED`, `SETTLEMENT_CONFIRMED`, `REFUNDED`, or active `READY` rows.
+
+Reason:
+
+- Payment rows are the source of truth for money movement and failed attempts.
+- Hard-deleting incomplete payments would make customer support and provider reconciliation harder.
+- Expiring abandoned `READY` rows keeps Admin views actionable without losing audit history.
+
 ---
 
 ## payments Table

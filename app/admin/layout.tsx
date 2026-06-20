@@ -8,6 +8,7 @@ const navItems = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/reservations", label: "Reservations" },
   { href: "/admin/settlement", label: "Settlement" },
+  { href: "/admin/payments", label: "Payments" },
   { href: "/admin/packages", label: "Packages" },
 ] as const;
 

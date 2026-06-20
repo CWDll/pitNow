@@ -161,6 +161,23 @@ export interface AdminSettlementItem {
   completedAt: string;
 }
 
+export interface AdminPaymentItem {
+  id: string;
+  reservationId: string | null;
+  checkoutId: string | null;
+  purpose: "RESERVATION" | "CHECKOUT_SETTLEMENT";
+  provider: "FAKE" | "TOSS";
+  method: string;
+  status: string;
+  amount: number;
+  approvedAt: string | null;
+  refundedAt: string | null;
+  failureCode: string | null;
+  failureMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AdminPackageItem {
   partnerName: string;
   packageName: string;
@@ -726,6 +743,52 @@ export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {
       completedAt: checkout.completed_at,
     };
   });
+}
+
+export async function getAdminPayments(): Promise<AdminPaymentItem[]> {
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
+    return [];
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("payments")
+    .select(
+      "id, reservation_id, checkout_id, payment_purpose, provider, method, status, amount, approved_at, refunded_at, failure_code, failure_message, created_at, updated_at",
+    )
+    .order("created_at", { ascending: false })
+    .limit(200)
+    .returns<
+      Array<
+        AdminPaymentRow & {
+          refunded_at: string | null;
+          failure_code: string | null;
+          failure_message: string | null;
+          updated_at: string;
+        }
+      >
+    >();
+
+  if (error) {
+    console.error("ADMIN PAYMENT LOOKUP ERROR:", error);
+    return [];
+  }
+
+  return (data ?? []).map((payment) => ({
+    id: payment.id,
+    reservationId: payment.reservation_id,
+    checkoutId: payment.checkout_id,
+    purpose: payment.payment_purpose,
+    provider: payment.provider,
+    method: payment.method,
+    status: payment.status,
+    amount: toNumber(payment.amount),
+    approvedAt: payment.approved_at,
+    refundedAt: payment.refunded_at,
+    failureCode: payment.failure_code,
+    failureMessage: payment.failure_message,
+    createdAt: payment.created_at,
+    updatedAt: payment.updated_at,
+  }));
 }
 
 export async function getAdminPackages(): Promise<AdminPackageItem[]> {

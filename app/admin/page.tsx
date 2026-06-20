@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import {
   formatAdminCurrency,
-  getAdminPackages,
+  getAdminPayments,
   getAdminReservations,
   getAdminSettlements,
 } from "./_lib/admin-data";
@@ -18,10 +18,10 @@ function metricCard(label: string, value: string, helper: string) {
 }
 
 export default async function AdminHomePage() {
-  const [reservations, settlements, packages] = await Promise.all([
+  const [reservations, settlements, payments] = await Promise.all([
     getAdminReservations(),
     getAdminSettlements(),
-    getAdminPackages(),
+    getAdminPayments(),
   ]);
 
   const activeReservations = reservations.filter((item) =>
@@ -31,7 +31,9 @@ export default async function AdminHomePage() {
     (sum, item) => sum + item.totalSettlement,
     0,
   );
-  const activePackages = packages.filter((item) => item.isActive);
+  const paymentAttention = payments.filter((item) =>
+    ["READY", "FAILED", "CANCELLED", "REFUND_PENDING"].includes(item.status),
+  );
 
   return (
     <section className="space-y-8">
@@ -59,10 +61,10 @@ export default async function AdminHomePage() {
         {metricCard("Active", String(activeReservations.length), "CONFIRMED / CHECKED_IN / IN_USE")}
         {metricCard("Completed", String(settlements.length), "Checkout rows")}
         {metricCard("Settlement", formatAdminCurrency(settlementTotal), "Total completed settlement")}
-        {metricCard("Packages", String(activePackages.length), "Active partner prices")}
+        {metricCard("Payments", String(paymentAttention.length), "Need attention")}
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
           {
             href: "/admin/reservations",
@@ -73,6 +75,11 @@ export default async function AdminHomePage() {
             href: "/admin/settlement",
             title: "Settlement board",
             text: "체크아웃 정산과 체크리스트 증적 상태를 봅니다.",
+          },
+          {
+            href: "/admin/payments",
+            title: "Payment ledger",
+            text: "READY, 실패, 취소, 환불 확인 필요 상태를 추적합니다.",
           },
           {
             href: "/admin/packages",
