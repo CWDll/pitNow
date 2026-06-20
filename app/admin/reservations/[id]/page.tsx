@@ -94,8 +94,15 @@ export default async function AdminReservationDetailPage(props: PageProps) {
     notFound();
   }
 
-  const { reservation, checkin, checkout, statusLogs, review, evidenceIssues } =
-    detail;
+  const {
+    reservation,
+    checkin,
+    checkout,
+    payments,
+    statusLogs,
+    review,
+    evidenceIssues,
+  } = detail;
 
   return (
     <section className="space-y-6">
@@ -275,6 +282,25 @@ export default async function AdminReservationDetailPage(props: PageProps) {
               <div className="pt-2 text-xs text-slate-500">
                 Completed {formatAdminDateTime(checkout.completedAt)}
               </div>
+              <div className="border-t border-white/10 pt-3">
+                <div className="flex justify-between">
+                  <dt>Reservation paid</dt>
+                  <dd className="text-white">
+                    {formatAdminCurrency(reservation.totalPrice)}
+                  </dd>
+                </div>
+                <div className="mt-2 flex justify-between">
+                  <dt>Settlement due</dt>
+                  <dd className="text-rose-200">
+                    {formatAdminCurrency(
+                      Math.max(
+                        0,
+                        checkout.totalSettlement - reservation.totalPrice,
+                      ),
+                    )}
+                  </dd>
+                </div>
+              </div>
             </dl>
           ) : (
             <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
@@ -283,6 +309,72 @@ export default async function AdminReservationDetailPage(props: PageProps) {
           )}
         </section>
       </div>
+
+      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
+        <h3 className="text-2xl font-semibold text-white">Payment Ledger</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          예약 선결제와 체크아웃 사후정산 결제 상태를 함께 확인합니다.
+        </p>
+        {payments.length === 0 ? (
+          <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+            결제 row가 없습니다.
+          </p>
+        ) : (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Purpose</th>
+                  <th className="px-4 py-3">Provider</th>
+                  <th className="px-4 py-3">Method</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Amount</th>
+                  <th className="px-4 py-3">Approved</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {payments.map((payment) => (
+                  <tr key={payment.id} className="text-slate-200">
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-white">
+                        {payment.purpose}
+                      </p>
+                      <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
+                        {payment.id}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">{payment.provider}</td>
+                    <td className="px-4 py-3">{payment.method}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
+                          payment.status === "RESERVATION_CONFIRMED" ||
+                          payment.status === "SETTLEMENT_CONFIRMED"
+                            ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30"
+                            : payment.status === "READY" ||
+                                payment.status === "APPROVED"
+                              ? "bg-amber-400/15 text-amber-100 ring-amber-300/30"
+                              : "bg-slate-400/15 text-slate-200 ring-slate-300/30"
+                        }`}
+                      >
+                        {payment.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-white">
+                      {formatAdminCurrency(payment.amount)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-400">
+                      {payment.approvedAt
+                        ? formatAdminDateTime(payment.approvedAt)
+                        : "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
         <h3 className="text-2xl font-semibold text-white">Check-in Evidence</h3>

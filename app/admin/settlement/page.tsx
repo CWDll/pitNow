@@ -33,13 +33,16 @@ export default async function AdminSettlementPage() {
               <th className="px-4 py-4 text-right">Extra</th>
               <th className="px-4 py-4 text-right">Verify</th>
               <th className="px-4 py-4 text-right">Total</th>
+              <th className="px-4 py-4 text-right">Paid</th>
+              <th className="px-4 py-4 text-right">Due</th>
+              <th className="px-4 py-4">Payment</th>
               <th className="px-4 py-4">Evidence</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
             {settlements.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={11} className="px-4 py-10 text-center text-slate-400">
                   정산 데이터가 없습니다.
                 </td>
               </tr>
@@ -64,6 +67,46 @@ export default async function AdminSettlementPage() {
                   </td>
                   <td className="px-4 py-4 text-right font-semibold text-white">
                     {formatAdminCurrency(settlement.totalSettlement)}
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    {formatAdminCurrency(
+                      settlement.reservationPaidAmount +
+                        settlement.settlementPaidAmount,
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-right font-semibold">
+                    <span
+                      className={
+                        settlement.settlementAmountDue >
+                          settlement.settlementPaidAmount
+                          ? "text-rose-200"
+                          : "text-emerald-200"
+                      }
+                    >
+                      {formatAdminCurrency(
+                        Math.max(
+                          0,
+                          settlement.settlementAmountDue -
+                            settlement.settlementPaidAmount,
+                        ),
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
+                        settlement.settlementAmountDue <= 0 ||
+                        settlement.settlementPaymentStatus ===
+                          "SETTLEMENT_CONFIRMED"
+                          ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30"
+                          : "bg-rose-400/15 text-rose-100 ring-rose-300/30"
+                      }`}
+                    >
+                      {settlement.settlementAmountDue <= 0
+                        ? "No due"
+                        : settlement.settlementPaymentStatus ??
+                          "Settlement due"}
+                    </span>
                   </td>
                   <td className="px-4 py-4">
                     <Link

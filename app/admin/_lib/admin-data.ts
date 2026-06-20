@@ -89,6 +89,19 @@ interface AdminReviewRow {
   created_at: string;
 }
 
+interface AdminPaymentRow {
+  id: string;
+  reservation_id: string | null;
+  checkout_id: string | null;
+  payment_purpose: "RESERVATION" | "CHECKOUT_SETTLEMENT";
+  provider: "FAKE" | "TOSS";
+  method: string;
+  status: string;
+  amount: number | string;
+  approved_at: string | null;
+  created_at: string;
+}
+
 interface PartnerPackagePriceRow {
   partner_id: string;
   labor_price: number | string;
@@ -133,6 +146,10 @@ export interface AdminSettlementItem {
   partnerName: string;
   reservationType: AdminReservationType;
   status: AdminReservationStatus;
+  reservationPaidAmount: number;
+  settlementAmountDue: number;
+  settlementPaymentStatus: string | null;
+  settlementPaidAmount: number;
   basePrice: number;
   extraFee: number;
   helperVerifyRequested: boolean;
@@ -160,6 +177,7 @@ export interface AdminReservationDetail {
     checkedInAt: string;
   } | null;
   checkout: {
+    id: string;
     basePrice: number;
     extraFee: number;
     helperVerifyRequested: boolean;
@@ -172,6 +190,16 @@ export interface AdminReservationDetail {
     checkoutPhoto2: string | null;
     completedAt: string;
   } | null;
+  payments: Array<{
+    id: string;
+    purpose: "RESERVATION" | "CHECKOUT_SETTLEMENT";
+    provider: "FAKE" | "TOSS";
+    method: string;
+    status: string;
+    amount: number;
+    approvedAt: string | null;
+    createdAt: string;
+  }>;
   statusLogs: Array<{
     id: string;
     fromStatus: AdminReservationStatus | null;
@@ -202,6 +230,17 @@ function firstOrSelf<T>(value: T | T[] | null): T | null {
   }
 
   return value;
+}
+
+function latestPaymentForPurpose(
+  payments: AdminPaymentRow[],
+  purpose: AdminPaymentRow["payment_purpose"],
+): AdminPaymentRow | null {
+  const candidates = payments.filter(
+    (payment) => payment.payment_purpose === purpose,
+  );
+
+  return candidates[0] ?? null;
 }
 
 async function getPartnerMap() {
@@ -364,7 +403,13 @@ export async function getAdminReservationDetail(
     return null;
   }
 
-  const [checkinResult, checkoutResult, statusLogsResult, reviewResult] =
+  const [
+    checkinResult,
+    checkoutResult,
+    paymentResult,
+    statusLogsResult,
+    reviewResult,
+  ] =
     await Promise.all([
       supabaseAdmin
         .from("checkins")
@@ -380,6 +425,14 @@ export async function getAdminReservationDetail(
         )
         .eq("reservation_id", reservation.id)
         .maybeSingle<AdminCheckoutRow>(),
+      supabaseAdmin
+        .from("payments")
+        .select(
+          "id, reservation_id, checkout_id, payment_purpose, provider, method, status, amount, approved_at, created_at",
+        )
+        .eq("reservation_id", reservation.id)
+        .order("created_at", { ascending: false })
+        .returns<AdminPaymentRow[]>(),
       supabaseAdmin
         .from("reservation_status_logs")
         .select(
@@ -403,6 +456,10 @@ export async function getAdminReservationDetail(
     console.error("ADMIN CHECKOUT DETAIL LOOKUP ERROR:", checkoutResult.error);
   }
 
+  if (paymentResult.error) {
+    console.error("ADMIN PAYMENT DETAIL LOOKUP ERROR:", paymentResult.error);
+  }
+
   if (statusLogsResult.error) {
     console.error("ADMIN STATUS LOG DETAIL LOOKUP ERROR:", statusLogsResult.error);
   }
@@ -422,6 +479,7 @@ export async function getAdminReservationDetail(
     : null;
   const checkout = checkoutResult.data
     ? {
+        id: checkoutResult.data.id ?? "",
         basePrice: toNumber(checkoutResult.data.base_price),
         extraFee: toNumber(checkoutResult.data.extra_fee),
         helperVerifyRequested: checkoutResult.data.helper_verify_requested,
@@ -433,8 +491,18 @@ export async function getAdminReservationDetail(
         checkoutPhoto1: checkoutResult.data.checkout_photo_1 ?? null,
         checkoutPhoto2: checkoutResult.data.checkout_photo_2 ?? null,
         completedAt: checkoutResult.data.completed_at,
-      }
+    }
     : null;
+  const payments = (paymentResult.data ?? []).map((payment) => ({
+    id: payment.id,
+    purpose: payment.payment_purpose,
+    provider: payment.provider,
+    method: payment.method,
+    status: payment.status,
+    amount: toNumber(payment.amount),
+    approvedAt: payment.approved_at,
+    createdAt: payment.created_at,
+  }));
   const evidenceIssues = [
     !checkin ? "체크인 row 없음" : null,
     checkin && !checkin.frontImg ? "체크인 전면 사진 없음" : null,
@@ -474,6 +542,7 @@ export async function getAdminReservationDetail(
     },
     checkin,
     checkout,
+    payments,
     statusLogs: (statusLogsResult.data ?? []).map((log) => ({
       id: log.id,
       fromStatus: log.from_status,
@@ -501,33 +570,44 @@ export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {
     return [];
   }
 
-  const [partnerMap, reservationResult, checkoutResult] = await Promise.all([
-    getPartnerMap(),
-    supabaseAdmin
-      .from("reservations")
-      .select("id, partner_id, reservation_type, status")
-      .returns<
-        Array<{
-          id: string;
-          partner_id: string;
-          reservation_type: AdminReservationType;
-          status: AdminReservationStatus;
-        }>
-      >(),
-    supabaseAdmin
-      .from("checkouts")
-      .select(
-        "reservation_id, base_price, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, completed_at",
-      )
-      .order("completed_at", { ascending: false })
-      .limit(100)
-      .returns<AdminCheckoutRow[]>(),
-  ]);
+  const [partnerMap, reservationResult, checkoutResult, paymentResult] =
+    await Promise.all([
+      getPartnerMap(),
+      supabaseAdmin
+        .from("reservations")
+        .select("id, partner_id, reservation_type, status, total_price")
+        .returns<
+          Array<{
+            id: string;
+            partner_id: string;
+            reservation_type: AdminReservationType;
+            status: AdminReservationStatus;
+            total_price: number | string;
+          }>
+        >(),
+      supabaseAdmin
+        .from("checkouts")
+        .select(
+          "id, reservation_id, base_price, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, completed_at",
+        )
+        .order("completed_at", { ascending: false })
+        .limit(100)
+        .returns<AdminCheckoutRow[]>(),
+      supabaseAdmin
+        .from("payments")
+        .select(
+          "id, reservation_id, checkout_id, payment_purpose, provider, method, status, amount, approved_at, created_at",
+        )
+        .in("payment_purpose", ["RESERVATION", "CHECKOUT_SETTLEMENT"])
+        .order("created_at", { ascending: false })
+        .returns<AdminPaymentRow[]>(),
+    ]);
 
-  if (reservationResult.error || checkoutResult.error) {
+  if (reservationResult.error || checkoutResult.error || paymentResult.error) {
     console.error("ADMIN SETTLEMENT LOOKUP ERROR:", {
       reservationError: reservationResult.error,
       checkoutError: checkoutResult.error,
+      paymentError: paymentResult.error,
     });
     return [];
   }
@@ -538,9 +618,36 @@ export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {
       reservation,
     ]),
   );
+  const paymentsByReservationId = new Map<string, AdminPaymentRow[]>();
+
+  for (const payment of paymentResult.data ?? []) {
+    if (!payment.reservation_id) {
+      continue;
+    }
+
+    const existing = paymentsByReservationId.get(payment.reservation_id) ?? [];
+    existing.push(payment);
+    paymentsByReservationId.set(payment.reservation_id, existing);
+  }
 
   return (checkoutResult.data ?? []).map((checkout) => {
     const reservation = reservationsById.get(checkout.reservation_id);
+    const payments = paymentsByReservationId.get(checkout.reservation_id) ?? [];
+    const reservationPayment = latestPaymentForPurpose(payments, "RESERVATION");
+    const settlementPayment = latestPaymentForPurpose(
+      payments,
+      "CHECKOUT_SETTLEMENT",
+    );
+    const reservationPaidAmount = toNumber(reservation?.total_price);
+    const totalSettlement = toNumber(checkout.total_settlement);
+    const settlementAmountDue = Math.max(
+      0,
+      totalSettlement - reservationPaidAmount,
+    );
+    const settlementPaidAmount =
+      settlementPayment?.status === "SETTLEMENT_CONFIRMED"
+        ? toNumber(settlementPayment.amount)
+        : 0;
 
     return {
       reservationId: checkout.reservation_id,
@@ -549,11 +656,18 @@ export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {
         : "Unknown partner",
       reservationType: reservation?.reservation_type ?? "SELF_SERVICE",
       status: reservation?.status ?? "COMPLETED",
+      reservationPaidAmount:
+        reservationPayment?.status === "RESERVATION_CONFIRMED"
+          ? toNumber(reservationPayment.amount)
+          : reservationPaidAmount,
+      settlementAmountDue,
+      settlementPaymentStatus: settlementPayment?.status ?? null,
+      settlementPaidAmount,
       basePrice: toNumber(checkout.base_price),
       extraFee: toNumber(checkout.extra_fee),
       helperVerifyRequested: checkout.helper_verify_requested,
       helperVerifyFee: toNumber(checkout.helper_verify_fee),
-      totalSettlement: toNumber(checkout.total_settlement),
+      totalSettlement,
       evidenceComplete:
         checkout.tool_check_completed &&
         checkout.cleaning_completed &&

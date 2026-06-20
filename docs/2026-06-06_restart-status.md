@@ -313,6 +313,21 @@ npm run build
 - reservation payment amount: `30000`.
 - settlement payment amount: `90000`.
 - total settlement: `120000`.
+
+## 39. 2026-06-20 Admin 사후정산 결제 가시성 보강
+
+사후정산 결제까지 붙으면서 운영자가 예약 선결제와 체크아웃 추가정산 결제를 구분해 확인할 수 있도록 Admin 화면을 보강했다.
+
+- `/admin/settlement`에 결제 완료액, 미수 금액, 사후정산 결제 상태 표시 추가.
+- `/admin/reservations/:id`에 Payment Ledger 섹션 추가.
+- Payment Ledger는 `RESERVATION`, `CHECKOUT_SETTLEMENT` purpose, provider, method, status, amount, approved time을 표시한다.
+- Admin 데이터 조회에서 `payments.payment_purpose`, `checkout_id`, `status`, `amount`를 함께 읽도록 확장.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- 인증 없는 `/admin/settlement`, `/admin/reservations/:id` 접근은 `/admin-login`으로 307 redirect 확인.
 - 실제 `/api/reservations` 호출로 잘못된 `reservationType: SELF`가 `INVALID_INPUT`으로 거부되는 것을 확인.
 - 실제 Self Service 예약 생성, 중복 예약 거부(`RESERVATION_OVERLAP`), 테스트 데이터 cleanup 확인.
 - 실제 Shop Service 예약 생성과 테스트 데이터 cleanup 확인.
