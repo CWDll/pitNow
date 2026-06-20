@@ -24,6 +24,7 @@ type PaymentFilter =
   | "stale-ready"
   | "failed"
   | "cancelled"
+  | "refunded"
   | "refund-pending";
 
 interface AdminPaymentsPageProps {
@@ -80,6 +81,7 @@ function normalizeFilter(value: string | string[] | undefined): PaymentFilter {
     rawValue === "stale-ready" ||
     rawValue === "failed" ||
     rawValue === "cancelled" ||
+    rawValue === "refunded" ||
     rawValue === "refund-pending"
   ) {
     return rawValue;
@@ -98,6 +100,8 @@ function filterLabel(filter: PaymentFilter): string {
       return "FAILED";
     case "cancelled":
       return "CANCELLED";
+    case "refunded":
+      return "REFUNDED";
     case "refund-pending":
       return "REFUND_PENDING";
     default:
@@ -161,6 +165,8 @@ function filterPayments(
       return payments.filter((payment) => payment.status === "FAILED");
     case "cancelled":
       return payments.filter((payment) => payment.status === "CANCELLED");
+    case "refunded":
+      return payments.filter((payment) => payment.status === "REFUNDED");
     case "refund-pending":
       return payments.filter((payment) => payment.status === "REFUND_PENDING");
     default:
@@ -193,6 +199,10 @@ export default async function AdminPaymentsPage({
     {
       id: "cancelled",
       count: payments.filter((payment) => payment.status === "CANCELLED").length,
+    },
+    {
+      id: "refunded",
+      count: payments.filter((payment) => payment.status === "REFUNDED").length,
     },
     {
       id: "refund-pending",
@@ -270,6 +280,15 @@ export default async function AdminPaymentsPage({
           );
         })}
       </nav>
+
+      <div className="rounded-3xl border border-cyan-300/15 bg-cyan-300/[0.06] p-4 text-sm leading-6 text-slate-300">
+        <p>
+          <span className="font-semibold text-cyan-200">만료 READY 정리</span>
+          는 결제창 진입 후 30분 이상 승인되지 않은 대기 결제를 운영 취소로
+          바꿉니다. <span className="font-semibold text-amber-100">환불 완료 처리</span>
+          는 결제사 대시보드에서 실제 환불을 확인한 뒤에만 눌러야 합니다.
+        </p>
+      </div>
 
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
         <table className="w-full border-collapse text-left text-sm">
@@ -364,6 +383,9 @@ export default async function AdminPaymentsPage({
                           action={confirmManualRefundAction}
                           className="mt-3"
                         >
+                          <p className="mb-2 text-[11px] leading-4 text-amber-100">
+                            Toss/결제사 환불 확인 후 처리
+                          </p>
                           <input
                             type="hidden"
                             name="paymentId"
