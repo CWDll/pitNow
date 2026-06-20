@@ -138,6 +138,8 @@ export interface AdminReservationItem {
   totalPrice: number;
   helperVerifyRequested: boolean;
   helperVerifyFee: number;
+  reservationPaymentStatus: string | null;
+  reservationRefundedAt: string | null;
   createdAt: string;
 }
 
@@ -350,7 +352,51 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
     reservationRows = data ?? [];
   }
 
-  return reservationRows.map((reservation) => ({
+  const reservationIds = reservationRows.map((reservation) => reservation.id);
+  const paymentResult =
+    reservationIds.length > 0
+      ? await supabaseAdmin
+          .from("payments")
+          .select(
+            "id, reservation_id, payment_purpose, provider, method, status, amount, approved_at, created_at, refunded_at",
+          )
+          .eq("payment_purpose", "RESERVATION")
+          .in("reservation_id", reservationIds)
+          .order("created_at", { ascending: false })
+          .returns<
+            Array<
+              AdminPaymentRow & {
+                refunded_at: string | null;
+              }
+            >
+          >()
+      : { data: [], error: null };
+
+  if (paymentResult.error) {
+    console.error("ADMIN RESERVATION PAYMENT LOOKUP ERROR:", paymentResult.error);
+  }
+
+  const latestPaymentsByReservationId = new Map<
+    string,
+    AdminPaymentRow & {
+      refunded_at: string | null;
+    }
+  >();
+
+  for (const payment of paymentResult.data ?? []) {
+    if (!payment.reservation_id) {
+      continue;
+    }
+
+    if (!latestPaymentsByReservationId.has(payment.reservation_id)) {
+      latestPaymentsByReservationId.set(payment.reservation_id, payment);
+    }
+  }
+
+  return reservationRows.map((reservation) => {
+    const reservationPayment = latestPaymentsByReservationId.get(reservation.id);
+
+    return {
     id: reservation.id,
     partnerName: partnerMap.get(reservation.partner_id) ?? "Unknown partner",
     bayName: reservation.bay_id
@@ -368,8 +414,11 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
     totalPrice: toNumber(reservation.total_price),
     helperVerifyRequested: reservation.helper_verify_requested,
     helperVerifyFee: toNumber(reservation.helper_verify_fee),
+    reservationPaymentStatus: reservationPayment?.status ?? null,
+    reservationRefundedAt: reservationPayment?.refunded_at ?? null,
     createdAt: reservation.created_at,
-  }));
+    };
+  });
 }
 
 export async function getAdminReservationDetail(
@@ -538,6 +587,8 @@ export async function getAdminReservationDetail(
       totalPrice: toNumber(reservation.total_price),
       helperVerifyRequested: reservation.helper_verify_requested,
       helperVerifyFee: toNumber(reservation.helper_verify_fee),
+      reservationPaymentStatus: null,
+      reservationRefundedAt: null,
       createdAt: reservation.created_at,
     },
     checkin,

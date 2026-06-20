@@ -352,6 +352,21 @@ npm run build
 - 검증 payment ID: `fe3396b1-569a-41db-abb2-8d85a6afc9b0`.
 - 최종 예약 상태 `CANCELLED`, payment 상태 `REFUNDED`, `refunded_at` 저장 확인.
 
+## 43. 2026-06-21 취소 예약 환불 상태 표시 보강
+
+Toss test 환불 검증 후, 사용자와 운영자가 취소 예약의 환불 상태를 목록에서 바로 확인할 수 있게 표시를 보강했다.
+
+- `/reservation` 목록이 예약 선결제 payment의 최신 상태와 `refunded_at`을 함께 조회한다.
+- 취소된 예약 카드에 `환불 완료`, `환불 확인 필요`, `결제 취소/실패` 등의 환불 상태 안내를 표시한다.
+- `/admin/reservations` 목록에 `Payment` 컬럼을 추가했다.
+- Admin 예약 목록에서 `RESERVATION_CONFIRMED`, `REFUNDED`, `REFUND_PENDING`, `FAILED`, `CANCELLED`를 badge로 구분한다.
+- `REFUNDED` 상태는 환불 처리 시각도 함께 표시한다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npm run build` 성공.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

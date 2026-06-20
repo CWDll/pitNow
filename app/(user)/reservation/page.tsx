@@ -75,6 +75,13 @@ interface SettlementPaymentRow {
   created_at: string;
 }
 
+interface ReservationPaymentRow {
+  reservation_id: string;
+  status: string;
+  refunded_at: string | null;
+  created_at: string;
+}
+
 interface SettlementSummary {
   amountDue: number;
   paidAmount: number;
@@ -98,6 +105,7 @@ function mapReservationItem(
     packageNames: Map<string, string>;
     taskLabels: Map<string, string>;
     settlements: Map<string, SettlementSummary>;
+    reservationPayments: Map<string, ReservationPaymentRow>;
   },
 ): ReservationListItem {
   const vehicle = Array.isArray(reservation.vehicles)
@@ -120,6 +128,7 @@ function mapReservationItem(
     ),
   );
   const settlement = maps.settlements.get(reservation.id);
+  const reservationPayment = maps.reservationPayments.get(reservation.id);
 
   return {
     id: reservation.id,
@@ -136,6 +145,8 @@ function mapReservationItem(
     settlementAmountDue: settlement?.amountDue ?? 0,
     settlementPaidAmount: settlement?.paidAmount ?? 0,
     settlementPaymentStatus: settlement?.status ?? null,
+    reservationPaymentStatus: reservationPayment?.status ?? null,
+    reservationRefundedAt: reservationPayment?.refunded_at ?? null,
     carLabel: vehicle
       ? `${vehicle.model} (${vehicle.year}) · ${vehicle.plate_number}`
       : "등록 차량",
@@ -201,6 +212,7 @@ export default function ReservationListPage() {
         reservationTaskResult,
         checkoutResult,
         settlementPaymentResult,
+        reservationPaymentResult,
       ] = await Promise.all([
         partnerIds.length > 0
           ? supabase
@@ -246,6 +258,15 @@ export default function ReservationListPage() {
               .order("created_at", { ascending: false })
               .returns<SettlementPaymentRow[]>()
           : Promise.resolve({ data: [], error: null }),
+        reservationIds.length > 0
+          ? supabase
+              .from("payments")
+              .select("reservation_id,status,refunded_at,created_at")
+              .eq("payment_purpose", "RESERVATION")
+              .in("reservation_id", reservationIds)
+              .order("created_at", { ascending: false })
+              .returns<ReservationPaymentRow[]>()
+          : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (cancelled) {
@@ -258,7 +279,8 @@ export default function ReservationListPage() {
         packageResult.error ||
         reservationTaskResult.error ||
         checkoutResult.error ||
-        settlementPaymentResult.error
+        settlementPaymentResult.error ||
+        reservationPaymentResult.error
       ) {
         console.error("RESERVATION LIST RELATED LOOKUP ERROR:", {
           partnerError: partnerResult.error,
@@ -267,6 +289,7 @@ export default function ReservationListPage() {
           reservationTaskError: reservationTaskResult.error,
           checkoutError: checkoutResult.error,
           settlementPaymentError: settlementPaymentResult.error,
+          reservationPaymentError: reservationPaymentResult.error,
         });
         setError("예약 연관 정보를 불러오지 못했습니다.");
         setIsLoading(false);
@@ -318,6 +341,7 @@ export default function ReservationListPage() {
         ]),
       );
       const latestSettlementPayments = new Map<string, SettlementPaymentRow>();
+      const reservationPayments = new Map<string, ReservationPaymentRow>();
 
       reservationTaskRows.forEach((taskRow) => {
         const taskName = taskNames.get(taskRow.task_id);
@@ -336,6 +360,12 @@ export default function ReservationListPage() {
       (settlementPaymentResult.data ?? []).forEach((payment) => {
         if (!latestSettlementPayments.has(payment.reservation_id)) {
           latestSettlementPayments.set(payment.reservation_id, payment);
+        }
+      });
+
+      (reservationPaymentResult.data ?? []).forEach((payment) => {
+        if (!reservationPayments.has(payment.reservation_id)) {
+          reservationPayments.set(payment.reservation_id, payment);
         }
       });
 
@@ -374,6 +404,7 @@ export default function ReservationListPage() {
             packageNames,
             taskLabels,
             settlements,
+            reservationPayments,
           }),
         ),
       );

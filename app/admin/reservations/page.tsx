@@ -27,6 +27,26 @@ function typeLabel(type: AdminReservationType): string {
   return type === "SELF_SERVICE" ? "Self" : "Shop";
 }
 
+function paymentClass(status: string | null): string {
+  if (status === "RESERVATION_CONFIRMED") {
+    return "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30";
+  }
+
+  if (status === "REFUNDED") {
+    return "bg-slate-400/15 text-slate-200 ring-slate-300/30";
+  }
+
+  if (status === "REFUND_PENDING") {
+    return "bg-amber-400/15 text-amber-100 ring-amber-300/30";
+  }
+
+  if (status === "FAILED" || status === "CANCELLED") {
+    return "bg-rose-400/15 text-rose-100 ring-rose-300/30";
+  }
+
+  return "bg-white/[0.04] text-slate-300 ring-white/10";
+}
+
 export default async function AdminReservationsPage() {
   const reservations = await getAdminReservations();
 
@@ -56,13 +76,14 @@ export default async function AdminReservationsPage() {
               <th className="px-4 py-4">Time</th>
               <th className="px-4 py-4">Blocked</th>
               <th className="px-4 py-4 text-right">Price</th>
+              <th className="px-4 py-4">Payment</th>
               <th className="px-4 py-4">Reservation ID</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
             {reservations.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={10} className="px-4 py-10 text-center text-slate-400">
                   예약 데이터가 없습니다.
                 </td>
               </tr>
@@ -91,6 +112,20 @@ export default async function AdminReservationsPage() {
                   </td>
                   <td className="px-4 py-4 text-right">
                     {formatAdminCurrency(reservation.totalPrice)}
+                  </td>
+                  <td className="px-4 py-4">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${paymentClass(
+                        reservation.reservationPaymentStatus,
+                      )}`}
+                    >
+                      {reservation.reservationPaymentStatus ?? "No payment"}
+                    </span>
+                    {reservation.reservationRefundedAt ? (
+                      <p className="mt-1 text-xs text-slate-500">
+                        {formatAdminDateTime(reservation.reservationRefundedAt)}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="max-w-48 truncate px-4 py-4 font-mono text-xs text-slate-400">
                     <Link

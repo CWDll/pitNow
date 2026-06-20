@@ -25,6 +25,8 @@ export interface ReservationListItem {
   settlementAmountDue: number;
   settlementPaidAmount: number;
   settlementPaymentStatus: string | null;
+  reservationPaymentStatus: string | null;
+  reservationRefundedAt: string | null;
 }
 
 type ReservationTab = "upcoming" | "history";
@@ -79,6 +81,48 @@ function getUnpaidSettlementAmount(item: ReservationListItem): number {
 
 function buildSettlementPaymentHref(item: ReservationListItem): string {
   return `/settlement-payment?reservationId=${item.id}`;
+}
+
+function getRefundLabel(status: string | null): string {
+  switch (status) {
+    case "REFUNDED":
+      return "환불 완료";
+    case "REFUND_PENDING":
+      return "환불 확인 필요";
+    case "RESERVATION_CONFIRMED":
+      return "결제 완료";
+    case "FAILED":
+      return "결제 실패";
+    case "CANCELLED":
+      return "결제 취소";
+    default:
+      return "결제 내역 없음";
+  }
+}
+
+function refundClass(status: string | null): string {
+  if (status === "REFUNDED") {
+    return "border-emerald-100 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "REFUND_PENDING") {
+    return "border-amber-100 bg-amber-50 text-amber-700";
+  }
+
+  return "border-zinc-100 bg-zinc-50 text-zinc-600";
+}
+
+function formatRefundedAt(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function buildReservationHref(item: ReservationListItem): string {
@@ -234,6 +278,25 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
           >
             추가 정산 결제하기
           </Link>
+        </div>
+      ) : null}
+
+      {item.status === "CANCELLED" ? (
+        <div
+          className={`mt-4 rounded-2xl border p-4 ${refundClass(
+            item.reservationPaymentStatus,
+          )}`}
+        >
+          <p className="text-sm font-semibold">
+            {getRefundLabel(item.reservationPaymentStatus)}
+          </p>
+          <p className="mt-1 text-xs leading-5 opacity-80">
+            {item.reservationPaymentStatus === "REFUNDED"
+              ? `${formatRefundedAt(item.reservationRefundedAt)} 환불 처리되었습니다.`
+              : item.reservationPaymentStatus === "REFUND_PENDING"
+                ? "결제사 환불 확인이 필요합니다. 운영자가 확인 후 정리합니다."
+                : "취소된 예약의 결제 상태입니다."}
+          </p>
         </div>
       ) : null}
 
