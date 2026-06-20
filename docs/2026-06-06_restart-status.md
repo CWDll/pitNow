@@ -291,6 +291,28 @@ npm run build
 
 - `npm run lint` 성공.
 - `npm run build` 성공.
+
+## 38. 2026-06-20 사후정산 E2E 검증 보강
+
+`scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.
+
+- 테스트 예약 생성 후 체크인/이용 시작까지 진행한다.
+- 테스트 중 예약 시간을 과거로 조정해 초과요금을 강제로 발생시킨다.
+- `/api/checkout` 응답의 `settlementAmountDue`가 0보다 큰지 확인한다.
+- `/api/payments/settlement/prepare`로 사후정산 payment row를 생성한다.
+- `/api/payments/settlement/confirm`으로 FAKE 사후정산 결제를 확정한다.
+- DB에서 예약 선결제 `RESERVATION_CONFIRMED`와 사후정산 `SETTLEMENT_CONFIRMED`를 모두 확인한다.
+
+검증:
+
+- `PITNOW_PAYMENT_PROVIDER=FAKE PORT=3010 npm run start`로 임시 서버 실행.
+- `PITNOW_PAYMENT_PROVIDER=FAKE PITNOW_E2E_BASE_URL=http://localhost:3010 npm run e2e:checkout` 성공.
+- reservation ID: `d7fb1f90-1df9-487e-a483-bd686c1650a2`.
+- reservation payment ID: `84c1b8b0-c6c1-473a-947f-e164d8ab6fab`.
+- settlement payment ID: `cda6388f-ee89-4466-bfb5-8329b340135c`.
+- reservation payment amount: `30000`.
+- settlement payment amount: `90000`.
+- total settlement: `120000`.
 - 실제 `/api/reservations` 호출로 잘못된 `reservationType: SELF`가 `INVALID_INPUT`으로 거부되는 것을 확인.
 - 실제 Self Service 예약 생성, 중복 예약 거부(`RESERVATION_OVERLAP`), 테스트 데이터 cleanup 확인.
 - 실제 Shop Service 예약 생성과 테스트 데이터 cleanup 확인.

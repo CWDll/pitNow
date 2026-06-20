@@ -280,10 +280,37 @@ async function createPaidReservationWithFreeWindow(params) {
   throw new Error("예약 가능한 테스트 시간대를 찾지 못했습니다.");
 }
 
+async function forceReservationOverdue({ admin, reservationId }) {
+  const start = addHours(new Date(), -3);
+  const end = addHours(new Date(), -2);
+  start.setUTCMinutes(0, 0, 0);
+  end.setUTCMinutes(0, 0, 0);
+
+  const { error } = await admin
+    .from("reservations")
+    .update({
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      reserved_end_time: end.toISOString(),
+      blocked_until: addHours(end, 1).toISOString(),
+    })
+    .eq("id", reservationId);
+
+  if (error) {
+    throw new Error(`초과요금 테스트 시간 조정 실패: ${error.message}`);
+  }
+
+  return {
+    startTime: start.toISOString(),
+    endTime: end.toISOString(),
+  };
+}
+
 async function verifyDatabase({ admin, reservationId }) {
   const [
     reservationResult,
-    paymentResult,
+    reservationPaymentResult,
+    settlementPaymentResult,
     checkinResult,
     checkoutResult,
     statusLogResult,
@@ -295,8 +322,15 @@ async function verifyDatabase({ admin, reservationId }) {
       .maybeSingle(),
     admin
       .from("payments")
-      .select("id,status,amount,reservation_id")
+      .select("id,status,amount,reservation_id,payment_purpose")
       .eq("reservation_id", reservationId)
+      .eq("payment_purpose", "RESERVATION")
+      .maybeSingle(),
+    admin
+      .from("payments")
+      .select("id,status,amount,reservation_id,checkout_id,payment_purpose")
+      .eq("reservation_id", reservationId)
+      .eq("payment_purpose", "CHECKOUT_SETTLEMENT")
       .maybeSingle(),
     admin
       .from("checkins")
@@ -321,8 +355,14 @@ async function verifyDatabase({ admin, reservationId }) {
     throw new Error(`예약 검증 실패: ${reservationResult.error.message}`);
   }
 
-  if (paymentResult.error) {
-    throw new Error(`결제 검증 실패: ${paymentResult.error.message}`);
+  if (reservationPaymentResult.error) {
+    throw new Error(`예약 결제 검증 실패: ${reservationPaymentResult.error.message}`);
+  }
+
+  if (settlementPaymentResult.error) {
+    throw new Error(
+      `사후정산 결제 검증 실패: ${settlementPaymentResult.error.message}`,
+    );
   }
 
   if (checkinResult.error) {
@@ -338,7 +378,8 @@ async function verifyDatabase({ admin, reservationId }) {
   }
 
   const reservation = reservationResult.data;
-  const payment = paymentResult.data;
+  const reservationPayment = reservationPaymentResult.data;
+  const settlementPayment = settlementPaymentResult.data;
   const checkin = checkinResult.data;
   const checkout = checkoutResult.data;
   const statusLogs = statusLogResult.data ?? [];
@@ -347,9 +388,19 @@ async function verifyDatabase({ admin, reservationId }) {
     throw new Error(`최종 예약 상태가 COMPLETED가 아닙니다: ${reservation?.status}`);
   }
 
-  if (payment?.status !== "RESERVATION_CONFIRMED") {
+  if (reservationPayment?.status !== "RESERVATION_CONFIRMED") {
     throw new Error(
-      `최종 결제 상태가 RESERVATION_CONFIRMED가 아닙니다: ${payment?.status}`,
+      `예약 결제 상태가 RESERVATION_CONFIRMED가 아닙니다: ${reservationPayment?.status}`,
+    );
+  }
+
+  if (Number(checkout?.extra_fee ?? 0) <= 0) {
+    throw new Error("초과요금이 생성되지 않았습니다.");
+  }
+
+  if (settlementPayment?.status !== "SETTLEMENT_CONFIRMED") {
+    throw new Error(
+      `사후정산 결제 상태가 SETTLEMENT_CONFIRMED가 아닙니다: ${settlementPayment?.status}`,
     );
   }
 
@@ -389,8 +440,10 @@ async function verifyDatabase({ admin, reservationId }) {
   }
 
   return {
-    paymentAmount: Number(payment.amount),
+    paymentAmount: Number(reservationPayment.amount),
+    settlementPaymentAmount: Number(settlementPayment.amount),
     totalPrice: Number(reservation.total_price),
+    extraFee: Number(checkout.extra_fee),
     totalSettlement: Number(checkout.total_settlement),
     transitions,
   };
@@ -461,7 +514,13 @@ async function main() {
   });
   formatStep("이용 시작 완료");
 
-  await apiRequest({
+  const overdueWindow = await forceReservationOverdue({
+    admin,
+    reservationId: reservation.reservationId,
+  });
+  formatStep("초과요금 테스트 시간 조정", overdueWindow.endTime);
+
+  const checkoutResponse = await apiRequest({
     baseUrl,
     token,
     path: "/api/checkout",
@@ -478,6 +537,37 @@ async function main() {
   });
   formatStep("체크아웃 완료");
 
+  if (Number(checkoutResponse.settlementAmountDue ?? 0) <= 0) {
+    throw new Error(
+      `사후정산 결제 금액이 생성되지 않았습니다: ${JSON.stringify(checkoutResponse)}`,
+    );
+  }
+
+  const settlementPayment = await apiRequest({
+    baseUrl,
+    token,
+    path: "/api/payments/settlement/prepare",
+    method: "POST",
+    body: {
+      reservationId: reservation.reservationId,
+      method: "CARD",
+    },
+  });
+  formatStep("사후정산 FAKE 결제 준비", settlementPayment.paymentId);
+
+  await apiRequest({
+    baseUrl,
+    token,
+    path: "/api/payments/settlement/confirm",
+    method: "POST",
+    body: {
+      paymentId: settlementPayment.paymentId,
+      providerOrderId: settlementPayment.providerOrderId,
+      amount: settlementPayment.amount,
+    },
+  });
+  formatStep("사후정산 FAKE 결제 승인");
+
   const verification = await verifyDatabase({
     admin,
     reservationId: reservation.reservationId,
@@ -490,10 +580,13 @@ async function main() {
         success: true,
         reservationId: reservation.reservationId,
         paymentId: reservation.paymentId,
+        settlementPaymentId: settlementPayment.paymentId,
         startTime: reservation.startTime,
         endTime: reservation.endTime,
         paymentAmount: verification.paymentAmount,
+        settlementPaymentAmount: verification.settlementPaymentAmount,
         totalPrice: verification.totalPrice,
+        extraFee: verification.extraFee,
         totalSettlement: verification.totalSettlement,
         transitions: verification.transitions,
       },
