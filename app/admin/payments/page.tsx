@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { hasAdminAccess } from "@/src/lib/admin-auth";
 import {
   cleanupStaleReadyPayments,
+  confirmManualRefund,
   getStaleReadyPaymentCutoff,
 } from "@/src/lib/payment-cleanup";
 import {
@@ -44,6 +45,31 @@ async function cleanupStaleReadyPaymentsAction() {
     db: supabaseAdmin,
   });
   revalidatePath("/admin/payments");
+}
+
+async function confirmManualRefundAction(formData: FormData) {
+  "use server";
+
+  const canAccessAdmin = await hasAdminAccess();
+  const paymentId = String(formData.get("paymentId") ?? "").trim();
+
+  if (
+    !canAccessAdmin ||
+    !hasSupabaseServiceRoleEnv ||
+    !supabaseAdmin ||
+    !paymentId
+  ) {
+    return;
+  }
+
+  await confirmManualRefund({
+    db: supabaseAdmin,
+    paymentId,
+    actorType: "ADMIN",
+  });
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/reservations");
+  revalidatePath("/admin/settlement");
 }
 
 function normalizeFilter(value: string | string[] | undefined): PaymentFilter {
@@ -333,6 +359,24 @@ export default async function AdminPaymentsPage({
                       ) : (
                         "-"
                       )}
+                      {payment.status === "REFUND_PENDING" ? (
+                        <form
+                          action={confirmManualRefundAction}
+                          className="mt-3"
+                        >
+                          <input
+                            type="hidden"
+                            name="paymentId"
+                            value={payment.id}
+                          />
+                          <button
+                            type="submit"
+                            className="rounded-full bg-amber-300 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-amber-200"
+                          >
+                            환불 완료 처리
+                          </button>
+                        </form>
+                      ) : null}
                     </td>
                   </tr>
                 );

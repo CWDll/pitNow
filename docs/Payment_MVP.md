@@ -94,6 +94,8 @@ Rules:
 - `CANCELLED` rows are retained to track user-abandoned payment windows.
 - `REFUND_PENDING` rows are retained until an operator confirms provider-side refund/cancel status.
 - Cleanup must not modify `RESERVATION_CONFIRMED`, `SETTLEMENT_CONFIRMED`, `REFUNDED`, or active `READY` rows.
+- Admin may mark a `REFUND_PENDING` row as `REFUNDED` only after confirming the provider dashboard or support evidence.
+- Manual refund confirmation stores `metadata.manualRefundConfirmed` and `refunded_at`.
 
 Reason:
 

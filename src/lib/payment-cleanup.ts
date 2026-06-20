@@ -7,6 +7,11 @@ export interface CleanupStaleReadyPaymentsResult {
   expiredCount: number;
 }
 
+export interface ConfirmManualRefundResult {
+  paymentId: string;
+  updated: boolean;
+}
+
 export function getStaleReadyPaymentCutoff(
   expiryMinutes = DEFAULT_READY_EXPIRY_MINUTES,
 ): string {
@@ -45,5 +50,41 @@ export async function cleanupStaleReadyPayments(params: {
   return {
     cutoff,
     expiredCount: data?.length ?? 0,
+  };
+}
+
+export async function confirmManualRefund(params: {
+  db: SupabaseClient;
+  paymentId: string;
+  actorType?: "ADMIN" | "SYSTEM";
+}): Promise<ConfirmManualRefundResult> {
+  const refundedAt = new Date().toISOString();
+  const { data, error } = await params.db
+    .from("payments")
+    .update({
+      status: "REFUNDED",
+      refunded_at: refundedAt,
+      failure_code: null,
+      failure_message: null,
+      metadata: {
+        manualRefundConfirmed: {
+          actorType: params.actorType ?? "ADMIN",
+          confirmedAt: refundedAt,
+        },
+      },
+      updated_at: refundedAt,
+    })
+    .eq("id", params.paymentId)
+    .eq("status", "REFUND_PENDING")
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    paymentId: params.paymentId,
+    updated: Boolean(data),
   };
 }
