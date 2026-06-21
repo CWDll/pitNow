@@ -10,11 +10,22 @@ function readLocalEnv(name: string): string | undefined {
   return line?.slice(name.length + 1).trim();
 }
 
+function requireAdminToken(): string {
+  const token =
+    process.env.PITNOW_ADMIN_ACCESS_TOKEN ??
+    readLocalEnv("PITNOW_ADMIN_ACCESS_TOKEN");
+
+  if (!token) {
+    test.skip(true, "PITNOW_ADMIN_ACCESS_TOKEN is required for admin smoke tests");
+    throw new Error("PITNOW_ADMIN_ACCESS_TOKEN is required");
+  }
+
+  return token;
+}
+
 test.describe("admin smoke", () => {
   test.beforeEach(async ({ context, baseURL }) => {
-    const token = process.env.PITNOW_ADMIN_ACCESS_TOKEN ?? readLocalEnv("PITNOW_ADMIN_ACCESS_TOKEN");
-
-    test.skip(!token, "PITNOW_ADMIN_ACCESS_TOKEN is required for admin smoke tests");
+    const token = requireAdminToken();
 
     await context.addCookies([
       {

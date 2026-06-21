@@ -31,6 +31,14 @@ export default defineConfig({
       testMatch: /mobile\.spec\.ts/,
     },
     {
+      name: "authenticated-mobile-chromium",
+      use: {
+        ...devices["iPhone 14 Pro Max"],
+        browserName: "chromium",
+      },
+      testMatch: /authenticated-user\.spec\.ts/,
+    },
+    {
       name: "admin-chromium",
       use: {
         ...devices["Desktop Chrome"],
