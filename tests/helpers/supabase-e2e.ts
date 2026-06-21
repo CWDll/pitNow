@@ -339,7 +339,12 @@ export async function cleanupConfirmedReservationForE2E(params: {
       },
     })
     .eq("reservation_id", params.reservationId)
-    .in("status", ["RESERVATION_CONFIRMED", "APPROVED", "READY"]);
+    .in("status", [
+      "RESERVATION_CONFIRMED",
+      "SETTLEMENT_CONFIRMED",
+      "APPROVED",
+      "READY",
+    ]);
 
   if (paymentError) {
     throw paymentError;
@@ -351,7 +356,7 @@ export async function cleanupConfirmedReservationForE2E(params: {
       status: "CANCELLED",
     })
     .eq("id", params.reservationId)
-    .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"]);
+    .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE", "COMPLETED"]);
 
   if (reservationError) {
     throw reservationError;

@@ -291,6 +291,155 @@ test.describe("booking flow smoke", () => {
         "CHECKED_IN",
         "IN_USE",
       ]);
+
+      const endWorkButton = page.getByRole("button", { name: "작업 종료" });
+      await expect(endWorkButton).toBeVisible();
+      await Promise.all([
+        page.waitForURL(/\/checkout\?/),
+        endWorkButton.click(),
+      ]);
+
+      await expect(
+        page.getByRole("heading", { name: "체크아웃", exact: true }),
+      ).toBeVisible();
+      await expect(page.getByText("IN_USE")).toBeVisible();
+      await page.getByLabel("공구 반납 완료").check();
+      await page.getByLabel("베이 청소 완료").check();
+      await page.getByLabel("폐유/폐기물 처리 완료").check();
+
+      const checkoutPhotoInputs = page.locator('input[type="file"]');
+      await expect(checkoutPhotoInputs).toHaveCount(2);
+      for (let index = 0; index < 2; index += 1) {
+        await checkoutPhotoInputs.nth(index).setInputFiles(testImageFile);
+      }
+
+      await expect(page.getByText("사진1 완료")).toBeVisible();
+      await expect(page.getByText("사진2 완료")).toBeVisible();
+      await page.getByLabel(/카 마스터 검수 요청/).check();
+
+      const checkoutButton = page.getByRole("button", {
+        name: "체크아웃 및 정산하기",
+      });
+      await expect(checkoutButton).toBeEnabled();
+      await Promise.all([
+        page.waitForURL(/\/settlement-payment\?/),
+        checkoutButton.click(),
+      ]);
+
+      await expect(
+        page.getByRole("heading", { name: "추가 정산" }),
+      ).toBeVisible();
+      await expect(page.getByText("정산 요약")).toBeVisible();
+
+      const settlementPayButton = page.getByRole("button", {
+        name: /원 추가 결제하기/,
+      });
+      await expect(settlementPayButton).toBeEnabled();
+      await Promise.all([
+        page.waitForURL(/\/complete\?/),
+        settlementPayButton.click(),
+      ]);
+
+      await expect(page.getByRole("heading", { name: "이용 완료" })).toBeVisible();
+      await expect(page.getByText("정비가 마무리되었습니다.")).toBeVisible();
+      await expect(page.getByText("추가 정산 결제 완료")).toBeVisible();
+
+      const { data: completedReservation, error: completedReservationError } =
+        await db
+          .from("reservations")
+          .select("status")
+          .eq("id", confirmedReservationId)
+          .single<{ status: string }>();
+
+      if (completedReservationError || !completedReservation) {
+        throw (
+          completedReservationError ??
+          new Error("Completed reservation was not found")
+        );
+      }
+
+      expect(completedReservation.status).toBe("COMPLETED");
+
+      const { data: checkout, error: checkoutError } = await db
+        .from("checkouts")
+        .select(
+          "id, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, checkout_photo_1, checkout_photo_2",
+        )
+        .eq("reservation_id", confirmedReservationId)
+        .single<{
+          id: string;
+          extra_fee: number | string;
+          helper_verify_requested: boolean;
+          helper_verify_fee: number | string;
+          total_settlement: number | string;
+          tool_check_completed: boolean;
+          cleaning_completed: boolean;
+          waste_disposal_completed: boolean;
+          checkout_photo_1: string;
+          checkout_photo_2: string;
+        }>();
+
+      if (checkoutError || !checkout) {
+        throw checkoutError ?? new Error("Checkout evidence was not found");
+      }
+
+      expect(checkout.tool_check_completed).toBe(true);
+      expect(checkout.cleaning_completed).toBe(true);
+      expect(checkout.waste_disposal_completed).toBe(true);
+      expect(checkout.checkout_photo_1).toContain("/reservation-photos/");
+      expect(checkout.checkout_photo_2).toContain("/reservation-photos/");
+      expect(checkout.helper_verify_requested).toBe(true);
+      expect(Number(checkout.helper_verify_fee)).toBeGreaterThan(0);
+      expect(Number(checkout.total_settlement)).toBeGreaterThan(
+        Number(reservation.total_price),
+      );
+
+      const { data: settlementPayment, error: settlementPaymentError } =
+        await db
+          .from("payments")
+          .select("id, checkout_id, payment_purpose, status, amount")
+          .eq("checkout_id", checkout.id)
+          .eq("payment_purpose", "CHECKOUT_SETTLEMENT")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single<{
+            id: string;
+            checkout_id: string;
+            payment_purpose: string;
+            status: string;
+            amount: number | string;
+          }>();
+
+      if (settlementPaymentError || !settlementPayment) {
+        throw (
+          settlementPaymentError ??
+          new Error("Settlement payment was not found")
+        );
+      }
+
+      expect(settlementPayment.checkout_id).toBe(checkout.id);
+      expect(settlementPayment.status).toBe("SETTLEMENT_CONFIRMED");
+      expect(Number(settlementPayment.amount)).toBe(
+        Number(checkout.total_settlement) - Number(reservation.total_price),
+      );
+
+      const { data: finalStatusLogs, error: finalStatusLogError } = await db
+        .from("reservation_status_logs")
+        .select("to_status")
+        .eq("reservation_id", confirmedReservationId)
+        .in("to_status", ["CHECKED_IN", "IN_USE", "COMPLETED"])
+        .order("created_at", { ascending: true })
+        .returns<Array<{ to_status: string }>>();
+
+      if (finalStatusLogError) {
+        throw finalStatusLogError;
+      }
+
+      expect(finalStatusLogs.map((log) => log.to_status)).toEqual([
+        "CHECKED_IN",
+        "IN_USE",
+        "COMPLETED",
+      ]);
     } finally {
       if (confirmedReservationId) {
         await cleanupConfirmedReservationForE2E({
