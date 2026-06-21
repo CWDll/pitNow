@@ -11,6 +11,11 @@ interface E2EUser {
   password: string;
 }
 
+interface E2ECredentials {
+  email: string;
+  password: string;
+}
+
 interface E2EVehicle {
   id: string;
   label: string;
@@ -69,19 +74,58 @@ export function getAdminSupabaseForE2E(): SupabaseClient | null {
   });
 }
 
-export function getE2ECredentials() {
+export function getE2ECredentials(
+  overrides: Partial<E2ECredentials> = {},
+): E2ECredentials {
   const env = getE2EEnv();
 
   return {
-    email: env.PITNOW_E2E_USER_EMAIL ?? "pitnow-e2e-ui@example.com",
-    password: env.PITNOW_E2E_USER_PASSWORD ?? "PitnowE2e!2026",
+    email:
+      overrides.email ??
+      env.PITNOW_E2E_USER_EMAIL ??
+      "pitnow-e2e-ui@example.com",
+    password:
+      overrides.password ??
+      env.PITNOW_E2E_USER_PASSWORD ??
+      "PitnowE2e!2026",
   };
+}
+
+export async function signInE2EUserForE2E(
+  credentials = getE2ECredentials(),
+): Promise<string> {
+  const env = getE2EEnv();
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !anonKey) {
+    throw new Error("Supabase anon env is required to sign in E2E user");
+  }
+
+  const client = createClient(supabaseUrl, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+
+  const { data, error } = await client.auth.signInWithPassword({
+    email: credentials.email,
+    password: credentials.password,
+  });
+
+  if (error || !data.session?.access_token) {
+    throw error ?? new Error("Failed to sign in E2E user");
+  }
+
+  return data.session.access_token;
 }
 
 export async function ensureE2EUser(
   db: SupabaseClient,
+  credentials = getE2ECredentials(),
 ): Promise<E2EUser> {
-  const { email, password } = getE2ECredentials();
+  const { email, password } = credentials;
   let page = 1;
   let userId: string | null = null;
 

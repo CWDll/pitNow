@@ -69,6 +69,15 @@ export async function POST(req: Request, context: Context) {
   }
 
   const reason = parseReason((payload as { reason?: unknown }).reason);
+
+  if (!reason) {
+    return jsonError(
+      400,
+      "CANCEL_REASON_REQUIRED",
+      "관리자 예약 취소 사유를 입력해 주세요.",
+    );
+  }
+
   const { data: reservation, error: reservationError } = await supabaseAdmin
     .from("reservations")
     .select("id,status")

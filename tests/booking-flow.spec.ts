@@ -1,10 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import {
   cleanupConfirmedReservationForE2E,
   ensureE2EUser,
   ensureE2EVehicle,
   getAdminSupabaseForE2E,
+  getE2EEnv,
   getSelfReservationSeed,
 } from "./helpers/supabase-e2e";
 
@@ -17,6 +18,17 @@ function requireAdminSupabaseForE2E() {
   }
 
   return db;
+}
+
+function requireAdminTokenForE2E() {
+  const token = getE2EEnv().PITNOW_ADMIN_ACCESS_TOKEN;
+
+  if (!token) {
+    test.skip(true, "PITNOW_ADMIN_ACCESS_TOKEN is required for admin drill-down checks");
+    throw new Error("PITNOW_ADMIN_ACCESS_TOKEN is required");
+  }
+
+  return token;
 }
 
 async function mockReservationPhotoUploads(page: Page) {
@@ -40,11 +52,86 @@ const testImageFile = {
   ]),
 };
 
+async function verifyAdminDrillDownForE2E(params: {
+  browser: Browser;
+  baseUrl: string;
+  adminToken: string;
+  reservationId: string;
+  partnerName: string;
+}) {
+  const adminContext = await params.browser.newContext({
+    viewport: { width: 1440, height: 1000 },
+  });
+
+  try {
+    await adminContext.addCookies([
+      {
+        name: "pitnow_admin_access",
+        value: params.adminToken,
+        url: params.baseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+
+    const adminPage = await adminContext.newPage();
+    const detailPath = `/admin/reservations/${params.reservationId}`;
+    const detailLink = adminPage.locator(`a[href="${detailPath}"]`);
+
+    await adminPage.goto(`${params.baseUrl}${detailPath}`);
+    await expect(
+      adminPage.getByRole("heading", { name: "Evidence Drill-down" }),
+    ).toBeVisible();
+    await expect(adminPage.getByText(params.reservationId)).toBeVisible();
+    await expect(adminPage.getByText("COMPLETED").first()).toBeVisible();
+    await expect(adminPage.getByText("증적 완료")).toBeVisible();
+    await expect(adminPage.getByText(params.partnerName).first()).toBeVisible();
+    await expect(adminPage.getByRole("heading", { name: "Payment Ledger" })).toBeVisible();
+    await expect(adminPage.getByText("RESERVATION_CONFIRMED")).toBeVisible();
+    await expect(adminPage.getByText("SETTLEMENT_CONFIRMED")).toBeVisible();
+    await expect(adminPage.getByRole("heading", { name: "Check-in Evidence" })).toBeVisible();
+    await expect(adminPage.getByRole("heading", { name: "Checkout Evidence" })).toBeVisible();
+    await expect(adminPage.getByText("Checkout photo 1")).toBeVisible();
+    await expect(adminPage.getByText("Checkout photo 2")).toBeVisible();
+    await expect(adminPage.getByRole("heading", { name: "Customer Review" })).toBeVisible();
+    await expect(adminPage.getByText("E2E 예약 루프 검증 후기입니다.")).toBeVisible();
+    await expect(adminPage.getByRole("heading", { name: "Status Timeline" })).toBeVisible();
+    await expect(adminPage.getByText(/CONFIRMED.*CHECKED_IN/)).toBeVisible();
+    await expect(adminPage.getByText(/CHECKED_IN.*IN_USE/)).toBeVisible();
+    await expect(adminPage.getByText(/IN_USE.*COMPLETED/)).toBeVisible();
+
+    await adminPage.goto(`${params.baseUrl}/admin/settlement`);
+    await expect(
+      adminPage.getByRole("heading", { name: "Checkout Settlement" }),
+    ).toBeVisible();
+    await expect(detailLink.first()).toBeVisible();
+
+    await adminPage.goto(`${params.baseUrl}/admin/payments`);
+    await expect(adminPage.getByRole("heading", { name: "Payment Ledger" })).toBeVisible();
+    const paymentRowsForReservation = adminPage.locator("tbody tr").filter({
+      has: adminPage.locator(`a[href="${detailPath}"]`),
+    });
+    await expect(paymentRowsForReservation).toHaveCount(2);
+    await expect(
+      paymentRowsForReservation.filter({ hasText: "RESERVATION" }),
+    ).toHaveCount(1);
+    await expect(
+      paymentRowsForReservation.filter({ hasText: "CHECKOUT_SETTLEMENT" }),
+    ).toHaveCount(1);
+  } finally {
+    await adminContext.close();
+  }
+}
+
 test.describe("booking flow smoke", () => {
-  test("clicks home booking path through work, schedule, safety, and payment", async ({
+  test.setTimeout(90_000);
+
+  test("clicks full reservation loop through receipt and admin drill-down", async ({
+    browser,
     page,
   }) => {
     const db = requireAdminSupabaseForE2E();
+    const adminToken = requireAdminTokenForE2E();
     let confirmedReservationId: string | null = null;
 
     try {
@@ -481,6 +568,14 @@ test.describe("booking flow smoke", () => {
         "IN_USE",
         "COMPLETED",
       ]);
+
+      await verifyAdminDrillDownForE2E({
+        browser,
+        baseUrl: new URL(page.url()).origin,
+        adminToken,
+        reservationId: e2eReservationId,
+        partnerName: seed.partnerName,
+      });
     } finally {
       if (confirmedReservationId) {
         await cleanupConfirmedReservationForE2E({
