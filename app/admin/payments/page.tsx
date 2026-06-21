@@ -290,8 +290,8 @@ export default async function AdminPaymentsPage({
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
-        <table className="w-full border-collapse text-left text-sm">
+      <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900">
+        <table className="min-w-[1120px] w-full border-collapse text-left text-sm">
           <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-slate-400">
             <tr>
               <th className="px-4 py-4">Purpose</th>
