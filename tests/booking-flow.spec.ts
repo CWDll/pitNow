@@ -153,12 +153,15 @@ test.describe("booking flow smoke", () => {
 
       const completeUrl = new URL(page.url());
       confirmedReservationId = completeUrl.searchParams.get("reservationId");
-      expect(confirmedReservationId).toBeTruthy();
+      if (!confirmedReservationId) {
+        throw new Error("Reservation complete URL did not include reservationId");
+      }
+      const e2eReservationId = confirmedReservationId;
 
       const { data: reservation, error: reservationError } = await db
         .from("reservations")
         .select("id, user_id, status, total_price")
-        .eq("id", confirmedReservationId)
+        .eq("id", e2eReservationId)
         .single<{
           id: string;
           user_id: string;
@@ -177,7 +180,7 @@ test.describe("booking flow smoke", () => {
       const { data: payment, error: paymentError } = await db
         .from("payments")
         .select("id, reservation_id, payment_purpose, status, amount")
-        .eq("reservation_id", confirmedReservationId)
+        .eq("reservation_id", e2eReservationId)
         .eq("payment_purpose", "RESERVATION")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -193,7 +196,7 @@ test.describe("booking flow smoke", () => {
         throw paymentError ?? new Error("Reservation payment was not found");
       }
 
-      expect(payment.reservation_id).toBe(confirmedReservationId);
+      expect(payment.reservation_id).toBe(e2eReservationId);
       expect(payment.status).toBe("RESERVATION_CONFIRMED");
       expect(Number(payment.amount)).toBe(Number(reservation.total_price));
 
@@ -237,7 +240,7 @@ test.describe("booking flow smoke", () => {
           const { data, error } = await db
             .from("reservations")
             .select("status")
-            .eq("id", confirmedReservationId)
+            .eq("id", e2eReservationId)
             .single<{ status: string }>();
 
           if (error) {
@@ -251,7 +254,7 @@ test.describe("booking flow smoke", () => {
       const { data: checkin, error: checkinError } = await db
         .from("checkins")
         .select("id, front_img, rear_img, left_img, right_img")
-        .eq("reservation_id", confirmedReservationId)
+        .eq("reservation_id", e2eReservationId)
         .single<{
           id: string;
           front_img: string;
@@ -272,7 +275,7 @@ test.describe("booking flow smoke", () => {
       const { data: statusLogs, error: statusLogError } = await db
         .from("reservation_status_logs")
         .select("from_status, to_status, reason")
-        .eq("reservation_id", confirmedReservationId)
+        .eq("reservation_id", e2eReservationId)
         .in("to_status", ["CHECKED_IN", "IN_USE"])
         .order("created_at", { ascending: true })
         .returns<
@@ -344,11 +347,49 @@ test.describe("booking flow smoke", () => {
       await expect(page.getByText("정비가 마무리되었습니다.")).toBeVisible();
       await expect(page.getByText("추가 정산 결제 완료")).toBeVisible();
 
+      await page.getByLabel("5점 선택").click();
+      await page
+        .getByPlaceholder("서비스 리뷰를 남겨주세요.")
+        .fill("E2E 예약 루프 검증 후기입니다.");
+      await page.getByRole("button", { name: "후기 제출" }).click();
+      await expect(page.getByText("리뷰 저장이 완료되었습니다.")).toBeVisible();
+
+      const { data: review, error: reviewError } = await db
+        .from("reviews")
+        .select("id, rating, comment")
+        .eq("reservation_id", e2eReservationId)
+        .single<{
+          id: string;
+          rating: number;
+          comment: string | null;
+        }>();
+
+      if (reviewError || !review) {
+        throw reviewError ?? new Error("Review was not found");
+      }
+
+      expect(review.rating).toBe(5);
+      expect(review.comment).toBe("E2E 예약 루프 검증 후기입니다.");
+
+      await Promise.all([
+        page.waitForURL(/\/receipt\?/),
+        page.getByRole("link", { name: "영수증" }).click(),
+      ]);
+
+      await expect(
+        page.getByRole("heading", { name: "이용 영수증" }),
+      ).toBeVisible();
+      await expect(page.getByText("PITNOW RECEIPT")).toBeVisible();
+      await expect(page.getByText("예약 ID")).toBeVisible();
+      await expect(page.getByText(e2eReservationId)).toBeVisible();
+      await expect(page.getByText("정산 내역")).toBeVisible();
+      await expect(page.getByText("총 결제")).toBeVisible();
+
       const { data: completedReservation, error: completedReservationError } =
         await db
           .from("reservations")
           .select("status")
-          .eq("id", confirmedReservationId)
+          .eq("id", e2eReservationId)
           .single<{ status: string }>();
 
       if (completedReservationError || !completedReservation) {
@@ -365,7 +406,7 @@ test.describe("booking flow smoke", () => {
         .select(
           "id, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, checkout_photo_1, checkout_photo_2",
         )
-        .eq("reservation_id", confirmedReservationId)
+        .eq("reservation_id", e2eReservationId)
         .single<{
           id: string;
           extra_fee: number | string;
@@ -426,7 +467,7 @@ test.describe("booking flow smoke", () => {
       const { data: finalStatusLogs, error: finalStatusLogError } = await db
         .from("reservation_status_logs")
         .select("to_status")
-        .eq("reservation_id", confirmedReservationId)
+        .eq("reservation_id", e2eReservationId)
         .in("to_status", ["CHECKED_IN", "IN_USE", "COMPLETED"])
         .order("created_at", { ascending: true })
         .returns<Array<{ to_status: string }>>();

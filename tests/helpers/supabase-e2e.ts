@@ -324,6 +324,15 @@ export async function cleanupConfirmedReservationForE2E(params: {
 }) {
   const now = new Date().toISOString();
 
+  const { error: reviewError } = await params.db
+    .from("reviews")
+    .delete()
+    .eq("reservation_id", params.reservationId);
+
+  if (reviewError) {
+    throw reviewError;
+  }
+
   const { error: paymentError } = await params.db
     .from("payments")
     .update({
