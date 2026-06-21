@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   cleanupConfirmedReservationForE2E,
@@ -19,6 +19,27 @@ function requireAdminSupabaseForE2E() {
   return db;
 }
 
+async function mockReservationPhotoUploads(page: Page) {
+  await page.route("**/storage/v1/object/reservation-photos/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        Key: "reservation-photos/e2e/mock.jpg",
+      }),
+    });
+  });
+}
+
+const testImageFile = {
+  name: "pitnow-e2e-checkin.jpg",
+  mimeType: "image/jpeg",
+  buffer: Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+    0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xd9,
+  ]),
+};
+
 test.describe("booking flow smoke", () => {
   test("clicks home booking path through work, schedule, safety, and payment", async ({
     page,
@@ -27,6 +48,7 @@ test.describe("booking flow smoke", () => {
     let confirmedReservationId: string | null = null;
 
     try {
+      await mockReservationPhotoUploads(page);
       const user = await ensureE2EUser(db);
       await ensureE2EVehicle({ db, userId: user.id });
       const seed = await getSelfReservationSeed(db);
@@ -174,6 +196,101 @@ test.describe("booking flow smoke", () => {
       expect(payment.reservation_id).toBe(confirmedReservationId);
       expect(payment.status).toBe("RESERVATION_CONFIRMED");
       expect(Number(payment.amount)).toBe(Number(reservation.total_price));
+
+      const checkinButton = page.getByRole("button", { name: "체크인 하러 가기" });
+      await expect(checkinButton).toBeVisible();
+      await Promise.all([
+        page.waitForURL(/\/checkin\?/),
+        checkinButton.click(),
+      ]);
+
+      await expect(page.getByRole("heading", { name: "체크인" })).toBeVisible();
+      await expect(page.getByText("CONFIRMED")).toBeVisible();
+      await page.getByRole("button", { name: "탭하여 QR 스캔" }).click();
+      await expect(page.getByRole("button", { name: "스캔 완료" })).toBeVisible();
+
+      const photoInputs = page.locator('input[type="file"]');
+      await expect(photoInputs).toHaveCount(4);
+      for (let index = 0; index < 4; index += 1) {
+        await photoInputs.nth(index).setInputFiles(testImageFile);
+      }
+
+      await expect(page.getByText("전면 완료")).toBeVisible();
+      await expect(page.getByText("후면 완료")).toBeVisible();
+      await expect(page.getByText("좌측 완료")).toBeVisible();
+      await expect(page.getByText("우측 완료")).toBeVisible();
+
+      const completeCheckinButton = page.getByRole("button", {
+        name: "체크인 완료 (타이머 시작)",
+      });
+      await expect(completeCheckinButton).toBeEnabled();
+      await Promise.all([
+        page.waitForURL(/\/in-use\?/),
+        completeCheckinButton.click(),
+      ]);
+
+      await expect(page.getByText("이용 중")).toBeVisible();
+      await expect(page.getByText("남은 시간")).toBeVisible();
+
+      await expect
+        .poll(async () => {
+          const { data, error } = await db
+            .from("reservations")
+            .select("status")
+            .eq("id", confirmedReservationId)
+            .single<{ status: string }>();
+
+          if (error) {
+            throw error;
+          }
+
+          return data.status;
+        })
+        .toBe("IN_USE");
+
+      const { data: checkin, error: checkinError } = await db
+        .from("checkins")
+        .select("id, front_img, rear_img, left_img, right_img")
+        .eq("reservation_id", confirmedReservationId)
+        .single<{
+          id: string;
+          front_img: string;
+          rear_img: string;
+          left_img: string;
+          right_img: string;
+        }>();
+
+      if (checkinError || !checkin) {
+        throw checkinError ?? new Error("Check-in evidence was not found");
+      }
+
+      expect(checkin.front_img).toContain("/reservation-photos/");
+      expect(checkin.rear_img).toContain("/reservation-photos/");
+      expect(checkin.left_img).toContain("/reservation-photos/");
+      expect(checkin.right_img).toContain("/reservation-photos/");
+
+      const { data: statusLogs, error: statusLogError } = await db
+        .from("reservation_status_logs")
+        .select("from_status, to_status, reason")
+        .eq("reservation_id", confirmedReservationId)
+        .in("to_status", ["CHECKED_IN", "IN_USE"])
+        .order("created_at", { ascending: true })
+        .returns<
+          Array<{
+            from_status: string | null;
+            to_status: string;
+            reason: string | null;
+          }>
+        >();
+
+      if (statusLogError) {
+        throw statusLogError;
+      }
+
+      expect(statusLogs.map((log) => log.to_status)).toEqual([
+        "CHECKED_IN",
+        "IN_USE",
+      ]);
     } finally {
       if (confirmedReservationId) {
         await cleanupConfirmedReservationForE2E({

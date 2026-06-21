@@ -351,9 +351,18 @@ export async function cleanupConfirmedReservationForE2E(params: {
       status: "CANCELLED",
     })
     .eq("id", params.reservationId)
-    .in("status", ["CONFIRMED"]);
+    .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"]);
 
   if (reservationError) {
     throw reservationError;
+  }
+
+  const { error: checkinError } = await params.db
+    .from("checkins")
+    .delete()
+    .eq("reservation_id", params.reservationId);
+
+  if (checkinError) {
+    throw checkinError;
   }
 }
