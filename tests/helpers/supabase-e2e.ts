@@ -317,3 +317,43 @@ export async function cancelPaymentForE2E(params: {
     throw error;
   }
 }
+
+export async function cleanupConfirmedReservationForE2E(params: {
+  db: SupabaseClient;
+  reservationId: string;
+}) {
+  const now = new Date().toISOString();
+
+  const { error: paymentError } = await params.db
+    .from("payments")
+    .update({
+      status: "REFUNDED",
+      refunded_at: now,
+      updated_at: now,
+      failure_code: "UI_E2E_CLEANUP",
+      failure_message: "UI E2E confirmed reservation cleanup.",
+      metadata: {
+        cleanup: {
+          reason: "UI_E2E_CLEANUP",
+        },
+      },
+    })
+    .eq("reservation_id", params.reservationId)
+    .in("status", ["RESERVATION_CONFIRMED", "APPROVED", "READY"]);
+
+  if (paymentError) {
+    throw paymentError;
+  }
+
+  const { error: reservationError } = await params.db
+    .from("reservations")
+    .update({
+      status: "CANCELLED",
+    })
+    .eq("id", params.reservationId)
+    .in("status", ["CONFIRMED"]);
+
+  if (reservationError) {
+    throw reservationError;
+  }
+}
