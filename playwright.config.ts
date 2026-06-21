@@ -39,6 +39,14 @@ export default defineConfig({
       testMatch: /authenticated-user\.spec\.ts/,
     },
     {
+      name: "booking-flow-mobile-chromium",
+      use: {
+        ...devices["iPhone 14 Pro Max"],
+        browserName: "chromium",
+      },
+      testMatch: /booking-flow\.spec\.ts/,
+    },
+    {
       name: "admin-chromium",
       use: {
         ...devices["Desktop Chrome"],

@@ -17,8 +17,11 @@ interface E2EVehicle {
 }
 
 interface E2EReservationSeed {
+  partnerId: string;
+  partnerName: string;
   bayId: string;
   taskCode: string;
+  taskTitle: string;
 }
 
 function readDotEnvLocal(): EnvMap {
@@ -227,10 +230,10 @@ export async function getSelfReservationSeed(
 ): Promise<E2EReservationSeed> {
   const { data: partners, error: partnerError } = await db
     .from("partners")
-    .select("id, hourly_price")
+    .select("id, name, hourly_price")
     .gt("hourly_price", 0)
     .order("name", { ascending: true })
-    .returns<Array<{ id: string; hourly_price: number | string }>>();
+    .returns<Array<{ id: string; name: string; hourly_price: number | string }>>();
 
   if (partnerError) {
     throw partnerError;
@@ -251,11 +254,12 @@ export async function getSelfReservationSeed(
     if (bay) {
       const { data: task, error: taskError } = await db
         .from("self_maintenance_tasks")
-        .select("code")
+        .select("code, name")
         .eq("is_legal", true)
         .eq("is_active", true)
+        .eq("code", "engine-oil")
         .limit(1)
-        .maybeSingle<{ code: string }>();
+        .maybeSingle<{ code: string; name: string | null }>();
 
       if (taskError) {
         throw taskError;
@@ -263,8 +267,11 @@ export async function getSelfReservationSeed(
 
       if (task) {
         return {
+          partnerId: partner.id,
+          partnerName: partner.name,
           bayId: bay.id,
           taskCode: task.code,
+          taskTitle: task.name ?? task.code,
         };
       }
     }

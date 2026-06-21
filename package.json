@@ -9,6 +9,7 @@
     "lint": "eslint",
     "e2e:checkout": "node scripts/e2e-checkout-loop.mjs",
     "e2e:ui": "playwright test",
+    "e2e:ui:fake": "PITNOW_E2E_BASE_URL=http://localhost:3011 PITNOW_PAYMENT_PROVIDER=FAKE PORT=3011 playwright test --project=booking-flow-mobile-chromium",
     "e2e:ui:headed": "playwright test --headed"
   },
   "dependencies": {
