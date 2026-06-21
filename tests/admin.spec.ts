@@ -302,6 +302,23 @@ test.describe("admin smoke", () => {
       expect(statusLog.metadata?.reason).toBe(
         "E2E 관리자 취소 안전장치 검증",
       );
+
+      await page.goto("/admin/payments?filter=refunded");
+      await expect(page.getByRole("heading", { name: "Payment Ledger" })).toBeVisible();
+      const refundedPaymentRow = page.locator("tbody tr").filter({
+        has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
+      });
+      await expect(refundedPaymentRow).toHaveCount(1);
+      await expect(refundedPaymentRow.getByText("REFUNDED")).toBeVisible();
+      await expect(refundedPaymentRow.getByText("환불 완료")).toBeVisible();
+
+      await page.goto("/admin/reservations");
+      const cancelledReservationRow = page.locator("tbody tr").filter({
+        has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
+      });
+      await expect(cancelledReservationRow).toHaveCount(1);
+      await expect(cancelledReservationRow.getByText("CANCELLED")).toBeVisible();
+      await expect(cancelledReservationRow.getByText("REFUNDED")).toBeVisible();
     } finally {
       if (reservationId) {
         await cleanupConfirmedReservationForE2E({ db, reservationId });

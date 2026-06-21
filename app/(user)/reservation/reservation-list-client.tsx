@@ -160,7 +160,12 @@ function buildReservationHref(item: ReservationListItem): string {
 
 interface ReservationCardProps {
   item: ReservationListItem;
-  onCancelled: (reservationId: string) => void;
+  onCancelled: (
+    reservationId: string,
+    refund: {
+      paymentStatus?: string;
+    } | null,
+  ) => void;
 }
 
 function extractErrorMessage(payload: unknown): string | null {
@@ -231,7 +236,12 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
 
       setShowCancelForm(false);
       setCancelReason("");
-      onCancelled(item.id);
+      onCancelled(
+        item.id,
+        payload && typeof payload === "object"
+          ? ((payload as { refund?: { paymentStatus?: string } }).refund ?? null)
+          : null,
+      );
     } catch {
       setCancelError("예약 취소 처리 중 네트워크 오류가 발생했습니다.");
     } finally {
@@ -376,7 +386,10 @@ export default function ReservationListClient(props: {
   );
   const [activeTab, setActiveTab] = useState<ReservationTab>("upcoming");
 
-  function handleReservationCancelled(reservationId: string) {
+  function handleReservationCancelled(
+    reservationId: string,
+    refund: { paymentStatus?: string } | null,
+  ) {
     setUpcomingReservations((current) => {
       const cancelledReservation = current.find((item) => item.id === reservationId);
 
@@ -385,7 +398,16 @@ export default function ReservationListClient(props: {
       }
 
       setPastReservations((pastCurrent) => [
-        { ...cancelledReservation, status: "CANCELLED" },
+        {
+          ...cancelledReservation,
+          status: "CANCELLED",
+          reservationPaymentStatus:
+            refund?.paymentStatus ?? cancelledReservation.reservationPaymentStatus,
+          reservationRefundedAt:
+            refund?.paymentStatus === "REFUNDED"
+              ? new Date().toISOString()
+              : cancelledReservation.reservationRefundedAt,
+        },
         ...pastCurrent,
       ]);
 

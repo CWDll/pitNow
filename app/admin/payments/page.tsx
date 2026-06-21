@@ -375,6 +375,19 @@ export default async function AdminPaymentsPage({
                         </>
                       ) : stale ? (
                         "30분 이상 READY 상태입니다."
+                      ) : payment.status === "REFUNDED" ? (
+                        payment.refundedAt ? (
+                          <>
+                            <p className="font-semibold text-emerald-200">
+                              환불 완료
+                            </p>
+                            <p className="mt-1">
+                              {formatAdminDateTime(payment.refundedAt)}
+                            </p>
+                          </>
+                        ) : (
+                          "환불 완료 시각이 없습니다."
+                        )
                       ) : (
                         "-"
                       )}
