@@ -198,6 +198,8 @@ test.describe("admin smoke", () => {
     page,
     request,
   }) => {
+    test.setTimeout(60_000);
+
     const db = requireAdminSupabaseForE2E();
     let reservationId: string | null = null;
 

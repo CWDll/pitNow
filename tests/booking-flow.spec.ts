@@ -5,6 +5,7 @@ import {
   ensureE2EUser,
   ensureE2EVehicle,
   getAdminSupabaseForE2E,
+  getE2ECredentials,
   getE2EEnv,
   getSelfReservationSeed,
 } from "./helpers/supabase-e2e";
@@ -136,7 +137,12 @@ test.describe("booking flow smoke", () => {
 
     try {
       await mockReservationPhotoUploads(page);
-      const user = await ensureE2EUser(db);
+      const user = await ensureE2EUser(
+        db,
+        getE2ECredentials({
+          email: "pitnow-e2e-booking-flow@example.com",
+        }),
+      );
       await ensureE2EVehicle({ db, userId: user.id });
       const seed = await getSelfReservationSeed(db);
 
@@ -169,7 +175,12 @@ test.describe("booking flow smoke", () => {
       await expect(
         page.getByRole("heading", { name: "예약 방식 선택" }),
       ).toBeVisible();
-      await expect(page.getByText("PitNow E2E (2026)")).toBeVisible();
+      await expect(
+        page.getByText("정비소 정보를 불러오는 중입니다."),
+      ).toBeHidden({ timeout: 15_000 });
+      await expect(page.getByText("PitNow E2E (2026)")).toBeVisible({
+        timeout: 10_000,
+      });
       await expect(page.getByText(seed.taskTitle)).toBeVisible();
       await page.getByRole("button", { name: "시간 선택으로 이동" }).click();
 

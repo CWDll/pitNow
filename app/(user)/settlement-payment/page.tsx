@@ -28,6 +28,12 @@ const paymentMethodMap: Record<
   "토스페이": "TOSS_PAY",
 };
 
+const tossEasyPayMap: Partial<Record<PaymentMethod, string>> = {
+  KAKAO_PAY: "KAKAOPAY",
+  NAVER_PAY: "NAVERPAY",
+  TOSS_PAY: "TOSSPAY",
+};
+
 interface TossCheckoutPayload {
   type: "TOSS_PAYMENT_WINDOW";
   clientKey: string;
@@ -72,6 +78,10 @@ declare global {
       payment: (params: { customerKey: string }) => {
         requestPayment: (params: {
           method: "CARD";
+          card?: {
+            flowMode: "DIRECT";
+            easyPay: string;
+          };
           amount: {
             value: number;
             currency: "KRW";
@@ -85,6 +95,19 @@ declare global {
       };
     };
   }
+}
+
+function getTossPaymentRequestOptions(selectedMethod: PaymentMethod) {
+  const easyPay = tossEasyPayMap[selectedMethod];
+
+  return easyPay
+    ? {
+        card: {
+          flowMode: "DIRECT" as const,
+          easyPay,
+        },
+      }
+    : {};
 }
 
 function parseStringField(payload: unknown, fieldName: string): string | null {
@@ -326,9 +349,10 @@ function SettlementPaymentContent() {
         return;
       }
 
+      const selectedPaymentMethod = paymentMethodMap[method];
       const prepareBody: PrepareSettlementPaymentPayload = {
         reservationId,
-        method: paymentMethodMap[method],
+        method: selectedPaymentMethod,
       };
       const prepareResponse = await authFetch(
         "/api/payments/settlement/prepare",
@@ -379,6 +403,7 @@ function SettlementPaymentContent() {
         try {
           await payment.requestPayment({
             method: "CARD",
+            ...getTossPaymentRequestOptions(selectedPaymentMethod),
             amount: {
               value: preparedAmount,
               currency: "KRW",

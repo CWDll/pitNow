@@ -329,6 +329,24 @@ Toss env vars:
 - `TOSS_PAYMENTS_SECRET_KEY`: server-only secret key for `/v1/payments/confirm`.
 - `TOSS_PAYMENTS_API_BASE_URL`: optional override. Defaults to `https://api.tosspayments.com`.
 
+Toss SDK/API alignment:
+
+- Browser SDK: `https://js.tosspayments.com/v2/standard`.
+- Browser initializes with `TossPayments(clientKey).payment({ customerKey })`.
+- Reservation and checkout-settlement payments use `payment.requestPayment()` redirect mode.
+- For card and easy-pay payments, Toss v2 uses `method: "CARD"`.
+- Plain `CARD` opens the default card/easy-pay integrated payment window.
+- `KAKAO_PAY`, `NAVER_PAY`, and `TOSS_PAY` open direct easy-pay windows by adding:
+  - `card.flowMode = "DIRECT"`
+  - `card.easyPay = "KAKAOPAY" | "NAVERPAY" | "TOSSPAY"`
+- `successUrl` must include the full origin. Toss redirects back with `paymentKey`, `orderId`, and `amount`.
+- `failUrl` must include the full origin. Toss redirects back with provider error `code` and `message`.
+- Server confirm must compare `orderId` and `amount` against the stored `payments` row before calling Toss.
+- Toss confirm API is `POST https://api.tosspayments.com/v1/payments/confirm`.
+- Toss cancel/refund API is `POST https://api.tosspayments.com/v1/payments/{paymentKey}/cancel`.
+- Server auth header is `Basic base64(TOSS_PAYMENTS_SECRET_KEY + ":")`.
+- Use `Idempotency-Key` for Toss POST APIs.
+
 After changing `.env.local`, restart `npm run dev`. A running Next dev server does not pick up shell-only env overrides for already-started route handlers.
 
 Recommended environments:
@@ -343,8 +361,90 @@ Automated E2E scripts must use `FAKE` so reservation/payment/check-in/checkout c
 Manual payment QA should be limited to:
 
 - One Toss test card success case.
+- One Toss test easy-pay success case. KakaoPay has already been smoke-tested once in sandbox.
 - One Toss test failure/cancel case.
+- One checkout settlement Toss test success case after a completed reservation with `settlementAmountDue > 0`.
+- One refund/cancel case from an approved Toss payment.
 - One overlap-after-approval refund simulation using fake provider.
+
+## Toss Sandbox QA Checklist
+
+Use this checklist only with Toss test keys. Do not run with live keys until sandbox success/failure/refund paths are stable.
+
+### 1. Environment
+
+`.env.local`:
+
+```bash
+PITNOW_PAYMENT_PROVIDER=TOSS_TEST
+NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY=test_ck_...
+TOSS_PAYMENTS_SECRET_KEY=test_sk_...
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+Then restart the dev server:
+
+```bash
+npm run dev
+```
+
+Confirm automated regression still uses FAKE:
+
+```bash
+npm run verify:mvp
+```
+
+### 2. Reservation Payment Success
+
+1. Log in as a test user.
+2. Register or select a vehicle.
+3. Create a Self Service reservation.
+4. On `/payment`, test both:
+   - `신용/체크카드`: default Toss integrated window.
+   - `카카오페이`, `네이버페이`, or `토스페이`: direct easy-pay window.
+5. Complete the Toss test payment.
+6. Expected redirect:
+   - `/payment/success?paymentId=...&paymentKey=...&orderId=...&amount=...`
+7. Expected server result:
+   - `/api/payments/confirm` calls Toss confirm.
+   - `payments.status = RESERVATION_CONFIRMED`
+   - `payments.provider = TOSS`
+   - `payments.provider_payment_key` is stored.
+   - `reservations.status = CONFIRMED`
+   - `reservation_status_logs.reason = payment_confirmed`
+
+### 3. Reservation Payment Failure/Cancel
+
+1. Start a Toss test payment.
+2. Close/cancel the payment window or force a Toss failure path.
+3. Expected redirect:
+   - `/payment/fail?paymentId=...&code=...&message=...`
+4. Expected server result:
+   - `/api/payments/fail` records `CANCELLED` for `PAY_PROCESS_CANCELED`.
+   - Other provider failures become `FAILED`.
+   - No reservation row is created.
+
+### 4. Checkout Settlement Payment
+
+1. Complete a reservation through checkout with `settlementAmountDue > 0`.
+2. Open `/settlement-payment?reservationId=...`.
+3. Complete a Toss test payment.
+4. Expected redirect:
+   - `/settlement-payment/success?paymentId=...&reservationId=...&paymentKey=...&orderId=...&amount=...`
+5. Expected server result:
+   - `/api/payments/settlement/confirm` calls Toss confirm.
+   - `payments.payment_purpose = CHECKOUT_SETTLEMENT`
+   - `payments.status = SETTLEMENT_CONFIRMED`
+   - User lands on `/complete?reservationId=...`.
+
+### 5. Refund/Cancel
+
+1. With a Toss-approved reservation payment, cancel the reservation from user or admin flow while the reservation is still cancellable.
+2. Expected server result:
+   - `cancelTossPayment()` calls Toss cancel API with the stored `provider_payment_key`.
+   - On Toss success, `payments.status = REFUNDED` and `refunded_at` is set.
+   - On Toss failure or missing `paymentKey`, `payments.status = REFUND_PENDING`.
+   - Admin `/admin/payments` exposes `REFUND_PENDING` for manual follow-up.
 
 ---
 
