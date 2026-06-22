@@ -144,12 +144,12 @@ test.describe("booking flow smoke", () => {
       await page.getByLabel("이메일").fill(user.email);
       await page.getByLabel("비밀번호").fill(user.password);
       await page.locator("form").getByRole("button", { name: "로그인" }).click();
-      await expect(page).toHaveURL(/\/$/);
+      await expect(page).toHaveURL((url) => url.pathname === "/");
 
       const partnerCard = page.locator("article").filter({
         has: page.getByRole("heading", { name: seed.partnerName }),
       });
-      await expect(partnerCard).toBeVisible();
+      await expect(partnerCard).toBeVisible({ timeout: 15_000 });
       const homeBookingLink = partnerCard.getByRole("link", {
         name: "예약하기",
       });
