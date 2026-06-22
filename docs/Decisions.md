@@ -156,6 +156,23 @@ Production note:
 
 ---
 
+## 2026-06-21
+
+Decision:
+`reservation-photos` Storage upload policy는 예약 소유자뿐 아니라 예약 상태도 확인한다.
+
+Rules:
+
+- `checkin/{reservation_id}/...` 업로드는 authenticated 예약 소유자이고 reservation status가 `CONFIRMED`일 때만 허용한다.
+- `checkout/{reservation_id}/...` 업로드는 authenticated 예약 소유자이고 reservation status가 `CHECKED_IN` 또는 `IN_USE`일 때만 허용한다.
+- anonymous insert는 계속 제거한다.
+- MVP 동안 public read는 유지한다.
+
+Reason:
+DB API는 상태 전환을 검증하지만, Storage insert policy가 상태를 보지 않으면 취소/완료된 예약에도 orphan evidence file이 업로드될 수 있다. 업로드 단계에서부터 phase별 상태를 제한해 증적 파일과 예약 상태의 정합성을 높인다.
+
+---
+
 ## 2026-06-09
 
 Decision:

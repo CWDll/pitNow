@@ -273,6 +273,8 @@ Operational note:
 
 - 2026-06-11 Auth/RLS 1차 기준으로 anonymous upload policy is removed.
 - Authenticated users may upload only under `checkin/{reservation_id}/...` or `checkout/{reservation_id}/...` for their own reservation.
+- 2026-06-21 hardening 기준으로 `checkin` uploads require reservation status `CONFIRMED`.
+- 2026-06-21 hardening 기준으로 `checkout` uploads require reservation status `CHECKED_IN` or `IN_USE`.
 - The bucket remains public-read in the current MVP so existing public URL display keeps working.
 - Before production, prefer private bucket + signed read URLs for stronger evidence protection.
 
