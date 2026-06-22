@@ -4,6 +4,7 @@ import {
   cancelPaymentForE2E,
   ensureE2EUser,
   ensureE2EVehicle,
+  getE2ECredentials,
   getAdminSupabaseForE2E,
   getFutureReservationWindow,
   getSelfReservationSeed,
@@ -26,7 +27,12 @@ test.describe("authenticated user smoke", () => {
   }) => {
     const db = requireAdminSupabaseForE2E();
 
-    const user = await ensureE2EUser(db);
+    const user = await ensureE2EUser(
+      db,
+      getE2ECredentials({
+        email: "pitnow-e2e-authenticated@example.com",
+      }),
+    );
     const vehicle = await ensureE2EVehicle({ db, userId: user.id });
     const seed = await getSelfReservationSeed(db);
     const { startTime, endTime } = getFutureReservationWindow();
