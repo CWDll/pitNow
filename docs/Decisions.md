@@ -645,3 +645,40 @@ Rules:
 
 Reason:
 체크아웃 API는 이미 초과요금과 검수비를 서버 기준으로 계산해 `checkouts`에 저장하지만, 기존 결제 모델은 예약 확정용 선결제만 표현했다. 이 상태에서는 사용자가 큰 추가요금을 확인해도 실제 결제하거나 운영자가 결제 완료 여부를 추적할 수 없다. 또한 결제 전 `/complete`가 뜨면 “이용 완료” 의미가 흐려진다. 결제 목적을 분리하고 체크아웃 화면에서 사후정산을 완료하게 하면 예약 선결제, 추가 정산, 향후 환불/부분취소가 같은 payments ledger 안에서 구분된다.
+
+---
+
+## 2026-06-24
+
+Decision:
+홈의 위치 기반 정비소 지도는 Kakao Maps JavaScript SDK를 1차 지도 provider로 사용한다.
+
+Rules:
+
+- 홈 화면 검색 영역 아래, 필터 버튼 위에 모바일 미니맵을 배치한다.
+- `partners.lat`, `partners.lng` 좌표가 있는 제휴 정비소는 지도 marker로 표시한다.
+- 사용자가 위치 권한을 허용하면 browser Geolocation API로 현재 위치 marker를 표시하고 지도를 해당 위치로 이동한다.
+- Kakao Maps 기본 zoom control을 사용해 사용자가 확대/축소할 수 있게 한다.
+- 지도 키는 `NEXT_PUBLIC_KAKAO_MAP_APP_KEY`로 주입한다.
+- 키가 없거나 SDK 로드에 실패해도 홈 화면은 깨지지 않고 fallback 미니맵을 표시한다.
+- Kakao Developers에서 JavaScript 키의 Web 플랫폼 도메인에 `http://localhost:3000`, Vercel Preview/Production 도메인을 등록해야 한다.
+
+Reason:
+PitNow는 한국 정비소 위치 탐색이 핵심인 모바일 서비스이고, 사용자가 기대하는 지도 UX가 카카오맵에 가깝다. Kakao Maps는 국내 POI/지도 표현과 사용자 친숙도가 높으며, JS SDK로 marker, zoom, geolocation 연동을 MVP 범위 안에서 구현할 수 있다.
+
+Options considered:
+
+1. Kakao Maps JavaScript SDK (선택)
+
+- 장점: 한국 사용자에게 익숙하고 국내 지도/POI 맥락이 좋다. 카카오맵 화면과 유사한 경험을 만들기 쉽다.
+- 단점: JavaScript 키와 도메인 등록이 필요하다.
+
+2. Google Maps JavaScript API
+
+- 장점: 문서와 글로벌 지원이 강하고 Geolocation 예제가 많다.
+- 단점: 국내 지도/POI 체감이 카카오/네이버보다 약하고 과금/키 관리 부담이 있다.
+
+3. Static/fallback 자체 미니맵
+
+- 장점: 외부 키 없이 항상 표시된다.
+- 단점: 실제 지도 조작, 경로/거리/주변성 판단이 불가능하다.

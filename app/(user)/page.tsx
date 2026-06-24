@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { PartnerMap } from "./_components/partner-map";
 import {
   hasSupabaseEnv,
   missingSupabaseEnvMessage,
@@ -10,6 +11,8 @@ interface PartnerRow {
   id: string;
   name: string;
   address: string;
+  lat: number | null;
+  lng: number | null;
 }
 
 interface BayRow {
@@ -33,6 +36,8 @@ interface HomePartnerCard {
   id: string;
   name: string;
   address: string;
+  lat: number | null;
+  lng: number | null;
   bayCount: number;
   averageRating: number | null;
   reviewCount: number;
@@ -42,7 +47,7 @@ interface HomePartnerCard {
 async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
   const { data: partners, error: partnerError } = await supabase
     .from("partners")
-    .select("id,name,address")
+    .select("id,name,address,lat,lng")
     .returns<PartnerRow[]>();
 
   if (partnerError || !partners) {
@@ -118,6 +123,8 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
       id: partner.id,
       name: partner.name,
       address: partner.address,
+      lat: partner.lat,
+      lng: partner.lng,
       bayCount: bayCountByPartner.get(partner.id) ?? 0,
       averageRating:
         reviewStats && reviewStats.count > 0
@@ -150,6 +157,8 @@ export default async function HomePage() {
   }
 
   const partners = await getHomePartnerCards();
+  const kakaoMapAppKey =
+    process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY?.trim() || null;
 
   return (
     <section className="space-y-4">
@@ -165,6 +174,8 @@ export default async function HomePage() {
       <div className="rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-500">
         강남구, 서초구 기준 가까운 제휴 정비소
       </div>
+
+      <PartnerMap partners={partners} kakaoMapAppKey={kakaoMapAppKey} />
 
       <div className="flex gap-2 text-sm">
         <span className="rounded-full bg-blue-600 px-4 py-2 font-semibold text-white">
