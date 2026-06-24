@@ -360,11 +360,11 @@ Automated E2E scripts must use `FAKE` so reservation/payment/check-in/checkout c
 
 Manual payment QA should be limited to:
 
-- One Toss test card success case.
-- One Toss test easy-pay success case. KakaoPay has already been smoke-tested once in sandbox.
-- One Toss test failure/cancel case.
-- One checkout settlement Toss test success case after a completed reservation with `settlementAmountDue > 0`.
-- One refund/cancel case from an approved Toss payment.
+- One Toss test card success case. Completed on 2026-06-24 local sandbox.
+- One Toss test easy-pay success case. KakaoPay completed on 2026-06-24 local sandbox.
+- One Toss test failure/cancel case. Completed on 2026-06-24 local sandbox.
+- One checkout settlement Toss test success case after a completed reservation with `settlementAmountDue > 0`. Completed on 2026-06-24 local sandbox.
+- One refund/cancel case from an approved Toss payment. Completed on 2026-06-24 local sandbox.
 - One overlap-after-approval refund simulation using fake provider.
 
 ## Toss Sandbox QA Checklist
