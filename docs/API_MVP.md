@@ -675,7 +675,43 @@ isActive
 
 ⸻
 
-19. POST /api/partner-admin/availability-blocks
+19. GET /api/partner-admin/availability-blocks
+
+⸻
+
+기능:
+store-admin 본인 정비소의 예약 차단 시간 목록 조회
+
+Query:
+{
+partnerId: string,
+includeInactive?: boolean
+}
+
+검증:
+• Supabase Auth session 필수
+• partnerId가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+
+성공 응답:
+{
+success: true,
+blocks: [
+{
+id,
+partnerId,
+bayId,
+bayName,
+startsAt,
+endsAt,
+reason,
+isActive
+}
+]
+}
+
+⸻
+
+20. POST /api/partner-admin/availability-blocks
 
 ⸻
 
@@ -701,12 +737,22 @@ reason?: string
 성공 응답:
 {
 success: true,
-blockId: string
+blockId: string,
+block: {
+id,
+partnerId,
+bayId,
+bayName,
+startsAt,
+endsAt,
+reason,
+isActive
+}
 }
 
 ⸻
 
-20. PATCH /api/partner-admin/availability-blocks/:id
+21. PATCH /api/partner-admin/availability-blocks/:id
 
 ⸻
 
@@ -729,7 +775,17 @@ isActive?: boolean
 
 성공 응답:
 {
-success: true
+success: true,
+block: {
+id,
+partnerId,
+bayId,
+bayName,
+startsAt,
+endsAt,
+reason,
+isActive
+}
 }
 
 ⸻

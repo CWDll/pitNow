@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { authFetch } from "@/src/lib/auth-fetch";
@@ -40,6 +41,19 @@ interface PartnerBay {
   partnerId: string;
   name: string;
   isActive: boolean;
+}
+
+interface AvailabilityBlock {
+  id: string;
+  partnerId: string;
+  bayId: string | null;
+  bayName: string | null;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface PartnerAdminReservationDetail {
@@ -89,6 +103,40 @@ function todayKstDate(): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+}
+
+function defaultBlockStartsAt(): string {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  now.setHours(now.getHours() + 1);
+  return toDateTimeLocalValue(now);
+}
+
+function defaultBlockEndsAt(): string {
+  const end = new Date();
+  end.setMinutes(0, 0, 0);
+  end.setHours(end.getHours() + 2);
+  return toDateTimeLocalValue(end);
+}
+
+function toDateTimeLocalValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function toDateTimeLocalFromIso(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return toDateTimeLocalValue(date);
 }
 
 function formatTime(value: string): string {
@@ -188,13 +236,27 @@ export function PartnerAdminDashboard() {
   const [selectedDate, setSelectedDate] = useState(todayKstDate);
   const [reservations, setReservations] = useState<PartnerAdminReservation[]>([]);
   const [bays, setBays] = useState<PartnerBay[]>([]);
+  const [availabilityBlocks, setAvailabilityBlocks] = useState<
+    AvailabilityBlock[]
+  >([]);
+  const [blockBayId, setBlockBayId] = useState("");
+  const [blockStartsAt, setBlockStartsAt] = useState(defaultBlockStartsAt);
+  const [blockEndsAt, setBlockEndsAt] = useState(defaultBlockEndsAt);
+  const [blockReason, setBlockReason] = useState("");
+  const [editingBlockId, setEditingBlockId] = useState("");
+  const [editBlockStartsAt, setEditBlockStartsAt] = useState("");
+  const [editBlockEndsAt, setEditBlockEndsAt] = useState("");
+  const [editBlockReason, setEditBlockReason] = useState("");
   const [selectedReservationId, setSelectedReservationId] = useState("");
   const [detail, setDetail] = useState<PartnerAdminReservationDetail | null>(null);
   const [isLoadingMe, setIsLoadingMe] = useState(true);
   const [isLoadingReservations, setIsLoadingReservations] = useState(false);
   const [isLoadingBays, setIsLoadingBays] = useState(false);
+  const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
+  const [isCreatingBlock, setIsCreatingBlock] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [updatingBayId, setUpdatingBayId] = useState("");
+  const [updatingBlockId, setUpdatingBlockId] = useState("");
   const [error, setError] = useState("");
 
   const selectedPartner = useMemo(
@@ -353,6 +415,57 @@ export function PartnerAdminDashboard() {
     };
   }, [selectedPartnerId]);
 
+  useEffect(() => {
+    if (!selectedPartnerId) {
+      return;
+    }
+
+    let mounted = true;
+
+    async function loadAvailabilityBlocks() {
+      setIsLoadingBlocks(true);
+      setError("");
+
+      const query = new URLSearchParams({
+        partnerId: selectedPartnerId,
+      });
+      const response = await authFetch(
+        `/api/partner-admin/availability-blocks?${query.toString()}`,
+      );
+      const payload = await readJson(response);
+
+      if (!response.ok) {
+        if (mounted) {
+          setError(
+            extractErrorMessage(payload) ??
+              "예약 차단 시간을 불러오지 못했습니다.",
+          );
+          setAvailabilityBlocks([]);
+          setIsLoadingBlocks(false);
+        }
+        return;
+      }
+
+      const nextBlocks =
+        payload &&
+        typeof payload === "object" &&
+        Array.isArray((payload as { blocks?: unknown }).blocks)
+          ? ((payload as { blocks: AvailabilityBlock[] }).blocks)
+          : [];
+
+      if (mounted) {
+        setAvailabilityBlocks(nextBlocks);
+        setIsLoadingBlocks(false);
+      }
+    }
+
+    void loadAvailabilityBlocks();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedPartnerId]);
+
   async function loadReservationDetail(reservationId: string) {
     setSelectedReservationId(reservationId);
     setIsLoadingDetail(true);
@@ -407,6 +520,158 @@ export function PartnerAdminDashboard() {
     setUpdatingBayId("");
   }
 
+  async function createAvailabilityBlock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedPartnerId) {
+      return;
+    }
+
+    setIsCreatingBlock(true);
+    setError("");
+
+    const response = await authFetch("/api/partner-admin/availability-blocks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        partnerId: selectedPartnerId,
+        bayId: blockBayId || undefined,
+        startsAt: new Date(blockStartsAt).toISOString(),
+        endsAt: new Date(blockEndsAt).toISOString(),
+        reason: blockReason,
+      }),
+    });
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ?? "예약 차단 시간을 생성하지 못했습니다.",
+      );
+      setIsCreatingBlock(false);
+      return;
+    }
+
+    const createdBlock =
+      payload && typeof payload === "object"
+        ? (payload as { block?: AvailabilityBlock }).block
+        : null;
+
+    if (createdBlock) {
+      setAvailabilityBlocks((current) =>
+        [...current, createdBlock].sort(
+          (left, right) =>
+            new Date(left.startsAt).getTime() -
+            new Date(right.startsAt).getTime(),
+        ),
+      );
+    }
+
+    setBlockReason("");
+    setIsCreatingBlock(false);
+  }
+
+  async function deactivateAvailabilityBlock(block: AvailabilityBlock) {
+    setUpdatingBlockId(block.id);
+    setError("");
+
+    const response = await authFetch(
+      `/api/partner-admin/availability-blocks/${block.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isActive: false }),
+      },
+    );
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ?? "예약 차단 시간을 해제하지 못했습니다.",
+      );
+      setUpdatingBlockId("");
+      return;
+    }
+
+    setAvailabilityBlocks((current) =>
+      current.filter((item) => item.id !== block.id),
+    );
+    setUpdatingBlockId("");
+  }
+
+  function startEditingAvailabilityBlock(block: AvailabilityBlock) {
+    setEditingBlockId(block.id);
+    setEditBlockStartsAt(toDateTimeLocalFromIso(block.startsAt));
+    setEditBlockEndsAt(toDateTimeLocalFromIso(block.endsAt));
+    setEditBlockReason(block.reason ?? "");
+    setError("");
+  }
+
+  function cancelEditingAvailabilityBlock() {
+    setEditingBlockId("");
+    setEditBlockStartsAt("");
+    setEditBlockEndsAt("");
+    setEditBlockReason("");
+  }
+
+  async function updateAvailabilityBlock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingBlockId) {
+      return;
+    }
+
+    setUpdatingBlockId(editingBlockId);
+    setError("");
+
+    const response = await authFetch(
+      `/api/partner-admin/availability-blocks/${editingBlockId}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          startsAt: new Date(editBlockStartsAt).toISOString(),
+          endsAt: new Date(editBlockEndsAt).toISOString(),
+          reason: editBlockReason,
+        }),
+      },
+    );
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ?? "예약 차단 시간을 수정하지 못했습니다.",
+      );
+      setUpdatingBlockId("");
+      return;
+    }
+
+    const updatedBlock =
+      payload && typeof payload === "object"
+        ? (payload as { block?: AvailabilityBlock }).block
+        : null;
+
+    if (updatedBlock) {
+      setAvailabilityBlocks((current) =>
+        current
+          .map((item) => (item.id === updatedBlock.id ? updatedBlock : item))
+          .sort(
+            (left, right) =>
+              new Date(left.startsAt).getTime() -
+              new Date(right.startsAt).getTime(),
+          ),
+      );
+    }
+
+    cancelEditingAvailabilityBlock();
+    setUpdatingBlockId("");
+  }
+
   const confirmedCount = reservations.filter(
     (reservation) => reservation.status === "CONFIRMED",
   ).length;
@@ -420,6 +685,7 @@ export function PartnerAdminDashboard() {
       (!reservation.checkinCompleted ||
         (reservation.status === "COMPLETED" && !reservation.checkoutCompleted)),
   ).length;
+  const activeBayCount = bays.filter((bay) => bay.isActive).length;
 
   return (
     <section className="space-y-5">
@@ -497,11 +763,12 @@ export function PartnerAdminDashboard() {
             </label>
           </section>
 
-          <section className="grid gap-3 md:grid-cols-3">
+          <section className="grid gap-3 md:grid-cols-4">
             {[
               ["예약 확정", confirmedCount],
               ["이용 중", activeCount],
               ["증적 확인 필요", evidenceWaitCount],
+              ["예약 가능 베이", `${activeBayCount}/${bays.length}`],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -567,6 +834,191 @@ export function PartnerAdminDashboard() {
                     </button>
                   </div>
                 ))
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-zinc-200 bg-white">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold">예약 차단 시간</h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  업장 전체 또는 특정 베이를 임시로 예약 불가 처리합니다.
+                </p>
+              </div>
+              {isLoadingBlocks ? (
+                <span className="text-xs font-medium text-zinc-500">
+                  불러오는 중
+                </span>
+              ) : null}
+            </div>
+
+            <form
+              onSubmit={createAvailabilityBlock}
+              className="grid gap-3 border-b border-zinc-200 p-4 lg:grid-cols-[180px_1fr_1fr_1fr_auto]"
+            >
+              <label className="block">
+                <span className="text-xs font-semibold text-zinc-500">범위</span>
+                <select
+                  value={blockBayId}
+                  onChange={(event) => setBlockBayId(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                >
+                  <option value="">업장 전체</option>
+                  {bays.map((bay) => (
+                    <option key={bay.id} value={bay.id}>
+                      {bay.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-semibold text-zinc-500">시작</span>
+                <input
+                  type="datetime-local"
+                  required
+                  value={blockStartsAt}
+                  onChange={(event) => setBlockStartsAt(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-semibold text-zinc-500">종료</span>
+                <input
+                  type="datetime-local"
+                  required
+                  value={blockEndsAt}
+                  onChange={(event) => setBlockEndsAt(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-semibold text-zinc-500">사유</span>
+                <input
+                  value={blockReason}
+                  onChange={(event) => setBlockReason(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                  placeholder="장비 점검"
+                />
+              </label>
+
+              <button
+                type="submit"
+                disabled={isCreatingBlock}
+                className="self-end rounded-lg bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:bg-zinc-300"
+              >
+                {isCreatingBlock ? "생성 중" : "차단 추가"}
+              </button>
+            </form>
+
+            <div className="divide-y divide-zinc-100">
+              {availabilityBlocks.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-zinc-500">
+                  활성 예약 차단 시간이 없습니다.
+                </p>
+              ) : (
+                availabilityBlocks.map((block) =>
+                  editingBlockId === block.id ? (
+                    <form
+                      key={block.id}
+                      onSubmit={updateAvailabilityBlock}
+                      className="grid gap-3 px-4 py-3 lg:grid-cols-[1fr_1fr_1fr_auto]"
+                    >
+                      <label className="block">
+                        <span className="text-xs font-semibold text-zinc-500">
+                          시작
+                        </span>
+                        <input
+                          type="datetime-local"
+                          required
+                          value={editBlockStartsAt}
+                          onChange={(event) =>
+                            setEditBlockStartsAt(event.target.value)
+                          }
+                          className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-semibold text-zinc-500">
+                          종료
+                        </span>
+                        <input
+                          type="datetime-local"
+                          required
+                          value={editBlockEndsAt}
+                          onChange={(event) =>
+                            setEditBlockEndsAt(event.target.value)
+                          }
+                          className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-semibold text-zinc-500">
+                          사유
+                        </span>
+                        <input
+                          value={editBlockReason}
+                          onChange={(event) =>
+                            setEditBlockReason(event.target.value)
+                          }
+                          className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                        />
+                      </label>
+                      <div className="flex items-end gap-2">
+                        <button
+                          type="submit"
+                          disabled={updatingBlockId === block.id}
+                          className="rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:opacity-50"
+                        >
+                          {updatingBlockId === block.id ? "저장 중" : "저장"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditingAvailabilityBlock}
+                          className="rounded-lg border border-zinc-300 px-3 py-2.5 text-xs font-semibold text-zinc-700"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div
+                      key={block.id}
+                      className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">
+                          {block.bayName ?? "업장 전체"} ·{" "}
+                          {formatDateTime(block.startsAt)} -{" "}
+                          {formatDateTime(block.endsAt)}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {block.reason || "사유 없음"}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditingAvailabilityBlock(block)}
+                          className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100"
+                        >
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          disabled={updatingBlockId === block.id}
+                          onClick={() => void deactivateAvailabilityBlock(block)}
+                          className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+                        >
+                          {updatingBlockId === block.id ? "해제 중" : "해제"}
+                        </button>
+                      </div>
+                    </div>
+                  ),
+                )
               )}
             </div>
           </section>

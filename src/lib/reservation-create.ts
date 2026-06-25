@@ -66,6 +66,10 @@ interface PartnerPackagePriceRow {
       }>;
 }
 
+interface AvailabilityBlockOverlapRow {
+  id: string;
+}
+
 interface ReservationInsertResult {
   id: string;
   status: string;
@@ -483,6 +487,64 @@ async function getPartnerPackage(params: {
   };
 }
 
+async function assertAvailabilityWindow(params: {
+  db: SupabaseClient;
+  partnerId: string;
+  bayId: string;
+  startTime: string;
+  endTime: string;
+}): Promise<LookupResult<Record<string, never>>> {
+  const { db, partnerId, bayId, startTime, endTime } = params;
+  const { data, error } = await db
+    .from("partner_availability_blocks")
+    .select("id")
+    .eq("partner_id", partnerId)
+    .eq("is_active", true)
+    .lt("starts_at", endTime)
+    .gt("ends_at", startTime)
+    .or(`bay_id.is.null,bay_id.eq.${bayId}`)
+    .limit(1)
+    .returns<AvailabilityBlockOverlapRow[]>();
+
+  if (error) {
+    const isMissingSchema =
+      error.code === "42P01" ||
+      error.code === "PGRST205" ||
+      error.message.includes("partner_availability_blocks");
+
+    if (isMissingSchema) {
+      return {
+        error: apiError(
+          500,
+          "MISSING_AVAILABILITY_BLOCK_SCHEMA",
+          "partner_availability_blocks 테이블이 없습니다. store-admin 마이그레이션 적용이 필요합니다.",
+        ),
+      };
+    }
+
+    console.error("AVAILABILITY BLOCK LOOKUP ERROR:", error);
+    return {
+      error: apiError(
+        500,
+        "DB_ERROR",
+        "예약 가능 시간 확인 중 오류가 발생했습니다.",
+      ),
+    };
+  }
+
+  if ((data ?? []).length > 0) {
+    return {
+      error: apiError(
+        400,
+        "PARTNER_AVAILABILITY_BLOCKED",
+        "선택한 시간은 정비소에서 예약을 막아둔 시간입니다.",
+      ),
+    };
+  }
+
+  return {};
+}
+
 export function reservationDbErrorToApiError(error: PostgrestError): ApiErrorSpec {
   if (error.code === "23P01") {
     return apiError(400, "RESERVATION_OVERLAP", "이미 예약된 시간입니다.");
@@ -594,6 +656,18 @@ export async function quoteReservation(params: {
         "유효하지 않은 bayId 입니다. 존재하는 베이를 선택해 주세요.",
       ),
     };
+  }
+
+  const availabilityResult = await assertAvailabilityWindow({
+    db,
+    partnerId,
+    bayId: body.bayId,
+    startTime: body.startTime,
+    endTime: body.endTime,
+  });
+
+  if ("error" in availabilityResult) {
+    return { ok: false, error: availabilityResult.error };
   }
 
   let totalPrice = 0;
