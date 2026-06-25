@@ -35,6 +35,13 @@ interface PartnerAdminReservation {
   checkoutCompleted: boolean;
 }
 
+interface PartnerBay {
+  id: string;
+  partnerId: string;
+  name: string;
+  isActive: boolean;
+}
+
 interface PartnerAdminReservationDetail {
   reservation: PartnerAdminReservation & {
     partnerId: string;
@@ -180,11 +187,14 @@ export function PartnerAdminDashboard() {
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
   const [selectedDate, setSelectedDate] = useState(todayKstDate);
   const [reservations, setReservations] = useState<PartnerAdminReservation[]>([]);
+  const [bays, setBays] = useState<PartnerBay[]>([]);
   const [selectedReservationId, setSelectedReservationId] = useState("");
   const [detail, setDetail] = useState<PartnerAdminReservationDetail | null>(null);
   const [isLoadingMe, setIsLoadingMe] = useState(true);
   const [isLoadingReservations, setIsLoadingReservations] = useState(false);
+  const [isLoadingBays, setIsLoadingBays] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [updatingBayId, setUpdatingBayId] = useState("");
   const [error, setError] = useState("");
 
   const selectedPartner = useMemo(
@@ -295,6 +305,54 @@ export function PartnerAdminDashboard() {
     };
   }, [selectedDate, selectedPartnerId]);
 
+  useEffect(() => {
+    if (!selectedPartnerId) {
+      return;
+    }
+
+    let mounted = true;
+
+    async function loadBays() {
+      setIsLoadingBays(true);
+      setError("");
+
+      const query = new URLSearchParams({
+        partnerId: selectedPartnerId,
+      });
+      const response = await authFetch(
+        `/api/partner-admin/bays?${query.toString()}`,
+      );
+      const payload = await readJson(response);
+
+      if (!response.ok) {
+        if (mounted) {
+          setError(extractErrorMessage(payload) ?? "베이 목록을 불러오지 못했습니다.");
+          setBays([]);
+          setIsLoadingBays(false);
+        }
+        return;
+      }
+
+      const nextBays =
+        payload &&
+        typeof payload === "object" &&
+        Array.isArray((payload as { bays?: unknown }).bays)
+          ? ((payload as { bays: PartnerBay[] }).bays)
+          : [];
+
+      if (mounted) {
+        setBays(nextBays);
+        setIsLoadingBays(false);
+      }
+    }
+
+    void loadBays();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedPartnerId]);
+
   async function loadReservationDetail(reservationId: string) {
     setSelectedReservationId(reservationId);
     setIsLoadingDetail(true);
@@ -314,6 +372,39 @@ export function PartnerAdminDashboard() {
 
     setDetail(payload as PartnerAdminReservationDetail);
     setIsLoadingDetail(false);
+  }
+
+  async function updateBayActiveState(bay: PartnerBay, isActive: boolean) {
+    setUpdatingBayId(bay.id);
+    setError("");
+
+    const response = await authFetch(`/api/partner-admin/bays/${bay.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ isActive }),
+    });
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(extractErrorMessage(payload) ?? "베이 상태를 변경하지 못했습니다.");
+      setUpdatingBayId("");
+      return;
+    }
+
+    const updatedBay =
+      payload && typeof payload === "object"
+        ? (payload as { bay?: PartnerBay }).bay
+        : null;
+
+    if (updatedBay) {
+      setBays((current) =>
+        current.map((item) => (item.id === updatedBay.id ? updatedBay : item)),
+      );
+    }
+
+    setUpdatingBayId("");
   }
 
   const confirmedCount = reservations.filter(
@@ -422,6 +513,62 @@ export function PartnerAdminDashboard() {
                 <p className="mt-2 text-3xl font-bold">{value}</p>
               </div>
             ))}
+          </section>
+
+          <section className="rounded-lg border border-zinc-200 bg-white">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold">베이 관리</h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  비활성 베이는 사용자가 새 예약을 만들 수 없습니다.
+                </p>
+              </div>
+              {isLoadingBays ? (
+                <span className="text-xs font-medium text-zinc-500">
+                  불러오는 중
+                </span>
+              ) : null}
+            </div>
+
+            <div className="grid gap-2 p-4 md:grid-cols-2 lg:grid-cols-3">
+              {bays.length === 0 ? (
+                <p className="text-sm text-zinc-500">등록된 베이가 없습니다.</p>
+              ) : (
+                bays.map((bay) => (
+                  <div
+                    key={bay.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3"
+                  >
+                    <div>
+                      <p className="font-semibold">{bay.name}</p>
+                      <p
+                        className={`mt-1 text-xs font-semibold ${
+                          bay.isActive ? "text-emerald-700" : "text-zinc-500"
+                        }`}
+                      >
+                        {bay.isActive ? "예약 가능" : "예약 중지"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={updatingBayId === bay.id}
+                      onClick={() => void updateBayActiveState(bay, !bay.isActive)}
+                      className={`h-9 rounded-full px-3 text-xs font-semibold transition disabled:opacity-50 ${
+                        bay.isActive
+                          ? "bg-zinc-900 text-white hover:bg-zinc-700"
+                          : "bg-blue-600 text-white hover:bg-blue-500"
+                      }`}
+                    >
+                      {updatingBayId === bay.id
+                        ? "변경 중"
+                        : bay.isActive
+                          ? "비활성화"
+                          : "활성화"}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </section>
 
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">

@@ -27,6 +27,7 @@ export interface ReservationRequestBody {
 interface BayRow {
   id: string;
   partner_id: string | null;
+  is_active: boolean;
 }
 
 interface PartnerRow {
@@ -336,7 +337,7 @@ async function getBayAndPartner(
 ): Promise<LookupResult<{ bay: BayRow; hourlyPrice: number }>> {
   const { data: bay, error: bayError } = await db
     .from("bays")
-    .select("id, partner_id")
+    .select("id, partner_id, is_active")
     .eq("id", bayId)
     .maybeSingle<BayRow>();
 
@@ -353,6 +354,16 @@ async function getBayAndPartner(
         400,
         "INVALID_BAY",
         "유효하지 않은 bayId 입니다. 존재하는 베이를 선택해 주세요.",
+      ),
+    };
+  }
+
+  if (!bay.is_active) {
+    return {
+      error: apiError(
+        400,
+        "BAY_INACTIVE",
+        "현재 예약할 수 없는 베이입니다. 다른 베이를 선택해 주세요.",
       ),
     };
   }

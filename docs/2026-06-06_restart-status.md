@@ -730,6 +730,29 @@ Supabase SQL Editor에 `db/migrations/20260624_partner_admin_foundation.sql` 적
 - availability block 생성/수정 API와 화면 구현.
 - `POST /api/payments/prepare`에서 active availability block overlap 예약 차단 연결.
 
+## 59. 2026-06-26 store-admin 베이 활성/비활성 관리 구현
+
+정비소 운영자가 본인 업장의 베이 예약 가능 여부를 관리할 수 있도록 partner-admin 베이 관리 흐름을 추가했다.
+
+- `GET /api/partner-admin/bays` 추가: active `partner_admins` membership 기준으로 본인 정비소 베이 목록 조회.
+- `PATCH /api/partner-admin/bays/:id` 추가: 본인 정비소 베이의 `is_active`만 변경.
+- `/partner-admin` 화면에 베이 관리 패널 추가.
+- 베이별 `예약 가능`/`예약 중지` 상태 표시와 활성화/비활성화 버튼 추가.
+- `src/lib/reservation-create.ts` 예약 quote 검증에서 `bays.is_active = false`인 베이를 `BAY_INACTIVE`로 거부하도록 보강.
+- `docs/API_MVP.md`에 store-admin bay 목록/수정 API 반영.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+
+다음 조치:
+
+- 브라우저에서 `/partner-admin` 베이 비활성화/활성화 버튼 동작 QA.
+- 비활성화한 베이를 사용자 예약 플로우에서 선택했을 때 결제 준비가 `BAY_INACTIVE`로 거부되는지 확인.
+- availability block 생성/수정 API와 화면 구현.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

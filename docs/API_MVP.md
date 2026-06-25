@@ -615,7 +615,38 @@ statusLogs
 
 ⸻
 
-17. PATCH /api/partner-admin/bays/:id
+17. GET /api/partner-admin/bays
+
+⸻
+
+기능:
+store-admin 본인 정비소 bay 목록 조회
+
+Query:
+{
+partnerId: string
+}
+
+검증:
+• Supabase Auth session 필수
+• 요청 user가 `partner_admins.partner_id = partnerId`의 active member여야 함
+
+성공 응답:
+{
+success: true,
+bays: [
+{
+id,
+partnerId,
+name,
+isActive
+}
+]
+}
+
+⸻
+
+18. PATCH /api/partner-admin/bays/:id
 
 ⸻
 
@@ -644,7 +675,7 @@ isActive
 
 ⸻
 
-18. POST /api/partner-admin/availability-blocks
+19. POST /api/partner-admin/availability-blocks
 
 ⸻
 
@@ -675,7 +706,7 @@ blockId: string
 
 ⸻
 
-19. PATCH /api/partner-admin/availability-blocks/:id
+20. PATCH /api/partner-admin/availability-blocks/:id
 
 ⸻
 
