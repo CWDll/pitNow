@@ -682,3 +682,43 @@ Options considered:
 
 - 장점: 외부 키 없이 항상 표시된다.
 - 단점: 실제 지도 조작, 경로/거리/주변성 판단이 불가능하다.
+
+---
+
+## 2026-06-24
+
+Decision:
+정비소 사장/직원용 store-admin은 MVP에 포함하고 내부 운영자 admin과 분리된 `/partner-admin` 영역으로 설계한다.
+
+Rules:
+
+- 내부 PitNow 운영자 콘솔은 `/admin`에 유지한다.
+- 정비소 운영자 콘솔은 `/partner-admin`에 둔다.
+- store-admin 권한은 `partner_admins(user_id, partner_id, role, is_active)`로 부여한다.
+- store-admin은 active membership이 있는 `partner_id` 범위만 조회/수정할 수 있다.
+- store-admin은 본인 정비소 예약, 체크인 사진, 체크아웃 사진/체크리스트, 상태 로그를 조회할 수 있다.
+- store-admin은 본인 정비소 `bays.is_active`와 `partner_availability_blocks`만 수정할 수 있다.
+- 시간대 관리는 `partner_availability_blocks`로 표현한다.
+- `partner_availability_blocks.bay_id = null`은 업장 전체 차단, `bay_id`가 있으면 해당 bay 차단이다.
+- 예약 준비 API는 active availability block과 겹치는 요청을 거부해야 한다.
+- 결제 provider key, 환불 operation metadata, 다른 정비소 데이터는 store-admin에 노출하지 않는다.
+
+Reason:
+정비소 사장은 본인 업장의 베이/시간대/체크인 증적을 관리해야 하지만, 내부 운영자와 동일한 권한을 주면 다른 정비소 예약과 결제 데이터까지 노출된다. 따라서 권한의 기본 단위를 `partner_id` membership으로 두고, 화면과 API를 내부 admin과 분리한다.
+
+Options considered:
+
+1. 기존 `/admin`에 partner filter만 추가
+
+- 장점: 화면을 재사용하기 쉽다.
+- 단점: 내부 운영자 데이터와 store-admin 데이터가 섞이고 권한 실수 시 전체 예약/결제 노출 위험이 크다.
+
+2. 별도 `/partner-admin` + `partner_admins` membership (선택)
+
+- 장점: 역할 경계가 명확하고 RLS/API scope를 `partner_id`로 강제하기 쉽다.
+- 단점: 별도 화면과 API 구현이 필요하다.
+
+3. store-admin을 Phase 2로 연기
+
+- 장점: 현재 사용자 예약 루프에 더 집중할 수 있다.
+- 단점: 실제 정비소 운영 검증에 필요한 베이/체크인 관리 흐름이 빠져 MVP 운영성이 낮다.

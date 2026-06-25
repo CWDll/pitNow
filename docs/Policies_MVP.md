@@ -34,3 +34,35 @@
 - Cleaning required
 - Tool check required
 - Extra fee auto calculated
+
+## Store Admin
+
+- Store-admin is a partner-side role, not the internal PitNow admin role.
+- Store-admin routes must be separated under `/partner-admin`.
+- Store-admin access is granted only through active `partner_admins` membership.
+- Store-admin may access only rows scoped to their `partner_id`.
+- Store-admin may read:
+  - own partner membership
+  - own partner reservations
+  - own partner check-in evidence
+  - own partner checkout evidence/checklist
+  - own partner reservation status logs
+  - own partner availability blocks
+- Store-admin may update:
+  - own partner `bays.is_active`
+  - own partner `partner_availability_blocks`
+- Store-admin must not access:
+  - other partners' reservations/evidence
+  - internal admin pages
+  - provider payment keys or refund operation metadata
+  - user-owned vehicle management outside reservation display fields
+- Internal PitNow admin keeps using server-only service role access for cross-partner operations.
+
+## Partner Availability Blocks
+
+- `bay_id = null` blocks the whole partner location.
+- `bay_id` set blocks only that bay.
+- Reservation prepare must reject requested windows overlapping:
+  - active whole-partner block for the partner
+  - active bay-specific block for the selected bay
+- Store-admin block creation and update must be logged in app-level audit/status metadata when write APIs are implemented.

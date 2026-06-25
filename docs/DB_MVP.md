@@ -53,6 +53,75 @@ create index idx_bays_partner on bays(partner_id);
 
 ---
 
+## partner_admins
+
+Partner-side operator membership.
+
+```sql
+create table partner_admins (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  partner_id uuid not null references partners(id) on delete cascade,
+  role text not null default 'OWNER' check (role in ('OWNER', 'STAFF')),
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  primary key (user_id, partner_id)
+);
+
+create index idx_partner_admins_partner
+  on partner_admins(partner_id, user_id)
+  where is_active = true;
+```
+
+RLS:
+
+- Authenticated users may select only their own `partner_admins` membership rows.
+- Client-side insert/update/delete is not exposed in MVP.
+- Internal admin/service role creates or disables memberships.
+
+---
+
+## partner_availability_blocks
+
+Partner-managed bay or whole-shop blocked time.
+
+```sql
+create table partner_availability_blocks (
+  id uuid primary key default gen_random_uuid(),
+  partner_id uuid not null references partners(id) on delete cascade,
+  bay_id uuid references bays(id) on delete cascade,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  reason text,
+  is_active boolean not null default true,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (starts_at < ends_at)
+);
+
+create index idx_partner_availability_blocks_partner_window
+  on partner_availability_blocks(partner_id, starts_at, ends_at)
+  where is_active = true;
+
+create index idx_partner_availability_blocks_bay_window
+  on partner_availability_blocks(bay_id, starts_at, ends_at)
+  where is_active = true and bay_id is not null;
+```
+
+Rules:
+
+- `bay_id = null` means the entire partner location is blocked.
+- `bay_id` must belong to the same `partner_id`.
+- Active blocks cannot overlap when they affect the same bay or when either block is whole-partner.
+- Partner-admin can select/insert/update/delete blocks only for their own partner.
+- Reservation prepare must reject any requested bay/time window overlapping an active block for that bay or the whole partner.
+
+Migration:
+
+- `db/migrations/20260624_partner_admin_foundation.sql`
+
+---
+
 ## service_packages
 
 Global package catalog reused from the Figma package set.
@@ -311,6 +380,16 @@ Auth / RLS foundation
 -- checkouts
 -- reservation_status_logs
 -- reviews insert/update
+
+-- Partner-owned operator access uses partner_admins:
+-- partner_admins
+-- partner_availability_blocks
+-- reservations select where reservations.partner_id is managed by auth.uid()
+-- reservation_tasks select through managed reservation
+-- checkins select through managed reservation
+-- checkouts select through managed reservation
+-- reservation_status_logs select through managed reservation
+-- bays update where bays.partner_id is managed by auth.uid()
 
 -- Public catalog read remains available:
 -- partners, bays, service_packages, partner_package_prices, self_maintenance_tasks

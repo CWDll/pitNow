@@ -23,6 +23,7 @@ The product message is not "cheap labor only". The point is that the same servic
 6. Usage timer for self service
 7. Auto settlement / completion
 8. Review
+9. Store-admin portal for partner-owned reservation and bay operations
 
 Package mode 유지, Self 정비 플로우만 변경.
 
@@ -95,6 +96,22 @@ Package mode 유지, Self 정비 플로우만 변경.
 - Auto extra fee calculation
 - Optional helper verification request (default +5,000 + per-task additional fee)
 
+### Store Admin
+
+Store-admin is the partner-side operator for a registered garage.
+
+- Store-admin users may access only partners linked through `partner_admins`.
+- Store-admin users must not access other partners' reservations, check-in evidence, checkout evidence, settlement details, or bay controls.
+- MVP store-admin routes are separated from internal admin routes under `/partner-admin`.
+- 1차 기능:
+  - 본인 정비소 dashboard
+  - 오늘/예정 예약 목록
+  - 예약 상세 조회
+  - 체크인 4방향 사진 확인
+  - 체크아웃 사진/체크리스트 확인
+  - 베이 활성/비활성 관리
+  - 베이 또는 업장 단위 예약 차단 시간 관리
+
 ---
 
 ## Operational Policy
@@ -105,3 +122,4 @@ Package mode 유지, Self 정비 플로우만 변경.
 - Self-maintenance task selection must be restricted to legal allowlist.
 - User declaration/consent evidence must be stored.
 - Buffer blocking (work end +1h) must be reflected in conflict checks.
+- Store-admin data access must always be scoped by `partner_id`.

@@ -331,6 +331,7 @@ endTime: string
 검증:
 • Authorization Bearer session 또는 local dev fallback 필요
 • 예약 생성과 같은 서버 검증/가격 계산 경로 사용
+• 선택한 bay/time window가 active `partner_availability_blocks`와 겹치면 거부
 • 클라이언트 결제 금액을 신뢰하지 않음
 • 이 단계에서는 reservations row를 만들지 않음
 
@@ -522,6 +523,182 @@ comment?: string
 {
 success: true,
 reviewId: string
+}
+
+⸻
+
+14. GET /api/partner-admin/me
+
+⸻
+
+기능:
+로그인한 store-admin의 partner membership 조회
+
+검증:
+• Supabase Auth session 필수
+• `partner_admins.user_id = auth.uid()`
+• `partner_admins.is_active = true`
+
+성공 응답:
+{
+partners: [
+{
+partnerId: string,
+partnerName: string,
+role: 'OWNER' | 'STAFF'
+}
+]
+}
+
+⸻
+
+15. GET /api/partner-admin/reservations
+
+⸻
+
+기능:
+store-admin 본인 정비소 예약 목록 조회
+
+Query:
+{
+partnerId: string,
+date?: string
+}
+
+검증:
+• Supabase Auth session 필수
+• 요청 user가 `partner_admins.partner_id = partnerId`의 active member여야 함
+
+응답:
+{
+reservations: [
+{
+id,
+reservationType,
+status,
+bayId,
+bayLabel,
+vehicleLabel,
+startTime,
+endTime,
+blockedUntil,
+totalPrice,
+checkinCompleted: boolean,
+checkoutCompleted: boolean
+}
+]
+}
+
+⸻
+
+16. GET /api/partner-admin/reservations/:id
+
+⸻
+
+기능:
+store-admin 본인 정비소 예약 상세와 증적 조회
+
+검증:
+• Supabase Auth session 필수
+• reservation.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+
+응답:
+{
+reservation,
+checkin,
+checkout,
+statusLogs
+}
+
+주의:
+• 고객의 결제 provider key, 내부 payment failure metadata, 다른 정비소 데이터는 반환하지 않는다.
+
+⸻
+
+17. PATCH /api/partner-admin/bays/:id
+
+⸻
+
+기능:
+store-admin 본인 정비소 bay 활성/비활성 관리
+
+입력:
+{
+isActive: boolean
+}
+
+검증:
+• Supabase Auth session 필수
+• bay.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+
+성공 응답:
+{
+success: true,
+bay: {
+id,
+partnerId,
+name,
+isActive
+}
+}
+
+⸻
+
+18. POST /api/partner-admin/availability-blocks
+
+⸻
+
+기능:
+store-admin 본인 정비소의 전체 업장 또는 특정 bay 예약 차단 시간 생성
+
+입력:
+{
+partnerId: string,
+bayId?: string,
+startsAt: string,
+endsAt: string,
+reason?: string
+}
+
+검증:
+• Supabase Auth session 필수
+• partnerId가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+• bayId가 있으면 해당 bay.partner_id = partnerId
+• startsAt < endsAt
+• 같은 scope의 active block과 겹치면 DB constraint 또는 API에서 거부
+
+성공 응답:
+{
+success: true,
+blockId: string
+}
+
+⸻
+
+19. PATCH /api/partner-admin/availability-blocks/:id
+
+⸻
+
+기능:
+store-admin 본인 정비소 예약 차단 시간 수정 또는 비활성화
+
+입력:
+{
+startsAt?: string,
+endsAt?: string,
+reason?: string,
+isActive?: boolean
+}
+
+검증:
+• Supabase Auth session 필수
+• block.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+• 수정 후에도 startsAt < endsAt
+• bayId 변경은 MVP에서 허용하지 않는다
+
+성공 응답:
+{
+success: true
 }
 
 ⸻
