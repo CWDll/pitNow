@@ -821,6 +821,45 @@ QA 상태:
 - SQL 적용 전 `/partner-admin` 예약 상세의 현장 메모 API는 `MISSING_PARTNER_NOTES_SCHEMA`를 반환한다.
 - SQL 적용 후 일괄 QA에서 메모 생성, 이슈 해결/다시 열기, 다른 partner 접근 차단을 확인한다.
 
+## 62. 2026-06-26 store-admin 예약 상세 UX 보강 및 API E2E 고정
+
+`partner_reservation_notes` SQL 적용 성공 이후, `/partner-admin` 예약 상세의 운영 판단 정보를 보강하고 partner-admin 기능 회귀 검증 스크립트를 추가했다.
+
+구현:
+
+- `/partner-admin` 예약 상세 패널에 운영 요약 영역 추가.
+  - 현재 예약 상태.
+  - 체크인 증적 완료/대기.
+  - 체크아웃 검수 완료/전.
+  - 미해결 이슈 수.
+  - 예약일, 예약 시간, 버퍼 종료, 메모 수.
+- 체크아웃 검수 영역에 체크리스트 완료 수, 추가 요금, 검수 요금을 함께 표시.
+- `scripts/e2e-partner-admin-api.mjs` 추가.
+  - 테스트 partner-admin/비권한 유저 생성 및 로그인.
+  - 테스트 정비소/베이 선택.
+  - `partner_admins` membership 연결.
+  - 테스트 예약 seed 생성.
+  - `/api/partner-admin/me` 검증.
+  - `/api/partner-admin/bays`, `PATCH /api/partner-admin/bays/:id` 검증.
+  - `/api/partner-admin/reservations`, `/api/partner-admin/reservations/:id` 검증.
+  - 비권한 유저의 예약 상세 접근 403 검증.
+  - availability block 생성/수정/해제 API 검증.
+  - 현장 메모 생성/조회/해결 API 검증.
+  - 테스트 예약/차량/block/note cleanup 및 베이 상태 복구.
+- `package.json`에 `npm run e2e:partner-admin` 추가.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+- `npm run e2e:partner-admin` 성공.
+
+수동 QA:
+
+- 이번 partner-admin UI 수동 QA는 사용자 요청에 따라 뒤로 미룸.
+- 나중에 `/partner-admin`에서 예약 선택, 운영 요약, 메모 생성/해결, 베이 활성/비활성, 차단시간 생성/해제를 한 번에 확인한다.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

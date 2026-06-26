@@ -178,6 +178,19 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+function formatDate(value: string | null): string {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
 function formatPrice(value: number): string {
   return `${value.toLocaleString("ko-KR")}원`;
 }
@@ -247,6 +260,10 @@ function noteTypeClass(type: PartnerNoteType): string {
     default:
       return "bg-zinc-100 text-zinc-700";
   }
+}
+
+function checklistValue(isComplete: boolean): string {
+  return isComplete ? "완료" : "미완료";
 }
 
 function extractErrorMessage(payload: unknown): string | null {
@@ -848,6 +865,18 @@ export function PartnerAdminDashboard() {
         (reservation.status === "COMPLETED" && !reservation.checkoutCompleted)),
   ).length;
   const activeBayCount = bays.filter((bay) => bay.isActive).length;
+  const unresolvedNotes = notes.filter((note) => !note.isResolved);
+  const unresolvedIssueNotes = unresolvedNotes.filter(
+    (note) => note.noteType !== "NOTE",
+  );
+  const checkoutChecklistItems = detail?.checkout
+    ? [
+        detail.checkout.toolCheckCompleted,
+        detail.checkout.cleaningCompleted,
+        detail.checkout.wasteDisposalCompleted,
+      ]
+    : [];
+  const checkoutChecklistCompletedCount = checkoutChecklistItems.filter(Boolean).length;
 
   return (
     <section className="space-y-5">
@@ -1307,6 +1336,73 @@ export function PartnerAdminDashboard() {
                     ))}
                   </dl>
 
+                  <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
+                          detail.reservation.status,
+                        )}`}
+                      >
+                        {statusLabel(detail.reservation.status)}
+                      </span>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          detail.checkin
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        체크인 {detail.checkin ? "증적 완료" : "증적 대기"}
+                      </span>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          detail.checkout
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-zinc-200 text-zinc-700"
+                        }`}
+                      >
+                        체크아웃 {detail.checkout ? "검수 완료" : "검수 전"}
+                      </span>
+                      {unresolvedIssueNotes.length > 0 ? (
+                        <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                          미해결 이슈 {unresolvedIssueNotes.length}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      {[
+                        ["예약일", formatDate(detail.reservation.startTime)],
+                        [
+                          "예약 시간",
+                          `${formatTime(detail.reservation.startTime)} - ${formatTime(
+                            detail.reservation.endTime,
+                          )}`,
+                        ],
+                        [
+                          "버퍼 종료",
+                          formatDateTime(detail.reservation.blockedUntil),
+                        ],
+                        [
+                          "메모",
+                          unresolvedNotes.length > 0
+                            ? `미해결 ${unresolvedNotes.length}건`
+                            : `${notes.length}건`,
+                        ],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="rounded-md border border-zinc-200 bg-white px-2 py-2"
+                        >
+                          <dt className="font-semibold text-zinc-500">{label}</dt>
+                          <dd className="mt-1 font-semibold text-zinc-900">
+                            {value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+
                   <section>
                     <h3 className="text-sm font-semibold">체크인 사진</h3>
                     {detail.checkin ? (
@@ -1342,17 +1438,27 @@ export function PartnerAdminDashboard() {
                         {[
                           [
                             "공구 확인",
-                            detail.checkout.toolCheckCompleted ? "완료" : "미완료",
+                            checklistValue(detail.checkout.toolCheckCompleted),
                           ],
                           [
                             "청소 확인",
-                            detail.checkout.cleaningCompleted ? "완료" : "미완료",
+                            checklistValue(detail.checkout.cleaningCompleted),
                           ],
                           [
                             "폐기물 확인",
-                            detail.checkout.wasteDisposalCompleted
-                              ? "완료"
-                              : "미완료",
+                            checklistValue(detail.checkout.wasteDisposalCompleted),
+                          ],
+                          [
+                            "체크리스트",
+                            `${checkoutChecklistCompletedCount}/${checkoutChecklistItems.length}`,
+                          ],
+                          [
+                            "추가 요금",
+                            formatPrice(detail.checkout.extraFee),
+                          ],
+                          [
+                            "검수 요금",
+                            formatPrice(detail.checkout.helperVerifyFee),
                           ],
                           ["총 정산", formatPrice(detail.checkout.totalSettlement)],
                         ].map(([label, value]) => (
