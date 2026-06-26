@@ -15,6 +15,7 @@ type ReservationStatus =
   | "CANCELLED";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 type PartnerNoteType = "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW";
+type NoteFilter = "ALL" | "OPEN" | "ISSUES";
 
 interface OperationalAction {
   type: Exclude<PartnerNoteType, "NOTE">;
@@ -360,6 +361,7 @@ export function PartnerAdminDashboard() {
   const [selectedReservationId, setSelectedReservationId] = useState("");
   const [detail, setDetail] = useState<PartnerAdminReservationDetail | null>(null);
   const [notes, setNotes] = useState<PartnerReservationNote[]>([]);
+  const [noteFilter, setNoteFilter] = useState<NoteFilter>("ALL");
   const [noteType, setNoteType] = useState<PartnerNoteType>("NOTE");
   const [noteBody, setNoteBody] = useState("");
   const [selectedOperationalAction, setSelectedOperationalAction] =
@@ -594,6 +596,7 @@ export function PartnerAdminDashboard() {
     setIsLoadingNotes(true);
     setSelectedOperationalAction(null);
     setOperationalReason("");
+    setNoteFilter("ALL");
     setError("");
 
     const [detailResponse, notesResponse] = await Promise.all([
@@ -1004,6 +1007,18 @@ export function PartnerAdminDashboard() {
   const unresolvedIssueNotes = unresolvedNotes.filter(
     (note) => note.noteType !== "NOTE",
   );
+  const issueNotes = notes.filter((note) => note.noteType !== "NOTE");
+  const visibleNotes = notes.filter((note) => {
+    if (noteFilter === "OPEN") {
+      return !note.isResolved;
+    }
+
+    if (noteFilter === "ISSUES") {
+      return note.noteType !== "NOTE";
+    }
+
+    return true;
+  });
   const checkoutChecklistItems = detail?.checkout
     ? [
         detail.checkout.toolCheckCompleted,
@@ -1638,11 +1653,50 @@ export function PartnerAdminDashboard() {
                   </section>
 
                   <section>
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold">현장 메모</h3>
-                      {isLoadingNotes ? (
-                        <span className="text-xs text-zinc-500">불러오는 중</span>
-                      ) : null}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold">현장 메모</h3>
+                        {isLoadingNotes ? (
+                          <span className="text-xs text-zinc-500">불러오는 중</span>
+                        ) : null}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        {[
+                          ["전체", notes.length],
+                          ["미해결", unresolvedNotes.length],
+                          ["이슈", issueNotes.length],
+                        ].map(([label, value]) => (
+                          <div
+                            key={label}
+                            className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2"
+                          >
+                            <p className="font-semibold text-zinc-500">{label}</p>
+                            <p className="mt-1 text-base font-bold text-zinc-950">
+                              {value}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([
+                          ["ALL", "전체"],
+                          ["OPEN", "미해결"],
+                          ["ISSUES", "이슈만"],
+                        ] as const).map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setNoteFilter(value)}
+                            className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+                              noteFilter === value
+                                ? "border-zinc-950 bg-zinc-950 text-white"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <form onSubmit={createReservationNote} className="mt-2 space-y-2">
@@ -1680,8 +1734,12 @@ export function PartnerAdminDashboard() {
                         <p className="text-sm text-zinc-500">
                           등록된 현장 메모가 없습니다.
                         </p>
+                      ) : visibleNotes.length === 0 ? (
+                        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
+                          현재 필터에 해당하는 현장 메모가 없습니다.
+                        </p>
                       ) : (
-                        notes.map((note) => (
+                        visibleNotes.map((note) => (
                           <div
                             key={note.id}
                             className={`rounded-lg border px-3 py-2 text-xs ${
