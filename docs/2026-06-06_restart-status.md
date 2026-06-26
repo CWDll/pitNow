@@ -916,6 +916,32 @@ QA 상태:
 - 이번 Admin UI 수동 QA는 사용자 요청에 따라 뒤로 미룸.
 - 나중에 partner-admin에서 지연/노쇼/이슈를 남긴 예약을 `/admin/reservations/:id`에서 열어 `Partner Field Notes` 반영을 확인한다.
 
+## 65. 2026-06-26 store-admin 운영 액션 사유 입력 모달 추가
+
+`/partner-admin` 현장 운영 액션이 버튼 클릭 즉시 기본 문구를 저장하던 흐름을 사유 입력 모달 기반으로 변경했다.
+
+구현:
+
+- `지연 기록`, `노쇼 기록`, `이슈 기록` 버튼 클릭 시 사유 입력 모달을 연다.
+- 모달 안에서 quick reason을 선택하면 textarea에 사유가 채워진다.
+- 사용자는 quick reason을 그대로 저장하거나 직접 수정해 저장할 수 있다.
+- 저장 시 기존 `POST /api/partner-admin/reservations/:id/notes` API를 사용해 `DELAY`, `NO_SHOW`, `ISSUE` note를 생성한다.
+- 모달은 모바일에서는 하단 시트, 넓은 화면에서는 중앙 모달로 표시되도록 반응형 구조로 구성했다.
+- 모달 본문은 `max-height`와 내부 스크롤을 사용해 작은 화면에서도 action button이 화면 밖으로 밀리지 않게 했다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+- `npm run e2e:partner-admin` 성공.
+- 브라우저에서 테스트 partner-admin 계정으로 로그인 후:
+  - 예약 상세에서 `지연 기록` 클릭 시 모달 표시 확인.
+  - quick reason 선택 시 textarea 반영 확인.
+  - 저장 후 모달 닫힘 및 현장 메모 목록 반영 확인.
+  - 모바일 viewport `390x844`에서 모달이 하단 시트로 표시되고 내부 스크롤이 적용되는 것 확인.
+- 브라우저 검증용 임시 예약/차량 데이터는 삭제 완료.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

@@ -20,6 +20,7 @@ interface OperationalAction {
   type: Exclude<PartnerNoteType, "NOTE">;
   label: string;
   body: string;
+  quickReasons: string[];
   allowedStatuses: ReservationStatus[];
   className: string;
 }
@@ -279,6 +280,11 @@ const OPERATIONAL_ACTIONS: OperationalAction[] = [
     type: "DELAY",
     label: "지연 기록",
     body: "고객 또는 작업 지연이 발생했습니다. 상세 사유를 추가로 기록해 주세요.",
+    quickReasons: [
+      "고객 도착이 예약 시간보다 늦어지고 있습니다.",
+      "이전 작업 지연으로 예약 시작이 늦어지고 있습니다.",
+      "부품/공구 준비 지연으로 작업 시작이 늦어지고 있습니다.",
+    ],
     allowedStatuses: ["CONFIRMED", "CHECKED_IN", "IN_USE"],
     className: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
   },
@@ -286,6 +292,11 @@ const OPERATIONAL_ACTIONS: OperationalAction[] = [
     type: "NO_SHOW",
     label: "노쇼 기록",
     body: "예약 시간에 고객이 도착하지 않았습니다. 연락 여부와 대기 시간을 추가로 기록해 주세요.",
+    quickReasons: [
+      "예약 시간 이후에도 고객이 도착하지 않았습니다.",
+      "고객에게 연락했으나 응답이 없습니다.",
+      "고객이 방문 취소 의사를 현장에서 전달했습니다.",
+    ],
     allowedStatuses: ["CONFIRMED"],
     className: "border-zinc-300 bg-zinc-100 text-zinc-800 hover:bg-zinc-200",
   },
@@ -293,6 +304,11 @@ const OPERATIONAL_ACTIONS: OperationalAction[] = [
     type: "ISSUE",
     label: "이슈 기록",
     body: "현장 이슈가 발생했습니다. 사진/상황/조치 내용을 추가로 기록해 주세요.",
+    quickReasons: [
+      "차량 상태 확인 중 추가 이슈가 발견되었습니다.",
+      "공구/장비 사용 중 현장 확인이 필요합니다.",
+      "고객과 작업 범위 확인이 필요합니다.",
+    ],
     allowedStatuses: ["CONFIRMED", "CHECKED_IN", "IN_USE", "COMPLETED"],
     className: "border-red-200 bg-red-50 text-red-800 hover:bg-red-100",
   },
@@ -346,6 +362,9 @@ export function PartnerAdminDashboard() {
   const [notes, setNotes] = useState<PartnerReservationNote[]>([]);
   const [noteType, setNoteType] = useState<PartnerNoteType>("NOTE");
   const [noteBody, setNoteBody] = useState("");
+  const [selectedOperationalAction, setSelectedOperationalAction] =
+    useState<OperationalAction | null>(null);
+  const [operationalReason, setOperationalReason] = useState("");
   const [isLoadingMe, setIsLoadingMe] = useState(true);
   const [isLoadingReservations, setIsLoadingReservations] = useState(false);
   const [isLoadingBays, setIsLoadingBays] = useState(false);
@@ -354,7 +373,8 @@ export function PartnerAdminDashboard() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
-  const [creatingOperationalAction, setCreatingOperationalAction] = useState("");
+  const [isCreatingOperationalNote, setIsCreatingOperationalNote] =
+    useState(false);
   const [updatingNoteId, setUpdatingNoteId] = useState("");
   const [updatingBayId, setUpdatingBayId] = useState("");
   const [updatingBlockId, setUpdatingBlockId] = useState("");
@@ -572,6 +592,8 @@ export function PartnerAdminDashboard() {
     setSelectedReservationId(reservationId);
     setIsLoadingDetail(true);
     setIsLoadingNotes(true);
+    setSelectedOperationalAction(null);
+    setOperationalReason("");
     setError("");
 
     const [detailResponse, notesResponse] = await Promise.all([
@@ -660,16 +682,47 @@ export function PartnerAdminDashboard() {
     setIsCreatingNote(false);
   }
 
-  async function createOperationalNote(action: OperationalAction) {
-    if (!selectedReservationId || !detail) {
+  function openOperationalActionModal(action: OperationalAction) {
+    if (!detail || !action.allowedStatuses.includes(detail.reservation.status)) {
       return;
     }
 
-    if (!action.allowedStatuses.includes(detail.reservation.status)) {
+    setSelectedOperationalAction(action);
+    setOperationalReason(action.body);
+    setError("");
+  }
+
+  function closeOperationalActionModal() {
+    if (isCreatingOperationalNote) {
       return;
     }
 
-    setCreatingOperationalAction(action.type);
+    setSelectedOperationalAction(null);
+    setOperationalReason("");
+  }
+
+  async function submitOperationalNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedReservationId || !detail || !selectedOperationalAction) {
+      return;
+    }
+
+    const reason = operationalReason.trim();
+
+    if (!reason) {
+      return;
+    }
+
+    if (
+      !selectedOperationalAction.allowedStatuses.includes(
+        detail.reservation.status,
+      )
+    ) {
+      return;
+    }
+
+    setIsCreatingOperationalNote(true);
     setError("");
 
     const response = await authFetch(
@@ -680,8 +733,8 @@ export function PartnerAdminDashboard() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          noteType: action.type,
-          body: action.body,
+          noteType: selectedOperationalAction.type,
+          body: reason,
         }),
       },
     );
@@ -691,7 +744,7 @@ export function PartnerAdminDashboard() {
       setError(
         extractErrorMessage(payload) ?? "현장 운영 액션을 기록하지 못했습니다.",
       );
-      setCreatingOperationalAction("");
+      setIsCreatingOperationalNote(false);
       return;
     }
 
@@ -704,7 +757,9 @@ export function PartnerAdminDashboard() {
       setNotes((current) => [createdNote, ...current]);
     }
 
-    setCreatingOperationalAction("");
+    setSelectedOperationalAction(null);
+    setOperationalReason("");
+    setIsCreatingOperationalNote(false);
   }
 
   async function updateReservationNoteResolved(
@@ -1562,25 +1617,23 @@ export function PartnerAdminDashboard() {
                         const isAllowed = action.allowedStatuses.includes(
                           detail.reservation.status,
                         );
-                        const isCreating =
-                          creatingOperationalAction === action.type;
 
                         return (
                           <button
                             key={action.type}
                             type="button"
-                            disabled={!isAllowed || Boolean(creatingOperationalAction)}
-                            onClick={() => void createOperationalNote(action)}
+                            disabled={!isAllowed || isCreatingOperationalNote}
+                            onClick={() => openOperationalActionModal(action)}
                             className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400 ${action.className}`}
                           >
-                            {isCreating ? "기록 중" : action.label}
+                            {action.label}
                           </button>
                         );
                       })}
                     </div>
                     <p className="mt-2 text-xs leading-5 text-zinc-500">
-                      빠른 액션은 현장 메모로 저장됩니다. 상세 내용은 아래 메모에
-                      추가하고, 처리 후 해결 상태로 변경합니다.
+                      액션 기록은 현장 메모로 저장되고, 처리 후 해결 상태로
+                      변경합니다.
                     </p>
                   </section>
 
@@ -1713,6 +1766,107 @@ export function PartnerAdminDashboard() {
           </section>
         </>
       )}
+
+      {selectedOperationalAction && detail ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-zinc-950/45 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="operational-action-title"
+        >
+          <form
+            onSubmit={submitOperationalNote}
+            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-lg bg-white p-4 shadow-2xl sm:rounded-lg sm:p-5"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Operational action
+                </p>
+                <h3
+                  id="operational-action-title"
+                  className="mt-1 text-xl font-bold text-zinc-950"
+                >
+                  {selectedOperationalAction.label}
+                </h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  {detail.reservation.vehicleLabel} ·{" "}
+                  {formatTime(detail.reservation.startTime)} -{" "}
+                  {formatTime(detail.reservation.endTime)}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isCreatingOperationalNote}
+                onClick={closeOperationalActionModal}
+                className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                Quick reason
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {selectedOperationalAction.quickReasons.map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    disabled={isCreatingOperationalNote}
+                    onClick={() => setOperationalReason(reason)}
+                    className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold leading-5 transition disabled:opacity-50 ${
+                      operationalReason.trim() === reason
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100"
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="mt-4 block">
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                Reason
+              </span>
+              <textarea
+                value={operationalReason}
+                onChange={(event) => setOperationalReason(event.target.value)}
+                className="mt-2 min-h-32 w-full resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm leading-6 outline-none ring-blue-200 focus:ring-4"
+                placeholder="사유를 입력하세요."
+              />
+            </label>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <p className="text-xs leading-5 text-zinc-500">
+                저장 후 현장 메모 목록에 추가됩니다.
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <button
+                  type="button"
+                  disabled={isCreatingOperationalNote}
+                  onClick={closeOperationalActionModal}
+                  className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    isCreatingOperationalNote || !operationalReason.trim()
+                  }
+                  className="rounded-lg bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:bg-zinc-300"
+                >
+                  {isCreatingOperationalNote ? "저장 중" : "저장"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }
