@@ -16,6 +16,14 @@ type ReservationStatus =
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 type PartnerNoteType = "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW";
 
+interface OperationalAction {
+  type: Exclude<PartnerNoteType, "NOTE">;
+  label: string;
+  body: string;
+  allowedStatuses: ReservationStatus[];
+  className: string;
+}
+
 interface PartnerMembership {
   partnerId: string;
   partnerName: string;
@@ -266,6 +274,30 @@ function checklistValue(isComplete: boolean): string {
   return isComplete ? "완료" : "미완료";
 }
 
+const OPERATIONAL_ACTIONS: OperationalAction[] = [
+  {
+    type: "DELAY",
+    label: "지연 기록",
+    body: "고객 또는 작업 지연이 발생했습니다. 상세 사유를 추가로 기록해 주세요.",
+    allowedStatuses: ["CONFIRMED", "CHECKED_IN", "IN_USE"],
+    className: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
+  },
+  {
+    type: "NO_SHOW",
+    label: "노쇼 기록",
+    body: "예약 시간에 고객이 도착하지 않았습니다. 연락 여부와 대기 시간을 추가로 기록해 주세요.",
+    allowedStatuses: ["CONFIRMED"],
+    className: "border-zinc-300 bg-zinc-100 text-zinc-800 hover:bg-zinc-200",
+  },
+  {
+    type: "ISSUE",
+    label: "이슈 기록",
+    body: "현장 이슈가 발생했습니다. 사진/상황/조치 내용을 추가로 기록해 주세요.",
+    allowedStatuses: ["CONFIRMED", "CHECKED_IN", "IN_USE", "COMPLETED"],
+    className: "border-red-200 bg-red-50 text-red-800 hover:bg-red-100",
+  },
+];
+
 function extractErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -322,6 +354,7 @@ export function PartnerAdminDashboard() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [creatingOperationalAction, setCreatingOperationalAction] = useState("");
   const [updatingNoteId, setUpdatingNoteId] = useState("");
   const [updatingBayId, setUpdatingBayId] = useState("");
   const [updatingBlockId, setUpdatingBlockId] = useState("");
@@ -625,6 +658,53 @@ export function PartnerAdminDashboard() {
     setNoteType("NOTE");
     setNoteBody("");
     setIsCreatingNote(false);
+  }
+
+  async function createOperationalNote(action: OperationalAction) {
+    if (!selectedReservationId || !detail) {
+      return;
+    }
+
+    if (!action.allowedStatuses.includes(detail.reservation.status)) {
+      return;
+    }
+
+    setCreatingOperationalAction(action.type);
+    setError("");
+
+    const response = await authFetch(
+      `/api/partner-admin/reservations/${selectedReservationId}/notes`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          noteType: action.type,
+          body: action.body,
+        }),
+      },
+    );
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ?? "현장 운영 액션을 기록하지 못했습니다.",
+      );
+      setCreatingOperationalAction("");
+      return;
+    }
+
+    const createdNote =
+      payload && typeof payload === "object"
+        ? (payload as { note?: PartnerReservationNote }).note
+        : null;
+
+    if (createdNote) {
+      setNotes((current) => [createdNote, ...current]);
+    }
+
+    setCreatingOperationalAction("");
   }
 
   async function updateReservationNoteResolved(
@@ -1473,6 +1553,35 @@ export function PartnerAdminDashboard() {
                         체크아웃 정보가 아직 없습니다.
                       </p>
                     )}
+                  </section>
+
+                  <section>
+                    <h3 className="text-sm font-semibold">현장 운영 액션</h3>
+                    <div className="mt-2 grid gap-2">
+                      {OPERATIONAL_ACTIONS.map((action) => {
+                        const isAllowed = action.allowedStatuses.includes(
+                          detail.reservation.status,
+                        );
+                        const isCreating =
+                          creatingOperationalAction === action.type;
+
+                        return (
+                          <button
+                            key={action.type}
+                            type="button"
+                            disabled={!isAllowed || Boolean(creatingOperationalAction)}
+                            onClick={() => void createOperationalNote(action)}
+                            className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400 ${action.className}`}
+                          >
+                            {isCreating ? "기록 중" : action.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-zinc-500">
+                      빠른 액션은 현장 메모로 저장됩니다. 상세 내용은 아래 메모에
+                      추가하고, 처리 후 해결 상태로 변경합니다.
+                    </p>
                   </section>
 
                   <section>

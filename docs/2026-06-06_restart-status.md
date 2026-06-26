@@ -860,6 +860,36 @@ QA 상태:
 - 이번 partner-admin UI 수동 QA는 사용자 요청에 따라 뒤로 미룸.
 - 나중에 `/partner-admin`에서 예약 선택, 운영 요약, 메모 생성/해결, 베이 활성/비활성, 차단시간 생성/해제를 한 번에 확인한다.
 
+## 63. 2026-06-26 store-admin 현장 운영 액션 추가
+
+정비소 운영자가 예약 상세에서 현장 상황을 빠르게 기록할 수 있도록 운영 액션 버튼을 추가했다. 예약 상태 자체를 변경하지 않고 `partner_reservation_notes`에 운영 이벤트를 남기는 방식으로 구현했다.
+
+구현:
+
+- `/partner-admin` 예약 상세에 `현장 운영 액션` 섹션 추가.
+- 빠른 액션:
+  - `지연 기록`: `DELAY` note 생성.
+  - `노쇼 기록`: `NO_SHOW` note 생성.
+  - `이슈 기록`: `ISSUE` note 생성.
+- 액션별 허용 상태 제한:
+  - 지연: `CONFIRMED`, `CHECKED_IN`, `IN_USE`.
+  - 노쇼: `CONFIRMED`.
+  - 이슈: `CONFIRMED`, `CHECKED_IN`, `IN_USE`, `COMPLETED`.
+- 생성된 운영 액션은 기존 현장 메모 목록에 즉시 추가되고, 기존 해결/다시 열기 기능으로 후속 처리한다.
+- `scripts/e2e-partner-admin-api.mjs`를 보강해 `DELAY`, `NO_SHOW`, `ISSUE` note 생성과 해결 처리를 함께 검증한다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+- `npm run e2e:partner-admin` 성공.
+
+수동 QA:
+
+- 이번 partner-admin UI 수동 QA는 사용자 요청에 따라 뒤로 미룸.
+- 나중에 `/partner-admin` 예약 상세에서 지연/노쇼/이슈 버튼 클릭 후 메모 목록 반영과 해결 처리를 확인한다.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

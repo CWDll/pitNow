@@ -287,8 +287,10 @@ async function createReservation({ admin, userId, vehicleId, bay }) {
 async function cleanup(admin, records) {
   const tasks = [];
 
-  if (records.noteId) {
-    tasks.push(admin.from("partner_reservation_notes").delete().eq("id", records.noteId));
+  if (records.noteIds?.length) {
+    tasks.push(
+      admin.from("partner_reservation_notes").delete().in("id", records.noteIds),
+    );
   }
 
   if (records.blockId) {
@@ -333,7 +335,9 @@ async function main() {
   const serviceRoleKey = assertEnv("SUPABASE_SERVICE_ROLE_KEY");
   const baseUrl = process.env.PITNOW_E2E_BASE_URL ?? "http://localhost:3000";
   const runId = String(Date.now()).slice(-8);
-  const records = {};
+  const records = {
+    noteIds: [],
+  };
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: {
@@ -512,36 +516,45 @@ async function main() {
     });
     formatStep("availability block 수정/해제 API 확인");
 
-    const notePayload = await apiRequest({
-      baseUrl,
-      token: adminToken,
-      path: `/api/partner-admin/reservations/${reservation.id}/notes`,
-      method: "POST",
-      body: {
-        noteType: "ISSUE",
-        body: `partner admin api e2e issue ${runId}`,
-      },
-    });
-    records.noteId = notePayload.note?.id;
-    if (!records.noteId) {
-      throw new Error("note 생성 응답에 note id가 없습니다.");
+    const createdNotes = [];
+
+    for (const noteType of ["DELAY", "NO_SHOW", "ISSUE"]) {
+      const notePayload = await apiRequest({
+        baseUrl,
+        token: adminToken,
+        path: `/api/partner-admin/reservations/${reservation.id}/notes`,
+        method: "POST",
+        body: {
+          noteType,
+          body: `partner admin api e2e ${noteType.toLowerCase()} ${runId}`,
+        },
+      });
+
+      if (!notePayload.note?.id) {
+        throw new Error(`${noteType} note 생성 응답에 note id가 없습니다.`);
+      }
+
+      createdNotes.push(notePayload.note);
+      records.noteIds.push(notePayload.note.id);
     }
-    formatStep("reservation note 생성 API 확인");
+    formatStep("reservation operational notes 생성 API 확인");
 
     const notesPayload = await apiRequest({
       baseUrl,
       token: adminToken,
       path: `/api/partner-admin/reservations/${reservation.id}/notes`,
     });
-    if (!notesPayload.notes?.some((note) => note.id === records.noteId)) {
-      throw new Error("notes API 응답에 테스트 note가 없습니다.");
+    for (const note of createdNotes) {
+      if (!notesPayload.notes?.some((item) => item.id === note.id)) {
+        throw new Error(`notes API 응답에 ${note.noteType} 테스트 note가 없습니다.`);
+      }
     }
     formatStep("reservation notes 조회 API 확인");
 
     const resolvedNotePayload = await apiRequest({
       baseUrl,
       token: adminToken,
-      path: `/api/partner-admin/reservation-notes/${records.noteId}`,
+      path: `/api/partner-admin/reservation-notes/${records.noteIds.at(-1)}`,
       method: "PATCH",
       body: { isResolved: true },
     });
