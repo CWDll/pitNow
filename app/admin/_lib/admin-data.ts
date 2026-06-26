@@ -156,6 +156,7 @@ export interface AdminReservationItem {
   helperVerifyFee: number;
   reservationPaymentStatus: string | null;
   reservationRefundedAt: string | null;
+  openPartnerNoteCount: number;
   createdAt: string;
 }
 
@@ -429,12 +430,45 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
     console.error("ADMIN RESERVATION PAYMENT LOOKUP ERROR:", paymentResult.error);
   }
 
+  const partnerNotesResult =
+    reservationIds.length > 0
+      ? await supabaseAdmin
+          .from("partner_reservation_notes")
+          .select("reservation_id")
+          .in("reservation_id", reservationIds)
+          .eq("is_resolved", false)
+          .returns<Array<{ reservation_id: string }>>()
+      : { data: [], error: null };
+
+  if (partnerNotesResult.error) {
+    if (isMissingPartnerNotesSchema(partnerNotesResult.error)) {
+      console.warn(
+        "ADMIN RESERVATION PARTNER NOTE COUNT SKIPPED: apply db/migrations/20260626_partner_reservation_notes.sql",
+      );
+    } else {
+      console.error(
+        "ADMIN RESERVATION PARTNER NOTE COUNT LOOKUP ERROR:",
+        partnerNotesResult.error,
+      );
+    }
+  }
+
   const latestPaymentsByReservationId = new Map<
     string,
     AdminPaymentRow & {
       refunded_at: string | null;
     }
   >();
+  const openPartnerNoteCountByReservationId = new Map<string, number>();
+
+  if (!partnerNotesResult.error) {
+    for (const note of partnerNotesResult.data ?? []) {
+      openPartnerNoteCountByReservationId.set(
+        note.reservation_id,
+        (openPartnerNoteCountByReservationId.get(note.reservation_id) ?? 0) + 1,
+      );
+    }
+  }
 
   for (const payment of paymentResult.data ?? []) {
     if (!payment.reservation_id) {
@@ -469,6 +503,8 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
     helperVerifyFee: toNumber(reservation.helper_verify_fee),
     reservationPaymentStatus: reservationPayment?.status ?? null,
     reservationRefundedAt: reservationPayment?.refunded_at ?? null,
+    openPartnerNoteCount:
+      openPartnerNoteCountByReservationId.get(reservation.id) ?? 0,
     createdAt: reservation.created_at,
     };
   });
@@ -664,6 +700,10 @@ export async function getAdminReservationDetail(
       helperVerifyFee: toNumber(reservation.helper_verify_fee),
       reservationPaymentStatus: null,
       reservationRefundedAt: null,
+      openPartnerNoteCount: partnerNotesResult.error
+        ? 0
+        : (partnerNotesResult.data ?? []).filter((note) => !note.is_resolved)
+            .length,
       createdAt: reservation.created_at,
     },
     checkin,

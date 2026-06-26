@@ -77,13 +77,14 @@ export default async function AdminReservationsPage() {
               <th className="px-4 py-4">Blocked</th>
               <th className="px-4 py-4 text-right">Price</th>
               <th className="px-4 py-4">Payment</th>
+              <th className="px-4 py-4">Issues</th>
               <th className="px-4 py-4">Reservation ID</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
             {reservations.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={11} className="px-4 py-10 text-center text-slate-400">
                   예약 데이터가 없습니다.
                 </td>
               </tr>
@@ -126,6 +127,15 @@ export default async function AdminReservationsPage() {
                         {formatAdminDateTime(reservation.reservationRefundedAt)}
                       </p>
                     ) : null}
+                  </td>
+                  <td className="px-4 py-4">
+                    {reservation.openPartnerNoteCount > 0 ? (
+                      <span className="rounded-full bg-rose-400/15 px-3 py-1 text-xs font-semibold text-rose-100 ring-1 ring-rose-300/30">
+                        Open {reservation.openPartnerNoteCount}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-600">-</span>
+                    )}
                   </td>
                   <td className="max-w-48 truncate px-4 py-4 font-mono text-xs text-slate-400">
                     <Link

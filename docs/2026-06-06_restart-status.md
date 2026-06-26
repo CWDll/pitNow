@@ -966,6 +966,24 @@ QA 상태:
 - `npm run build` 성공.
 - `npm run e2e:partner-admin` 성공.
 
+## 67. 2026-06-26 Admin 예약 목록 미해결 현장 기록 표시
+
+PitNow 내부 운영자가 예약 목록에서 미해결 정비소 현장 기록이 있는 예약을 바로 식별할 수 있도록 Admin 예약 목록을 보강했다.
+
+구현:
+
+- `getAdminReservations()`에서 최근 100개 예약의 unresolved `partner_reservation_notes` 수를 bulk 조회.
+- `partner_reservation_notes` 마이그레이션이 없는 환경에서는 count 조회를 skip하고 0으로 fallback.
+- `/admin/reservations` 테이블에 `Issues` 열 추가.
+- 미해결 partner note가 있으면 `Open N` badge를 표시하고, 없으면 `-` 표시.
+- Admin 예약 상세에서 재사용하는 `AdminReservationItem`에도 `openPartnerNoteCount`를 채운다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.
