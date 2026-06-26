@@ -14,6 +14,7 @@ type ReservationStatus =
   | "COMPLETED"
   | "CANCELLED";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
+type PartnerNoteType = "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW";
 
 interface PartnerMembership {
   partnerId: string;
@@ -52,6 +53,20 @@ interface AvailabilityBlock {
   endsAt: string;
   reason: string | null;
   isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface PartnerReservationNote {
+  id: string;
+  reservationId: string;
+  partnerId: string;
+  authorUserId: string | null;
+  noteType: PartnerNoteType;
+  body: string;
+  isResolved: boolean;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -204,6 +219,36 @@ function reservationTypeLabel(type: ReservationType): string {
   return type === "SELF_SERVICE" ? "Self" : "Shop";
 }
 
+function noteTypeLabel(type: PartnerNoteType): string {
+  switch (type) {
+    case "ISSUE":
+      return "이슈";
+    case "DELAY":
+      return "지연";
+    case "NO_SHOW":
+      return "노쇼";
+    case "NOTE":
+      return "메모";
+    default:
+      return type;
+  }
+}
+
+function noteTypeClass(type: PartnerNoteType): string {
+  switch (type) {
+    case "ISSUE":
+      return "bg-red-50 text-red-700";
+    case "DELAY":
+      return "bg-amber-50 text-amber-700";
+    case "NO_SHOW":
+      return "bg-zinc-200 text-zinc-700";
+    case "NOTE":
+      return "bg-blue-50 text-blue-700";
+    default:
+      return "bg-zinc-100 text-zinc-700";
+  }
+}
+
 function extractErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -249,12 +294,18 @@ export function PartnerAdminDashboard() {
   const [editBlockReason, setEditBlockReason] = useState("");
   const [selectedReservationId, setSelectedReservationId] = useState("");
   const [detail, setDetail] = useState<PartnerAdminReservationDetail | null>(null);
+  const [notes, setNotes] = useState<PartnerReservationNote[]>([]);
+  const [noteType, setNoteType] = useState<PartnerNoteType>("NOTE");
+  const [noteBody, setNoteBody] = useState("");
   const [isLoadingMe, setIsLoadingMe] = useState(true);
   const [isLoadingReservations, setIsLoadingReservations] = useState(false);
   const [isLoadingBays, setIsLoadingBays] = useState(false);
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
   const [isCreatingBlock, setIsCreatingBlock] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [updatingNoteId, setUpdatingNoteId] = useState("");
   const [updatingBayId, setUpdatingBayId] = useState("");
   const [updatingBlockId, setUpdatingBlockId] = useState("");
   const [error, setError] = useState("");
@@ -324,6 +375,7 @@ export function PartnerAdminDashboard() {
       setError("");
       setSelectedReservationId("");
       setDetail(null);
+      setNotes([]);
 
       const query = new URLSearchParams({
         partnerId: selectedPartnerId,
@@ -469,22 +521,132 @@ export function PartnerAdminDashboard() {
   async function loadReservationDetail(reservationId: string) {
     setSelectedReservationId(reservationId);
     setIsLoadingDetail(true);
+    setIsLoadingNotes(true);
+    setError("");
+
+    const [detailResponse, notesResponse] = await Promise.all([
+      authFetch(`/api/partner-admin/reservations/${reservationId}`),
+      authFetch(`/api/partner-admin/reservations/${reservationId}/notes`),
+    ]);
+    const detailPayload = await readJson(detailResponse);
+    const notesPayload = await readJson(notesResponse);
+
+    if (!detailResponse.ok) {
+      setError(
+        extractErrorMessage(detailPayload) ?? "예약 상세를 불러오지 못했습니다.",
+      );
+      setDetail(null);
+      setNotes([]);
+      setIsLoadingDetail(false);
+      setIsLoadingNotes(false);
+      return;
+    }
+
+    setDetail(detailPayload as PartnerAdminReservationDetail);
+    setIsLoadingDetail(false);
+
+    if (!notesResponse.ok) {
+      setError(
+        extractErrorMessage(notesPayload) ?? "현장 메모를 불러오지 못했습니다.",
+      );
+      setNotes([]);
+      setIsLoadingNotes(false);
+      return;
+    }
+
+    const nextNotes =
+      notesPayload &&
+      typeof notesPayload === "object" &&
+      Array.isArray((notesPayload as { notes?: unknown }).notes)
+        ? ((notesPayload as { notes: PartnerReservationNote[] }).notes)
+        : [];
+
+    setNotes(nextNotes);
+    setIsLoadingNotes(false);
+  }
+
+  async function createReservationNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedReservationId || !noteBody.trim()) {
+      return;
+    }
+
+    setIsCreatingNote(true);
     setError("");
 
     const response = await authFetch(
-      `/api/partner-admin/reservations/${reservationId}`,
+      `/api/partner-admin/reservations/${selectedReservationId}/notes`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          noteType,
+          body: noteBody,
+        }),
+      },
     );
     const payload = await readJson(response);
 
     if (!response.ok) {
-      setError(extractErrorMessage(payload) ?? "예약 상세를 불러오지 못했습니다.");
-      setDetail(null);
-      setIsLoadingDetail(false);
+      setError(extractErrorMessage(payload) ?? "현장 메모를 저장하지 못했습니다.");
+      setIsCreatingNote(false);
       return;
     }
 
-    setDetail(payload as PartnerAdminReservationDetail);
-    setIsLoadingDetail(false);
+    const createdNote =
+      payload && typeof payload === "object"
+        ? (payload as { note?: PartnerReservationNote }).note
+        : null;
+
+    if (createdNote) {
+      setNotes((current) => [createdNote, ...current]);
+    }
+
+    setNoteType("NOTE");
+    setNoteBody("");
+    setIsCreatingNote(false);
+  }
+
+  async function updateReservationNoteResolved(
+    note: PartnerReservationNote,
+    isResolved: boolean,
+  ) {
+    setUpdatingNoteId(note.id);
+    setError("");
+
+    const response = await authFetch(
+      `/api/partner-admin/reservation-notes/${note.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isResolved }),
+      },
+    );
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(extractErrorMessage(payload) ?? "현장 메모를 수정하지 못했습니다.");
+      setUpdatingNoteId("");
+      return;
+    }
+
+    const updatedNote =
+      payload && typeof payload === "object"
+        ? (payload as { note?: PartnerReservationNote }).note
+        : null;
+
+    if (updatedNote) {
+      setNotes((current) =>
+        current.map((item) => (item.id === updatedNote.id ? updatedNote : item)),
+      );
+    }
+
+    setUpdatingNoteId("");
   }
 
   async function updateBayActiveState(bay: PartnerBay, isActive: boolean) {
@@ -1205,6 +1367,107 @@ export function PartnerAdminDashboard() {
                         체크아웃 정보가 아직 없습니다.
                       </p>
                     )}
+                  </section>
+
+                  <section>
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold">현장 메모</h3>
+                      {isLoadingNotes ? (
+                        <span className="text-xs text-zinc-500">불러오는 중</span>
+                      ) : null}
+                    </div>
+
+                    <form onSubmit={createReservationNote} className="mt-2 space-y-2">
+                      <div className="grid grid-cols-[92px_1fr] gap-2">
+                        <select
+                          value={noteType}
+                          onChange={(event) =>
+                            setNoteType(event.target.value as PartnerNoteType)
+                          }
+                          className="h-10 rounded-lg border border-zinc-300 bg-white px-2 text-xs font-semibold outline-none ring-blue-200 focus:ring-4"
+                        >
+                          <option value="NOTE">메모</option>
+                          <option value="ISSUE">이슈</option>
+                          <option value="DELAY">지연</option>
+                          <option value="NO_SHOW">노쇼</option>
+                        </select>
+                        <button
+                          type="submit"
+                          disabled={isCreatingNote || !noteBody.trim()}
+                          className="rounded-lg bg-zinc-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:bg-zinc-300"
+                        >
+                          {isCreatingNote ? "저장 중" : "메모 추가"}
+                        </button>
+                      </div>
+                      <textarea
+                        value={noteBody}
+                        onChange={(event) => setNoteBody(event.target.value)}
+                        className="min-h-20 w-full resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none ring-blue-200 focus:ring-4"
+                        placeholder="고객 지연, 현장 특이사항, 작업 이슈 등을 기록"
+                      />
+                    </form>
+
+                    <div className="mt-3 space-y-2">
+                      {notes.length === 0 ? (
+                        <p className="text-sm text-zinc-500">
+                          등록된 현장 메모가 없습니다.
+                        </p>
+                      ) : (
+                        notes.map((note) => (
+                          <div
+                            key={note.id}
+                            className={`rounded-lg border px-3 py-2 text-xs ${
+                              note.isResolved
+                                ? "border-zinc-200 bg-zinc-50 text-zinc-500"
+                                : "border-zinc-200 bg-white"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 font-semibold ${noteTypeClass(
+                                    note.noteType,
+                                  )}`}
+                                >
+                                  {noteTypeLabel(note.noteType)}
+                                </span>
+                                {note.isResolved ? (
+                                  <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                                    해결
+                                  </span>
+                                ) : null}
+                              </div>
+                              <button
+                                type="button"
+                                disabled={updatingNoteId === note.id}
+                                onClick={() =>
+                                  void updateReservationNoteResolved(
+                                    note,
+                                    !note.isResolved,
+                                  )
+                                }
+                                className="font-semibold text-zinc-600 underline-offset-2 hover:underline disabled:opacity-50"
+                              >
+                                {updatingNoteId === note.id
+                                  ? "변경 중"
+                                  : note.isResolved
+                                    ? "다시 열기"
+                                    : "해결"}
+                              </button>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap leading-5">
+                              {note.body}
+                            </p>
+                            <p className="mt-2 text-zinc-400">
+                              {formatDateTime(note.createdAt)}
+                              {note.resolvedAt
+                                ? ` · 해결 ${formatDateTime(note.resolvedAt)}`
+                                : ""}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </section>
 
                   <section>

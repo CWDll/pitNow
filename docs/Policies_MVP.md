@@ -48,14 +48,19 @@
   - own partner checkout evidence/checklist
   - own partner reservation status logs
   - own partner availability blocks
+  - own partner reservation field notes/issues
 - Store-admin may update:
   - own partner `bays.is_active`
   - own partner `partner_availability_blocks`
+  - own partner `partner_reservation_notes.is_resolved`
+- Store-admin may insert:
+  - own partner reservation field notes/issues
 - Store-admin must not access:
   - other partners' reservations/evidence
   - internal admin pages
   - provider payment keys or refund operation metadata
   - user-owned vehicle management outside reservation display fields
+- Store-admin field notes are internal partner-side records and must not be shown in the user app.
 - Internal PitNow admin keeps using server-only service role access for cross-partner operations.
 
 ## Partner Availability Blocks

@@ -122,6 +122,40 @@ Migration:
 
 ---
 
+## partner_reservation_notes
+
+Partner-side field notes and issue records for a reservation.
+
+```sql
+create table partner_reservation_notes (
+  id uuid primary key default gen_random_uuid(),
+  reservation_id uuid not null references reservations(id) on delete cascade,
+  partner_id uuid not null references partners(id) on delete cascade,
+  author_user_id uuid references auth.users(id) on delete set null,
+  note_type text not null default 'NOTE'
+    check (note_type in ('NOTE', 'ISSUE', 'DELAY', 'NO_SHOW')),
+  body text not null check (length(trim(body)) > 0),
+  is_resolved boolean not null default false,
+  resolved_at timestamptz,
+  resolved_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+Rules:
+
+- `partner_id` must match `reservations.partner_id`.
+- Store-admin may select/insert/update notes only for their own partner.
+- Notes are partner-side operational records and are not shown in the user app.
+- `ISSUE`, `DELAY`, `NO_SHOW` notes can be marked resolved.
+
+Migration:
+
+- `db/migrations/20260626_partner_reservation_notes.sql`
+
+---
+
 ## service_packages
 
 Global package catalog reused from the Figma package set.

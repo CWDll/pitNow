@@ -790,6 +790,88 @@ isActive
 
 ⸻
 
+22. GET/POST /api/partner-admin/reservations/:id/notes
+
+⸻
+
+기능:
+store-admin 본인 정비소 예약의 현장 메모/이슈 목록 조회 및 생성
+
+GET 검증:
+• Supabase Auth session 필수
+• reservation.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+
+POST 입력:
+{
+noteType: 'NOTE' | 'ISSUE' | 'DELAY' | 'NO_SHOW',
+body: string
+}
+
+POST 검증:
+• Supabase Auth session 필수
+• reservation.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+• body는 빈 문자열 불가
+
+성공 응답:
+{
+success: true,
+notes?: [
+{
+id,
+reservationId,
+partnerId,
+noteType,
+body,
+isResolved,
+createdAt
+}
+],
+note?: {
+id,
+reservationId,
+partnerId,
+noteType,
+body,
+isResolved,
+createdAt
+}
+}
+
+⸻
+
+23. PATCH /api/partner-admin/reservation-notes/:id
+
+⸻
+
+기능:
+store-admin 본인 정비소 현장 메모/이슈 해결 상태 변경
+
+입력:
+{
+isResolved: boolean
+}
+
+검증:
+• Supabase Auth session 필수
+• note.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+
+성공 응답:
+{
+success: true,
+note: {
+id,
+reservationId,
+partnerId,
+noteType,
+body,
+isResolved,
+resolvedAt,
+createdAt
+}
+}
+
+⸻
+
 상태 전환 규칙
 
 결제 상태:

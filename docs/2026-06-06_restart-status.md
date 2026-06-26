@@ -788,6 +788,39 @@ QA 상태:
 - availability block까지 포함한 store-admin 일괄 QA.
 - store-admin 현장 메모/이슈 기록 또는 예약 상세 UX 보강 검토.
 
+## 61. 2026-06-26 store-admin 현장 메모/이슈 기록 구현
+
+정비소 운영자가 예약 상세에서 현장 특이사항, 이슈, 지연, 노쇼 메모를 남기고 해결 상태를 관리할 수 있도록 partner-side notes 흐름을 추가했다.
+
+- 신규 마이그레이션 추가: `db/migrations/20260626_partner_reservation_notes.sql`.
+- 신규 테이블 설계: `partner_reservation_notes`.
+  - `note_type`: `NOTE`, `ISSUE`, `DELAY`, `NO_SHOW`.
+  - `body`, `is_resolved`, `resolved_at`, `resolved_by`, `author_user_id` 저장.
+  - `reservation_id`의 `partner_id`와 note의 `partner_id`가 일치하도록 trigger 검증.
+  - active `partner_admins` membership 기준 RLS 추가.
+- `GET /api/partner-admin/reservations/:id/notes` 추가: 본인 정비소 예약의 현장 메모 목록 조회.
+- `POST /api/partner-admin/reservations/:id/notes` 추가: 본인 정비소 예약에 현장 메모 생성.
+- `PATCH /api/partner-admin/reservation-notes/:id` 추가: 현장 메모/이슈 해결 상태 변경.
+- `/partner-admin` 예약 상세 패널에 `현장 메모` 섹션 추가.
+  - 메모 유형 선택.
+  - 메모 본문 입력.
+  - 메모 목록 표시.
+  - 해결/다시 열기 처리.
+- 현장 메모는 partner-side 내부 운영 기록이며 사용자 앱에는 노출하지 않는다.
+- `docs/DB_MVP.md`, `docs/API_MVP.md`, `docs/Policies_MVP.md`에 설계/정책 반영.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+
+주의/다음 조치:
+
+- Supabase SQL Editor에 `db/migrations/20260626_partner_reservation_notes.sql` 적용 필요.
+- SQL 적용 전 `/partner-admin` 예약 상세의 현장 메모 API는 `MISSING_PARTNER_NOTES_SCHEMA`를 반환한다.
+- SQL 적용 후 일괄 QA에서 메모 생성, 이슈 해결/다시 열기, 다른 partner 접근 차단을 확인한다.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.
