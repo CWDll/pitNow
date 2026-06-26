@@ -102,6 +102,22 @@ interface AdminPaymentRow {
   created_at: string;
 }
 
+type AdminPartnerNoteType = "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW";
+
+interface AdminPartnerNoteRow {
+  id: string;
+  reservation_id: string;
+  partner_id: string;
+  author_user_id: string | null;
+  note_type: AdminPartnerNoteType;
+  body: string;
+  is_resolved: boolean;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface PartnerPackagePriceRow {
   partner_id: string;
   labor_price: number | string;
@@ -219,6 +235,17 @@ export interface AdminReservationDetail {
     approvedAt: string | null;
     createdAt: string;
   }>;
+  partnerNotes: Array<{
+    id: string;
+    noteType: AdminPartnerNoteType;
+    body: string;
+    isResolved: boolean;
+    authorUserId: string | null;
+    resolvedAt: string | null;
+    resolvedBy: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   statusLogs: Array<{
     id: string;
     fromStatus: AdminReservationStatus | null;
@@ -260,6 +287,15 @@ function latestPaymentForPurpose(
   );
 
   return candidates[0] ?? null;
+}
+
+function isMissingPartnerNotesSchema(error: { code?: string; message?: string } | null) {
+  const message = error?.message ?? "";
+  return (
+    error?.code === "42P01" ||
+    error?.code === "PGRST205" ||
+    message.includes("partner_reservation_notes")
+  );
 }
 
 async function getPartnerMap() {
@@ -473,6 +509,7 @@ export async function getAdminReservationDetail(
     checkinResult,
     checkoutResult,
     paymentResult,
+    partnerNotesResult,
     statusLogsResult,
     reviewResult,
   ] =
@@ -500,6 +537,14 @@ export async function getAdminReservationDetail(
         .order("created_at", { ascending: false })
         .returns<AdminPaymentRow[]>(),
       supabaseAdmin
+        .from("partner_reservation_notes")
+        .select(
+          "id, reservation_id, partner_id, author_user_id, note_type, body, is_resolved, resolved_at, resolved_by, created_at, updated_at",
+        )
+        .eq("reservation_id", reservation.id)
+        .order("created_at", { ascending: false })
+        .returns<AdminPartnerNoteRow[]>(),
+      supabaseAdmin
         .from("reservation_status_logs")
         .select(
           "id, reservation_id, from_status, to_status, actor_type, actor_user_id, reason, metadata, created_at",
@@ -524,6 +569,19 @@ export async function getAdminReservationDetail(
 
   if (paymentResult.error) {
     console.error("ADMIN PAYMENT DETAIL LOOKUP ERROR:", paymentResult.error);
+  }
+
+  if (partnerNotesResult.error) {
+    if (isMissingPartnerNotesSchema(partnerNotesResult.error)) {
+      console.warn(
+        "ADMIN PARTNER NOTE LOOKUP SKIPPED: apply db/migrations/20260626_partner_reservation_notes.sql",
+      );
+    } else {
+      console.error(
+        "ADMIN PARTNER NOTE DETAIL LOOKUP ERROR:",
+        partnerNotesResult.error,
+      );
+    }
   }
 
   if (statusLogsResult.error) {
@@ -611,6 +669,19 @@ export async function getAdminReservationDetail(
     checkin,
     checkout,
     payments,
+    partnerNotes: partnerNotesResult.error
+      ? []
+      : (partnerNotesResult.data ?? []).map((note) => ({
+          id: note.id,
+          noteType: note.note_type,
+          body: note.body,
+          isResolved: note.is_resolved,
+          authorUserId: note.author_user_id,
+          resolvedAt: note.resolved_at,
+          resolvedBy: note.resolved_by,
+          createdAt: note.created_at,
+          updatedAt: note.updated_at,
+        })),
     statusLogs: (statusLogsResult.data ?? []).map((log) => ({
       id: log.id,
       fromStatus: log.from_status,

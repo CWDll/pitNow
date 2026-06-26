@@ -890,6 +890,32 @@ QA 상태:
 - 이번 partner-admin UI 수동 QA는 사용자 요청에 따라 뒤로 미룸.
 - 나중에 `/partner-admin` 예약 상세에서 지연/노쇼/이슈 버튼 클릭 후 메모 목록 반영과 해결 처리를 확인한다.
 
+## 64. 2026-06-26 Admin 정비소 현장 기록 조회 추가
+
+정비소 운영자가 `/partner-admin`에서 남긴 현장 메모/이슈/지연/노쇼 기록을 PitNow 내부 운영자도 예약 상세에서 확인할 수 있도록 Admin drill-down을 보강했다.
+
+구현:
+
+- `getAdminReservationDetail()`에서 `partner_reservation_notes`를 예약별로 조회.
+- `partner_reservation_notes` 마이그레이션이 없는 환경에서는 Admin 상세가 깨지지 않도록 빈 배열로 fallback.
+- `/admin/reservations/:id`에 `Partner Field Notes` 섹션 추가.
+  - note type: `NOTE`, `ISSUE`, `DELAY`, `NO_SHOW`.
+  - open/resolved 상태.
+  - 본문, 작성자 user id, 생성 시각, 해결 시각/해결자.
+  - 미해결 기록이 있으면 섹션을 강조하고 open count 표시.
+- Admin에서는 조회 전용으로 표시하며, 해결/수정 처리는 현재 `/partner-admin`의 현장 메모 기능에서 수행한다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+
+수동 QA:
+
+- 이번 Admin UI 수동 QA는 사용자 요청에 따라 뒤로 미룸.
+- 나중에 partner-admin에서 지연/노쇼/이슈를 남긴 예약을 `/admin/reservations/:id`에서 열어 `Partner Field Notes` 반영을 확인한다.
+
 ## 38. 2026-06-20 사후정산 E2E 검증 보강
 
 `scripts/e2e-checkout-loop.mjs`가 초과요금과 사후정산 결제까지 검증하도록 확장됐다.

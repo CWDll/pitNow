@@ -86,6 +86,36 @@ function RatingStars({ rating }: { rating: number }) {
   );
 }
 
+function partnerNoteLabel(type: "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW") {
+  switch (type) {
+    case "ISSUE":
+      return "Issue";
+    case "DELAY":
+      return "Delay";
+    case "NO_SHOW":
+      return "No-show";
+    case "NOTE":
+      return "Note";
+    default:
+      return type;
+  }
+}
+
+function partnerNoteClass(type: "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW") {
+  switch (type) {
+    case "ISSUE":
+      return "bg-rose-400/15 text-rose-200 ring-rose-300/30";
+    case "DELAY":
+      return "bg-amber-400/15 text-amber-100 ring-amber-300/30";
+    case "NO_SHOW":
+      return "bg-slate-400/15 text-slate-200 ring-slate-300/30";
+    case "NOTE":
+      return "bg-cyan-400/15 text-cyan-200 ring-cyan-300/30";
+    default:
+      return "bg-slate-400/15 text-slate-200 ring-slate-300/30";
+  }
+}
+
 export default async function AdminReservationDetailPage(props: PageProps) {
   const { id } = await props.params;
   const detail = await getAdminReservationDetail(id);
@@ -99,10 +129,12 @@ export default async function AdminReservationDetailPage(props: PageProps) {
     checkin,
     checkout,
     payments,
+    partnerNotes,
     statusLogs,
     review,
     evidenceIssues,
   } = detail;
+  const unresolvedPartnerNotes = partnerNotes.filter((note) => !note.isResolved);
 
   return (
     <section className="space-y-6">
@@ -372,6 +404,93 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </section>
+
+      <section
+        className={`rounded-3xl border p-6 ${
+          unresolvedPartnerNotes.length > 0
+            ? "border-rose-300/20 bg-rose-300/10"
+            : "border-white/10 bg-slate-900"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-2xl font-semibold text-white">
+              Partner Field Notes
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              정비소 운영자가 남긴 현장 메모, 이슈, 지연, 노쇼 기록입니다.
+            </p>
+          </div>
+          <span
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              unresolvedPartnerNotes.length > 0
+                ? "bg-rose-300 text-slate-950"
+                : "bg-slate-700 text-slate-200"
+            }`}
+          >
+            {unresolvedPartnerNotes.length > 0
+              ? `Open ${unresolvedPartnerNotes.length}`
+              : "No open issues"}
+          </span>
+        </div>
+
+        {partnerNotes.length === 0 ? (
+          <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+            정비소 측 현장 기록이 없습니다.
+          </p>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {partnerNotes.map((note) => (
+              <article
+                key={note.id}
+                className={`rounded-2xl border p-4 ${
+                  note.isResolved
+                    ? "border-white/10 bg-white/[0.03]"
+                    : "border-white/15 bg-slate-950/40"
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${partnerNoteClass(
+                        note.noteType,
+                      )}`}
+                    >
+                      {partnerNoteLabel(note.noteType)}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        note.isResolved
+                          ? "bg-emerald-400/15 text-emerald-200"
+                          : "bg-rose-400/15 text-rose-200"
+                      }`}
+                    >
+                      {note.isResolved ? "Resolved" : "Open"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {formatAdminDateTime(note.createdAt)}
+                  </p>
+                </div>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">
+                  {note.body}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+                  {note.authorUserId ? (
+                    <span className="break-all">Author {note.authorUserId}</span>
+                  ) : null}
+                  {note.resolvedAt ? (
+                    <span>
+                      Resolved {formatAdminDateTime(note.resolvedAt)}
+                      {note.resolvedBy ? ` · ${note.resolvedBy}` : ""}
+                    </span>
+                  ) : null}
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </section>
