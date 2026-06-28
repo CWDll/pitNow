@@ -81,6 +81,14 @@ git log --oneline --decorate --graph -5
 - `20260624_partner_admin_foundation.sql`
 - `20260626_partner_reservation_notes.sql`
 
+현재 Supabase 적용 상태는 아래 명령으로 읽기 전용 점검한다.
+
+```bash
+npm run check:supabase
+```
+
+2026-06-28 점검 결과: 위 schema/bucket checks 통과.
+
 ## 5. Automated Verification
 
 로컬 서버가 이미 떠 있으면 Playwright가 기존 서버를 재사용한다. 기존 서버가 Toss 모드로 떠 있으면 fake 결제 기반 테스트가 실패할 수 있으므로, 릴리즈 검증 전에는 서버 환경을 맞춘다.
@@ -89,6 +97,7 @@ git log --oneline --decorate --graph -5
 
 ```bash
 npm run verify:static
+npm run check:supabase
 npm run e2e:storage-hardening
 npm run e2e:partner-admin
 PITNOW_PAYMENT_PROVIDER=FAKE npm run e2e:ui
