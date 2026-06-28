@@ -79,6 +79,7 @@ export default function CancelReservationForm({
           headers: {
             "Content-Type": "application/json",
           },
+          credentials: "same-origin",
           body: JSON.stringify({
             reason: normalizedReason,
           }),

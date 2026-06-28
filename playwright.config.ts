@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.PITNOW_E2E_BASE_URL ?? "http://localhost:3000";
+const reuseExistingServer = process.env.PITNOW_E2E_REUSE_SERVER === "0" ? false : true;
+const webServerCommand = process.env.PITNOW_E2E_WEB_SERVER_COMMAND ?? "npm run dev";
 
 export default defineConfig({
   testDir: "./tests",
@@ -16,9 +18,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "npm run dev",
+    command: webServerCommand,
     url: baseURL,
-    reuseExistingServer: true,
+    reuseExistingServer,
     timeout: 120_000,
   },
   projects: [

@@ -722,3 +722,23 @@ Options considered:
 
 - 장점: 현재 사용자 예약 루프에 더 집중할 수 있다.
 - 단점: 실제 정비소 운영 검증에 필요한 베이/체크인 관리 흐름이 빠져 MVP 운영성이 낮다.
+
+---
+
+## 2026-06-29
+
+Decision:
+자동 릴리즈 검증의 UI E2E는 기존 개발 서버를 재사용하지 않고 전용 FAKE production 서버에서 실행한다.
+
+Rules:
+
+- `npm run e2e:ui`는 `PITNOW_E2E_BASE_URL=http://localhost:3011`을 사용한다.
+- UI E2E 전용 서버는 `PITNOW_PAYMENT_PROVIDER=FAKE`로 실행한다.
+- UI E2E는 `next build && next start` 기반으로 실행해 Vercel 배포에 가까운 조건을 검증한다.
+- Playwright는 `PITNOW_E2E_REUSE_SERVER=0`일 때 기존 서버를 재사용하지 않는다.
+- Admin E2E는 쿠키를 직접 주입하기보다 `/admin-login` 실제 로그인 흐름을 사용한다.
+- `/admin/logout`은 GET route이므로 `Link` prefetch를 비활성화해야 한다.
+- Admin cookie의 `secure` 속성은 Vercel 배포 환경에서만 켠다.
+
+Reason:
+로컬 개발 중 3000번 서버가 Toss test mode로 떠 있으면 `PITNOW_PAYMENT_PROVIDER=FAKE playwright test`만으로는 서버 provider가 바뀌지 않아 booking-flow E2E가 Toss 외부 결제창으로 빠졌다. 또한 production `next start` 검증 중 `/admin/logout` 링크 prefetch가 쿠키를 삭제하는 실제 운영성 버그가 드러났다. 릴리즈 검증은 독립 포트와 FAKE provider를 강제하고, Admin 인증은 실제 로그인 흐름으로 검증해야 재현성과 배포 유사성이 모두 확보된다.

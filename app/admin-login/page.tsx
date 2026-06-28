@@ -20,7 +20,7 @@ async function loginAdmin(formData: FormData) {
   cookieStore.set(ADMIN_ACCESS_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.VERCEL === "1",
     path: "/",
     maxAge: 60 * 60 * 8,
   });

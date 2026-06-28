@@ -65,19 +65,16 @@ async function verifyAdminDrillDownForE2E(params: {
   });
 
   try {
-    await adminContext.addCookies([
-      {
-        name: "pitnow_admin_access",
-        value: params.adminToken,
-        url: params.baseUrl,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
-
     const adminPage = await adminContext.newPage();
     const detailPath = `/admin/reservations/${params.reservationId}`;
     const detailLink = adminPage.locator(`a[href="${detailPath}"]`);
+
+    await adminPage.goto(`${params.baseUrl}/admin-login`);
+    await adminPage.getByLabel("Admin token").fill(params.adminToken);
+    await Promise.all([
+      adminPage.waitForURL((url) => url.pathname === "/admin"),
+      adminPage.getByRole("button", { name: "Admin 열기" }).click(),
+    ]);
 
     await adminPage.goto(`${params.baseUrl}${detailPath}`);
     await expect(

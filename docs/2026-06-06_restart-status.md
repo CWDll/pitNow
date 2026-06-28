@@ -1650,3 +1650,20 @@ Toss test key 환경에서 실제 카카오페이 인증 플로우를 통해 성
 
 - `npm run lint` 성공.
 - `npm run build` 성공.
+
+## 38. 2026-06-29 릴리즈 검증 스크립트 안정화
+
+`npm run verify:release`가 기존 `localhost:3000` dev server를 재사용하면서 Toss sandbox 결제창으로 빠지는 문제를 확인하고, UI E2E를 전용 FAKE production 서버에서 실행하도록 안정화했다.
+
+- `e2e:ui`, `e2e:ui:fake`는 `http://localhost:3011`에서 `PITNOW_PAYMENT_PROVIDER=FAKE`와 `next start`를 사용한다.
+- Playwright webServer command와 reuse 여부를 `PITNOW_E2E_WEB_SERVER_COMMAND`, `PITNOW_E2E_REUSE_SERVER`로 제어할 수 있게 했다.
+- Admin 취소 E2E는 Toss/FAKE 런타임 provider에 의존하지 않도록 confirmed reservation/payment seed를 직접 만든다.
+- Admin E2E는 실제 `/admin-login` 흐름으로 로그인해 admin cookie와 보호 라우트를 함께 검증한다.
+- production `next start`에서 `/admin/logout` Link prefetch가 GET `/admin/logout`을 호출해 admin cookie를 삭제하는 문제를 발견하고 `prefetch={false}`로 막았다.
+- 로컬 `next start`는 `NODE_ENV=production`이지만 `http://localhost`이므로, admin cookie `secure`는 Vercel 배포 환경에서만 켜도록 조정했다.
+- Admin cancel form fetch에 `credentials: "same-origin"`을 명시했다.
+
+검증:
+
+- `npm run e2e:ui` 성공: 8 passed.
+- `npm run verify:release` 성공.

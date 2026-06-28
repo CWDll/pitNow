@@ -50,6 +50,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
           <Link
             href="/admin/logout"
+            prefetch={false}
             className="mt-4 block rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
           >
             Logout

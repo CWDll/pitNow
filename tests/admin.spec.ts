@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import {
@@ -7,7 +8,6 @@ import {
   ensureE2EVehicle,
   getAdminSupabaseForE2E,
   getSelfReservationSeed,
-  signInE2EUserForE2E,
 } from "./helpers/supabase-e2e";
 
 function readLocalEnv(name: string): string | undefined {
@@ -32,6 +32,17 @@ function requireAdminToken(): string {
   return token;
 }
 
+async function loginAdminForE2E(page: Page) {
+  const token = requireAdminToken();
+
+  await page.goto("/admin-login");
+  await page.getByLabel("Admin token").fill(token);
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === "/admin"),
+    page.getByRole("button", { name: "Admin 열기" }).click(),
+  ]);
+}
+
 function requireAdminSupabaseForE2E() {
   const db = getAdminSupabaseForE2E();
 
@@ -54,9 +65,7 @@ function getFutureWindowForAttempt(attempt: number) {
   };
 }
 
-async function createConfirmedReservationForAdminE2E(params: {
-  request: APIRequestContext;
-}) {
+async function createConfirmedReservationForAdminE2E() {
   const db = requireAdminSupabaseForE2E();
   const credentials = {
     email: "pitnow-e2e-admin-cancel@example.com",
@@ -65,82 +74,92 @@ async function createConfirmedReservationForAdminE2E(params: {
   const user = await ensureE2EUser(db, credentials);
   const vehicle = await ensureE2EVehicle({ db, userId: user.id });
   const seed = await getSelfReservationSeed(db);
-  const token = await signInE2EUserForE2E(credentials);
 
   for (let attempt = 0; attempt < 24; attempt += 1) {
     const { startTime, endTime } = getFutureWindowForAttempt(attempt);
-    const reservation = {
-      reservationType: "SELF_SERVICE",
-      bayId: seed.bayId,
-      vehicleId: vehicle.id,
-      taskIds: [seed.taskCode],
-      agreeOnlySelectedTasks: true,
-      consentMethod: "CHECKBOX",
-      helperVerifyRequested: false,
-      startTime,
-      endTime,
-    };
+    const blockedUntil = new Date(
+      new Date(endTime).getTime() + 60 * 60 * 1000,
+    ).toISOString();
+    const amount = 10000;
+    const { data: reservation, error: reservationError } = await db
+      .from("reservations")
+      .insert({
+        user_id: user.id,
+        vehicle_id: vehicle.id,
+        partner_id: seed.partnerId,
+        bay_id: seed.bayId,
+        reservation_type: "SELF_SERVICE",
+        start_time: startTime,
+        end_time: endTime,
+        reserved_end_time: endTime,
+        blocked_until: blockedUntil,
+        duration_minutes: 60,
+        selected_task_count: 1,
+        helper_verify_requested: false,
+        helper_verify_fee: 0,
+        status: "CONFIRMED",
+        total_price: amount,
+      })
+      .select("id")
+      .single<{ id: string }>();
 
-    const prepareResponse = await params.request.post("/api/payments/prepare", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      data: {
-        method: "CARD",
-        reservation,
-      },
-    });
-    const preparePayload = (await prepareResponse.json()) as {
-      success?: boolean;
-      paymentId?: string;
-      providerOrderId?: string;
-      amount?: number;
-      error?: { code?: string; message?: string };
-    };
+    if (reservation?.id) {
+      const providerOrderId = `pitnow_admin_cancel_e2e_${randomUUID()}`;
+      const { data: payment, error: paymentError } = await db
+        .from("payments")
+        .insert({
+          user_id: user.id,
+          reservation_id: reservation.id,
+          payment_purpose: "RESERVATION",
+          provider: "FAKE",
+          provider_order_id: providerOrderId,
+          method: "CARD",
+          status: "RESERVATION_CONFIRMED",
+          amount,
+          currency: "KRW",
+          reservation_snapshot: {
+            reservationType: "SELF_SERVICE",
+            bayId: seed.bayId,
+            vehicleId: vehicle.id,
+            taskIds: [seed.taskCode],
+            agreeOnlySelectedTasks: true,
+            consentMethod: "CHECKBOX",
+            helperVerifyRequested: false,
+            startTime,
+            endTime,
+            amount,
+          },
+          metadata: {
+            e2e: "admin-cancel",
+          },
+          approved_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single<{ id: string }>();
 
-    if (!prepareResponse.ok()) {
-      throw new Error(
-        `payment prepare failed: ${JSON.stringify(preparePayload)}`,
-      );
-    }
+      if (paymentError || !payment) {
+        await db.from("reservations").delete().eq("id", reservation.id);
+        throw paymentError ?? new Error("Failed to create admin E2E payment");
+      }
 
-    if (
-      !preparePayload.paymentId ||
-      !preparePayload.providerOrderId ||
-      typeof preparePayload.amount !== "number"
-    ) {
-      throw new Error(`invalid prepare payload: ${JSON.stringify(preparePayload)}`);
-    }
-
-    const confirmResponse = await params.request.post("/api/payments/confirm", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      data: {
-        paymentId: preparePayload.paymentId,
-        providerOrderId: preparePayload.providerOrderId,
-        amount: preparePayload.amount,
-      },
-    });
-    const confirmPayload = (await confirmResponse.json()) as {
-      success?: boolean;
-      reservationId?: string;
-      error?: { code?: string; message?: string };
-    };
-
-    if (confirmResponse.ok() && confirmPayload.reservationId) {
       return {
-        reservationId: confirmPayload.reservationId,
-        paymentId: preparePayload.paymentId,
+        reservationId: reservation.id,
+        paymentId: payment.id,
         partnerId: seed.partnerId,
       };
     }
 
-    if (confirmPayload.error?.code === "RESERVATION_OVERLAP") {
+    const message = reservationError?.message ?? "";
+
+    if (
+      reservationError?.code === "23P01" ||
+      message.includes("no_overlap") ||
+      message.includes("conflicting key value violates exclusion constraint")
+    ) {
       continue;
     }
 
-    throw new Error(`payment confirm failed: ${JSON.stringify(confirmPayload)}`);
+    throw reservationError ?? new Error("Failed to create admin E2E reservation");
   }
 
   throw new Error("Could not find an available E2E reservation window");
@@ -248,18 +267,8 @@ async function createPartnerNotesForAdminE2E(params: {
 }
 
 test.describe("admin smoke", () => {
-  test.beforeEach(async ({ context, baseURL }) => {
-    const token = requireAdminToken();
-
-    await context.addCookies([
-      {
-        name: "pitnow_admin_access",
-        value: token,
-        url: baseURL ?? "http://localhost:3000",
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+  test.beforeEach(async ({ page }) => {
+    await loginAdminForE2E(page);
   });
 
   test("protected admin pages render with admin cookie", async ({ page }) => {
@@ -298,7 +307,6 @@ test.describe("admin smoke", () => {
 
   test("admin cancellation requires explicit confirmation and refunds payment", async ({
     page,
-    request,
   }) => {
     test.setTimeout(60_000);
 
@@ -306,7 +314,7 @@ test.describe("admin smoke", () => {
     let reservationId: string | null = null;
 
     try {
-      const created = await createConfirmedReservationForAdminE2E({ request });
+      const created = await createConfirmedReservationForAdminE2E();
       reservationId = created.reservationId;
 
       const missingReasonResponse = await page.request.post(
