@@ -132,6 +132,7 @@ async function createConfirmedReservationForAdminE2E(params: {
       return {
         reservationId: confirmPayload.reservationId,
         paymentId: preparePayload.paymentId,
+        partnerId: seed.partnerId,
       };
     }
 
@@ -143,6 +144,107 @@ async function createConfirmedReservationForAdminE2E(params: {
   }
 
   throw new Error("Could not find an available E2E reservation window");
+}
+
+async function createConfirmedReservationRowForAdminIssueE2E() {
+  const db = requireAdminSupabaseForE2E();
+  const credentials = {
+    email: "pitnow-e2e-admin-issues@example.com",
+    password: "PitnowAdminIssuesE2e!2026",
+  };
+  const user = await ensureE2EUser(db, credentials);
+  const vehicle = await ensureE2EVehicle({ db, userId: user.id });
+  const seed = await getSelfReservationSeed(db);
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const { startTime, endTime } = getFutureWindowForAttempt(attempt + 120);
+    const blockedUntil = new Date(
+      new Date(endTime).getTime() + 60 * 60 * 1000,
+    ).toISOString();
+    const { data, error } = await db
+      .from("reservations")
+      .insert({
+        user_id: user.id,
+        vehicle_id: vehicle.id,
+        partner_id: seed.partnerId,
+        bay_id: seed.bayId,
+        reservation_type: "SELF_SERVICE",
+        start_time: startTime,
+        end_time: endTime,
+        reserved_end_time: endTime,
+        blocked_until: blockedUntil,
+        duration_minutes: 60,
+        selected_task_count: 1,
+        helper_verify_requested: false,
+        helper_verify_fee: 0,
+        status: "CONFIRMED",
+        total_price: 10000,
+      })
+      .select("id")
+      .single<{ id: string }>();
+
+    if (data?.id) {
+      return {
+        reservationId: data.id,
+        partnerId: seed.partnerId,
+      };
+    }
+
+    const message = error?.message ?? "";
+
+    if (
+      error?.code === "23P01" ||
+      message.includes("no_overlap") ||
+      message.includes("conflicting key value violates exclusion constraint")
+    ) {
+      continue;
+    }
+
+    throw error ?? new Error("Failed to create admin issue E2E reservation");
+  }
+
+  throw new Error("Could not create admin issue E2E reservation");
+}
+
+async function createPartnerNotesForAdminE2E(params: {
+  reservationId: string;
+  partnerId: string;
+}) {
+  const db = requireAdminSupabaseForE2E();
+  const runId = String(Date.now());
+  const { data, error } = await db
+    .from("partner_reservation_notes")
+    .insert([
+      {
+        reservation_id: params.reservationId,
+        partner_id: params.partnerId,
+        note_type: "ISSUE",
+        body: `Admin issue counter E2E open issue ${runId}`,
+        is_resolved: false,
+      },
+      {
+        reservation_id: params.reservationId,
+        partner_id: params.partnerId,
+        note_type: "DELAY",
+        body: `Admin issue counter E2E delay ${runId}`,
+        is_resolved: false,
+      },
+      {
+        reservation_id: params.reservationId,
+        partner_id: params.partnerId,
+        note_type: "NO_SHOW",
+        body: `Admin issue counter E2E resolved no-show ${runId}`,
+        is_resolved: true,
+      },
+    ])
+    .select("id, body, is_resolved")
+    .returns<Array<{ id: string; body: string; is_resolved: boolean }>>();
+
+  if (error || !data || data.length !== 3) {
+    throw error ?? new Error("Failed to create partner notes for admin E2E");
+  }
+
+  return data;
 }
 
 test.describe("admin smoke", () => {
@@ -322,6 +424,61 @@ test.describe("admin smoke", () => {
       await expect(cancelledReservationRow.getByText("CANCELLED")).toBeVisible();
       await expect(cancelledReservationRow.getByText("REFUNDED")).toBeVisible();
     } finally {
+      if (reservationId) {
+        await cleanupConfirmedReservationForE2E({ db, reservationId });
+      }
+    }
+  });
+
+  test("admin reservation list and detail surface open partner issues", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+
+    const db = requireAdminSupabaseForE2E();
+    let reservationId: string | null = null;
+    let noteIds: string[] = [];
+
+    try {
+      const created = await createConfirmedReservationRowForAdminIssueE2E();
+      reservationId = created.reservationId;
+      const notes = await createPartnerNotesForAdminE2E({
+        reservationId,
+        partnerId: created.partnerId,
+      });
+      noteIds = notes.map((note) => note.id);
+
+      await page.goto("/admin/reservations");
+      const reservationRow = page.locator("tbody tr").filter({
+        has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
+      });
+      await expect(reservationRow).toHaveCount(1);
+      await expect(reservationRow.getByText("Open 2")).toBeVisible();
+
+      await page.goto(`/admin/reservations/${reservationId}`);
+      await expect(
+        page.getByRole("heading", { name: "Partner Field Notes" }),
+      ).toBeVisible();
+      await expect(page.getByText("Open 2")).toBeVisible();
+      await expect(
+        page.getByText(notes.find((note) => !note.is_resolved)?.body ?? ""),
+      ).toBeVisible();
+      await expect(
+        page.getByText(notes.find((note) => note.is_resolved)?.body ?? ""),
+      ).toBeVisible();
+      await expect(page.getByText("Resolved", { exact: true })).toBeVisible();
+    } finally {
+      if (noteIds.length > 0) {
+        const { error } = await db
+          .from("partner_reservation_notes")
+          .delete()
+          .in("id", noteIds);
+
+        if (error) {
+          throw error;
+        }
+      }
+
       if (reservationId) {
         await cleanupConfirmedReservationForE2E({ db, reservationId });
       }
