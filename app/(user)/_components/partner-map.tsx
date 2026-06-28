@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 
 export interface PartnerMapItem {
   id: string;
@@ -14,6 +13,9 @@ export interface PartnerMapItem {
 interface PartnerMapProps {
   partners: PartnerMapItem[];
   kakaoMapAppKey: string | null;
+  selectedPartnerId?: string | null;
+  onPartnerSelect?: (partnerId: string) => void;
+  onUserLocationChange?: (location: { lat: number; lng: number }) => void;
 }
 
 interface KakaoLatLng {
@@ -75,11 +77,22 @@ const DEFAULT_CENTER = {
   lng: 127.0364,
 };
 
+let kakaoMapSdkPromise: Promise<KakaoMapsNamespace> | null = null;
+
 function loadKakaoMapSdk(appKey: string): Promise<KakaoMapsNamespace> {
-  return new Promise((resolve, reject) => {
+  if (kakaoMapSdkPromise) {
+    return kakaoMapSdkPromise;
+  }
+
+  kakaoMapSdkPromise = new Promise((resolve, reject) => {
+    const fail = (error: Error) => {
+      kakaoMapSdkPromise = null;
+      reject(error);
+    };
+
     const resolveLoadedMaps = () => {
       if (!window.kakao?.maps) {
-        reject(new Error("Kakao Maps SDK did not expose window.kakao.maps"));
+        fail(new Error("Kakao Maps SDK did not expose window.kakao.maps"));
         return;
       }
 
@@ -96,29 +109,32 @@ function loadKakaoMapSdk(appKey: string): Promise<KakaoMapsNamespace> {
     );
 
     if (existingScript) {
-      existingScript.addEventListener(
-        "load",
-        () => {
-          resolveLoadedMaps();
-        },
-        { once: true },
-      );
-      existingScript.addEventListener("error", () => reject(), { once: true });
-      return;
+      existingScript.remove();
     }
 
     const script = document.createElement("script");
+    const timeoutId = window.setTimeout(() => {
+      script.remove();
+      fail(new Error("Kakao Maps SDK load timed out"));
+    }, 8000);
+
     script.async = true;
     script.dataset.pitnowKakaoMap = "true";
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
       appKey,
     )}&autoload=false`;
     script.addEventListener("load", () => {
+      window.clearTimeout(timeoutId);
       resolveLoadedMaps();
     });
-    script.addEventListener("error", () => reject());
+    script.addEventListener("error", () => {
+      window.clearTimeout(timeoutId);
+      fail(new Error("Kakao Maps SDK script failed to load"));
+    });
     document.head.appendChild(script);
   });
+
+  return kakaoMapSdkPromise;
 }
 
 function getMapPartners(partners: PartnerMapItem[]) {
@@ -158,13 +174,24 @@ function escapeHtml(value: string) {
     .replaceAll('"', "&quot;");
 }
 
-export function PartnerMap({ partners, kakaoMapAppKey }: PartnerMapProps) {
+export function PartnerMap({
+  partners,
+  kakaoMapAppKey,
+  selectedPartnerId,
+  onPartnerSelect,
+  onUserLocationChange,
+}: PartnerMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
   const markerRefs = useRef<KakaoMarker[]>([]);
   const userMarkerRef = useRef<KakaoMarker | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "fallback">(
     kakaoMapAppKey ? "idle" : "fallback",
+  );
+  const [mapFallbackReason, setMapFallbackReason] = useState(
+    kakaoMapAppKey
+      ? "Kakao 지도를 불러오지 못해 미리보기로 표시 중입니다."
+      : "지도 키 설정 전 미리보기",
   );
   const [locationMessage, setLocationMessage] = useState(
     "위치 권한을 허용하면 내 주변 기준으로 볼 수 있어요.",
@@ -178,6 +205,11 @@ export function PartnerMap({ partners, kakaoMapAppKey }: PartnerMapProps) {
 
     async function initializeMap() {
       if (!kakaoMapAppKey || !containerRef.current || mapPartners.length === 0) {
+        setMapFallbackReason(
+          kakaoMapAppKey
+            ? "지도에 표시할 정비소 위치 정보가 없습니다."
+            : "지도 키 설정 전 미리보기",
+        );
         setStatus("fallback");
         return;
       }
@@ -221,6 +253,7 @@ export function PartnerMap({ partners, kakaoMapAppKey }: PartnerMapProps) {
 
           kakaoMaps.event.addListener(marker, "click", () => {
             infoWindow.open(map, marker);
+            onPartnerSelect?.(partner.id);
           });
           markerRefs.current.push(marker);
           bounds.extend(position);
@@ -230,6 +263,9 @@ export function PartnerMap({ partners, kakaoMapAppKey }: PartnerMapProps) {
         mapRef.current = map;
         setStatus("ready");
       } catch {
+        setMapFallbackReason(
+          "Kakao 지도를 불러오지 못해 미리보기로 표시 중입니다.",
+        );
         setStatus("fallback");
       }
     }
@@ -243,7 +279,23 @@ export function PartnerMap({ partners, kakaoMapAppKey }: PartnerMapProps) {
       userMarkerRef.current?.setMap(null);
       userMarkerRef.current = null;
     };
-  }, [center.lat, center.lng, kakaoMapAppKey, mapPartners]);
+  }, [center.lat, center.lng, kakaoMapAppKey, mapPartners, onPartnerSelect]);
+
+  useEffect(() => {
+    if (!selectedPartnerId || !window.kakao?.maps || !mapRef.current) {
+      return;
+    }
+
+    const partner = mapPartners.find((item) => item.id === selectedPartnerId);
+
+    if (!partner) {
+      return;
+    }
+
+    mapRef.current.setCenter(
+      new window.kakao.maps.LatLng(partner.lat, partner.lng),
+    );
+  }, [mapPartners, selectedPartnerId]);
 
   function moveToCurrentLocation() {
     if (!navigator.geolocation) {
@@ -271,6 +323,10 @@ export function PartnerMap({ partners, kakaoMapAppKey }: PartnerMapProps) {
           title: "내 위치",
         });
         mapRef.current.setCenter(currentPosition);
+        onUserLocationChange?.({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
         setLocationMessage("현재 위치 기준으로 지도를 이동했어요.");
       },
       () => {
@@ -310,23 +366,24 @@ export function PartnerMap({ partners, kakaoMapAppKey }: PartnerMapProps) {
             <div className="absolute right-[-10%] top-[6%] h-28 w-24 rounded-full bg-blue-100/70" />
             <div className="absolute bottom-[-18%] left-[-8%] h-28 w-32 rounded-full bg-emerald-100/80" />
             <div className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-2 text-xs font-medium text-zinc-600 shadow-sm">
-              지도 키 설정 전 미리보기
+              {mapFallbackReason}
             </div>
             {mapPartners.map((partner) => {
               const position = getFallbackPosition(partner, mapPartners);
 
               return (
-                <Link
+                <button
+                  type="button"
                   key={partner.id}
-                  href={`/partner/${partner.id}`}
                   className="absolute -translate-x-1/2 -translate-y-full"
                   style={position}
                   aria-label={`${partner.name} 상세 보기`}
+                  onClick={() => onPartnerSelect?.(partner.id)}
                 >
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-lg ring-4 ring-white">
                     P
                   </span>
-                </Link>
+                </button>
               );
             })}
           </div>
