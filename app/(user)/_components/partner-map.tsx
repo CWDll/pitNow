@@ -26,15 +26,12 @@ interface KakaoLatLng {
 interface KakaoMap {
   setCenter(latlng: KakaoLatLng): void;
   setBounds(bounds: KakaoLatLngBounds): void;
+  setLevel(level: number): void;
   addControl(control: unknown, position: number): void;
 }
 
-interface KakaoMarker {
+interface KakaoOverlay {
   setMap(map: KakaoMap | null): void;
-}
-
-interface KakaoInfoWindow {
-  open(map: KakaoMap, marker: KakaoMarker): void;
 }
 
 interface KakaoLatLngBounds {
@@ -52,8 +49,14 @@ interface KakaoMapsNamespace {
     map?: KakaoMap;
     position: KakaoLatLng;
     title?: string;
-  }) => KakaoMarker;
-  InfoWindow: new (options: { content: string }) => KakaoInfoWindow;
+  }) => KakaoOverlay;
+  CustomOverlay: new (options: {
+    clickable?: boolean;
+    content: HTMLElement | string;
+    position: KakaoLatLng;
+    xAnchor?: number;
+    yAnchor?: number;
+  }) => KakaoOverlay;
   ZoomControl: new () => unknown;
   ControlPosition: {
     RIGHT: number;
@@ -166,12 +169,107 @@ function getFallbackPosition(
   };
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+function createPartnerOverlayContent(
+  partner: PartnerMapItem,
+  selected: boolean,
+  onSelect: () => void,
+) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.setAttribute("aria-label", `${partner.name} 선택`);
+  button.style.cssText = [
+    "appearance:none",
+    "border:0",
+    "background:transparent",
+    "display:flex",
+    "flex-direction:column",
+    "align-items:center",
+    "gap:3px",
+    "padding:0",
+    "cursor:pointer",
+    "transform:translateY(-2px)",
+  ].join(";");
+
+  const label = document.createElement("span");
+  label.textContent = partner.name;
+  label.style.cssText = [
+    "max-width:128px",
+    "overflow:hidden",
+    "text-overflow:ellipsis",
+    "white-space:nowrap",
+    "border-radius:999px",
+    "background:white",
+    `border:1px solid ${selected ? "#2563eb" : "rgba(24,24,27,0.14)"}`,
+    "box-shadow:0 8px 20px rgba(15,23,42,0.16)",
+    "color:#18181b",
+    "font-size:11px",
+    "font-weight:700",
+    "line-height:1",
+    "padding:6px 8px",
+  ].join(";");
+
+  const pin = document.createElement("span");
+  pin.style.cssText = [
+    "display:flex",
+    "height:28px",
+    "width:28px",
+    "align-items:center",
+    "justify-content:center",
+    "border-radius:999px",
+    `background:${selected ? "#1d4ed8" : "#2563eb"}`,
+    "box-shadow:0 8px 20px rgba(37,99,235,0.35)",
+    "color:white",
+    "font-size:12px",
+    "font-weight:800",
+    "outline:4px solid white",
+  ].join(";");
+  pin.textContent = "P";
+
+  button.append(label, pin);
+  button.addEventListener("click", onSelect);
+
+  return button;
+}
+
+function createUserLocationOverlayContent() {
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("aria-label", "내 위치");
+  wrapper.style.cssText = [
+    "display:flex",
+    "flex-direction:column",
+    "align-items:center",
+    "gap:3px",
+    "transform:translateY(-2px)",
+  ].join(";");
+
+  const label = document.createElement("span");
+  label.textContent = "내 위치";
+  label.style.cssText = [
+    "border-radius:999px",
+    "background:white",
+    "border:1px solid rgba(220,38,38,0.35)",
+    "box-shadow:0 8px 20px rgba(15,23,42,0.16)",
+    "color:#991b1b",
+    "font-size:11px",
+    "font-weight:800",
+    "line-height:1",
+    "padding:6px 8px",
+  ].join(";");
+
+  const dot = document.createElement("span");
+  dot.style.cssText = [
+    "display:block",
+    "height:16px",
+    "width:16px",
+    "border-radius:999px",
+    "background:#ef4444",
+    "box-shadow:0 0 0 6px rgba(239,68,68,0.18),0 8px 20px rgba(239,68,68,0.35)",
+    "outline:3px solid white",
+  ].join(";");
+
+  wrapper.append(label, dot);
+
+  return wrapper;
 }
 
 export function PartnerMap({
@@ -183,8 +281,8 @@ export function PartnerMap({
 }: PartnerMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
-  const markerRefs = useRef<KakaoMarker[]>([]);
-  const userMarkerRef = useRef<KakaoMarker | null>(null);
+  const markerRefs = useRef<KakaoOverlay[]>([]);
+  const userMarkerRef = useRef<KakaoOverlay | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "fallback">(
     kakaoMapAppKey ? "idle" : "fallback",
   );
@@ -240,22 +338,23 @@ export function PartnerMap({
 
         for (const partner of mapPartners) {
           const position = new kakaoMaps.LatLng(partner.lat, partner.lng);
-          const marker = new kakaoMaps.Marker({
-            map,
+          const marker = new kakaoMaps.CustomOverlay({
+            clickable: true,
+            content: createPartnerOverlayContent(
+              partner,
+              selectedPartnerId === partner.id,
+              () => {
+                onPartnerSelect?.(partner.id);
+              },
+            ),
             position,
-            title: partner.name,
-          });
-          const infoWindow = new kakaoMaps.InfoWindow({
-            content: `<div style="padding:8px 10px;font-size:12px;line-height:1.4;white-space:nowrap;"><strong>${escapeHtml(
-              partner.name,
-            )}</strong><br/>${escapeHtml(partner.address)}</div>`,
+            xAnchor: 0.5,
+            yAnchor: 1,
           });
 
-          kakaoMaps.event.addListener(marker, "click", () => {
-            infoWindow.open(map, marker);
-            onPartnerSelect?.(partner.id);
-          });
+          marker.setMap(map);
           markerRefs.current.push(marker);
+
           bounds.extend(position);
         }
 
@@ -279,7 +378,14 @@ export function PartnerMap({
       userMarkerRef.current?.setMap(null);
       userMarkerRef.current = null;
     };
-  }, [center.lat, center.lng, kakaoMapAppKey, mapPartners, onPartnerSelect]);
+  }, [
+    center.lat,
+    center.lng,
+    kakaoMapAppKey,
+    mapPartners,
+    onPartnerSelect,
+    selectedPartnerId,
+  ]);
 
   useEffect(() => {
     if (!selectedPartnerId || !window.kakao?.maps || !mapRef.current) {
@@ -295,6 +401,7 @@ export function PartnerMap({
     mapRef.current.setCenter(
       new window.kakao.maps.LatLng(partner.lat, partner.lng),
     );
+    mapRef.current.setLevel(5);
   }, [mapPartners, selectedPartnerId]);
 
   function moveToCurrentLocation() {
@@ -317,12 +424,15 @@ export function PartnerMap({
           position.coords.longitude,
         );
         userMarkerRef.current?.setMap(null);
-        userMarkerRef.current = new window.kakao.maps.Marker({
-          map: mapRef.current,
+        userMarkerRef.current = new window.kakao.maps.CustomOverlay({
+          content: createUserLocationOverlayContent(),
           position: currentPosition,
-          title: "내 위치",
+          xAnchor: 0.5,
+          yAnchor: 1,
         });
+        userMarkerRef.current.setMap(mapRef.current);
         mapRef.current.setCenter(currentPosition);
+        mapRef.current.setLevel(4);
         onUserLocationChange?.({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
