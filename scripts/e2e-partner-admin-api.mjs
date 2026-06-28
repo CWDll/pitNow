@@ -141,6 +141,7 @@ async function apiRequest({
   method = "GET",
   body,
   expectedStatus = 200,
+  expectedErrorCode,
 }) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
@@ -155,6 +156,17 @@ async function apiRequest({
   if (response.status !== expectedStatus) {
     throw new Error(
       `${method} ${path} expected ${expectedStatus}, got ${response.status}: ${JSON.stringify(
+        payload,
+      )}`,
+    );
+  }
+
+  if (
+    expectedErrorCode &&
+    (!payload?.error || payload.error.code !== expectedErrorCode)
+  ) {
+    throw new Error(
+      `${method} ${path} expected error code ${expectedErrorCode}, got ${JSON.stringify(
         payload,
       )}`,
     );
@@ -234,6 +246,26 @@ async function createVehicle({ admin, userId, runId }) {
   return data.id;
 }
 
+async function getLegalSelfTaskId(admin) {
+  const { data, error } = await admin
+    .from("self_maintenance_tasks")
+    .select("id")
+    .eq("is_legal", true)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`셀프 정비 작업 조회 실패: ${error.message}`);
+  }
+
+  if (!data?.id) {
+    throw new Error("활성화된 법적 허용 셀프 정비 작업이 없습니다.");
+  }
+
+  return data.id;
+}
+
 async function createReservation({ admin, userId, vehicleId, bay }) {
   const startBase = addHours(new Date(), 24 * 180);
 
@@ -282,6 +314,39 @@ async function createReservation({ admin, userId, vehicleId, bay }) {
   }
 
   throw new Error("테스트 예약 가능한 시간대를 찾지 못했습니다.");
+}
+
+async function findAvailabilityBlockWindow({ admin, bay, startAfter }) {
+  const startBase = addHours(startAfter, 72);
+
+  for (let attempt = 0; attempt < 72; attempt += 1) {
+    const startsAt = addHours(startBase, attempt * 4);
+    startsAt.setUTCMinutes(0, 0, 0);
+    const endsAt = addHours(startsAt, 1);
+
+    const { data, error } = await admin
+      .from("partner_availability_blocks")
+      .select("id")
+      .eq("partner_id", bay.partnerId)
+      .eq("is_active", true)
+      .lt("starts_at", endsAt.toISOString())
+      .gt("ends_at", startsAt.toISOString())
+      .or(`bay_id.is.null,bay_id.eq.${bay.id}`)
+      .limit(1);
+
+    if (error) {
+      throw new Error(`예약 차단 시간 조회 실패: ${error.message}`);
+    }
+
+    if ((data ?? []).length === 0) {
+      return {
+        startsAt,
+        endsAt,
+      };
+    }
+  }
+
+  throw new Error("테스트 예약 차단 가능 시간대를 찾지 못했습니다.");
 }
 
 async function cleanup(admin, records) {
@@ -394,6 +459,7 @@ async function main() {
       userId: partnerAdminUser.id,
       runId,
     });
+    const legalTaskId = await getLegalSelfTaskId(admin);
     const reservation = await createReservation({
       admin,
       userId: partnerAdminUser.id,
@@ -475,8 +541,13 @@ async function main() {
     });
     formatStep("비권한 유저 reservation detail 403 확인");
 
-    const blockStart = addHours(new Date(reservation.end_time), 48);
-    const blockEnd = addHours(blockStart, 1);
+    const blockWindow = await findAvailabilityBlockWindow({
+      admin,
+      bay,
+      startAfter: new Date(reservation.end_time),
+    });
+    const blockStart = blockWindow.startsAt;
+    const blockEnd = blockWindow.endsAt;
     const blockPayload = await apiRequest({
       baseUrl,
       token: adminToken,
@@ -495,6 +566,76 @@ async function main() {
       throw new Error("availability block 생성 응답에 block id가 없습니다.");
     }
     formatStep("availability block 생성 API 확인");
+
+    const activeBlocksPayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/availability-blocks?partnerId=${bay.partnerId}`,
+    });
+    if (
+      !activeBlocksPayload.blocks?.some((block) => block.id === records.blockId)
+    ) {
+      throw new Error("availability block 조회 응답에 활성 테스트 block이 없습니다.");
+    }
+    formatStep("availability block 조회 API 확인");
+
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: "/api/partner-admin/availability-blocks",
+      method: "POST",
+      body: {
+        partnerId: bay.partnerId,
+        bayId: bay.id,
+        startsAt: blockStart.toISOString(),
+        endsAt: blockEnd.toISOString(),
+        reason: `partner admin api e2e overlap ${runId}`,
+      },
+      expectedStatus: 400,
+      expectedErrorCode: "AVAILABILITY_BLOCK_OVERLAP",
+    });
+    formatStep("availability block 중복 생성 거부 확인");
+
+    await apiRequest({
+      baseUrl,
+      token: outsiderToken,
+      path: "/api/partner-admin/availability-blocks",
+      method: "POST",
+      body: {
+        partnerId: bay.partnerId,
+        bayId: bay.id,
+        startsAt: addHours(blockEnd, 1).toISOString(),
+        endsAt: addHours(blockEnd, 2).toISOString(),
+        reason: `partner admin api e2e outsider ${runId}`,
+      },
+      expectedStatus: 403,
+      expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
+    });
+    formatStep("비권한 유저 availability block 생성 403 확인");
+
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: "/api/payments/prepare",
+      method: "POST",
+      body: {
+        method: "CARD",
+        reservation: {
+          reservationType: "SELF_SERVICE",
+          bayId: bay.id,
+          vehicleId: records.vehicleId,
+          taskIds: [legalTaskId],
+          agreeOnlySelectedTasks: true,
+          consentMethod: "CHECKBOX",
+          helperVerifyRequested: false,
+          startTime: blockStart.toISOString(),
+          endTime: blockEnd.toISOString(),
+        },
+      },
+      expectedStatus: 400,
+      expectedErrorCode: "PARTNER_AVAILABILITY_BLOCKED",
+    });
+    formatStep("결제 준비 단계 availability block 거부 확인");
 
     await apiRequest({
       baseUrl,
@@ -516,7 +657,65 @@ async function main() {
     });
     formatStep("availability block 수정/해제 API 확인");
 
+    const inactiveBlocksPayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/availability-blocks?partnerId=${bay.partnerId}&includeInactive=true`,
+    });
+    if (
+      !inactiveBlocksPayload.blocks?.some(
+        (block) => block.id === records.blockId && block.isActive === false,
+      )
+    ) {
+      throw new Error("includeInactive 조회 응답에 해제된 테스트 block이 없습니다.");
+    }
+    formatStep("availability block includeInactive 조회 확인");
+
     const createdNotes = [];
+
+    const defaultNotePayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/reservations/${reservation.id}/notes`,
+      method: "POST",
+      body: {
+        body: `partner admin api e2e note default ${runId}`,
+      },
+    });
+    if (defaultNotePayload.note?.noteType !== "NOTE") {
+      throw new Error("noteType 기본값 NOTE 응답이 올바르지 않습니다.");
+    }
+    createdNotes.push(defaultNotePayload.note);
+    records.noteIds.push(defaultNotePayload.note.id);
+    formatStep("reservation note 기본 타입 생성 API 확인");
+
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/reservations/${reservation.id}/notes`,
+      method: "POST",
+      body: {
+        noteType: "ISSUE",
+        body: "   ",
+      },
+      expectedStatus: 400,
+      expectedErrorCode: "INVALID_INPUT",
+    });
+    formatStep("reservation note 빈 본문 거부 확인");
+
+    await apiRequest({
+      baseUrl,
+      token: outsiderToken,
+      path: `/api/partner-admin/reservations/${reservation.id}/notes`,
+      method: "POST",
+      body: {
+        noteType: "ISSUE",
+        body: `partner admin api e2e forbidden note ${runId}`,
+      },
+      expectedStatus: 403,
+      expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
+    });
+    formatStep("비권한 유저 reservation note 생성 403 확인");
 
     for (const noteType of ["DELAY", "NO_SHOW", "ISSUE"]) {
       const notePayload = await apiRequest({
@@ -562,6 +761,33 @@ async function main() {
       throw new Error("note 해결 처리 응답이 올바르지 않습니다.");
     }
     formatStep("reservation note 해결 API 확인");
+
+    const reopenedNotePayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/reservation-notes/${records.noteIds.at(-1)}`,
+      method: "PATCH",
+      body: { isResolved: false },
+    });
+    if (
+      reopenedNotePayload.note?.isResolved !== false ||
+      reopenedNotePayload.note?.resolvedAt !== null ||
+      reopenedNotePayload.note?.resolvedBy !== null
+    ) {
+      throw new Error("note 다시 열기 응답이 올바르지 않습니다.");
+    }
+    formatStep("reservation note 다시 열기 API 확인");
+
+    await apiRequest({
+      baseUrl,
+      token: outsiderToken,
+      path: `/api/partner-admin/reservation-notes/${records.noteIds.at(-1)}`,
+      method: "PATCH",
+      body: { isResolved: true },
+      expectedStatus: 403,
+      expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
+    });
+    formatStep("비권한 유저 reservation note 수정 403 확인");
 
     console.log("partner-admin API E2E passed");
   } finally {
