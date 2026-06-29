@@ -266,6 +266,56 @@ async function createPartnerNotesForAdminE2E(params: {
   return data;
 }
 
+async function createPartnerAuditLogsForAdminE2E(params: {
+  reservationId: string;
+  partnerId: string;
+  targetNoteId: string;
+}) {
+  const db = requireAdminSupabaseForE2E();
+  const { data, error } = await db
+    .from("partner_admin_audit_logs")
+    .insert([
+      {
+        partner_id: params.partnerId,
+        action: "RESERVATION_NOTE_CREATED",
+        target_type: "RESERVATION_NOTE",
+        target_id: params.targetNoteId,
+        reservation_id: params.reservationId,
+        before_state: {},
+        after_state: {
+          isResolved: false,
+        },
+        metadata: {
+          noteType: "ISSUE",
+        },
+      },
+      {
+        partner_id: params.partnerId,
+        action: "RESERVATION_NOTE_RESOLVED",
+        target_type: "RESERVATION_NOTE",
+        target_id: params.targetNoteId,
+        reservation_id: params.reservationId,
+        before_state: {
+          isResolved: false,
+        },
+        after_state: {
+          isResolved: true,
+        },
+        metadata: {
+          noteType: "ISSUE",
+        },
+      },
+    ])
+    .select("id")
+    .returns<Array<{ id: string }>>();
+
+  if (error || !data || data.length !== 2) {
+    throw error ?? new Error("Failed to create partner audit logs for admin E2E");
+  }
+
+  return data;
+}
+
 test.describe("admin smoke", () => {
   test.beforeEach(async ({ page }) => {
     await loginAdminForE2E(page);
@@ -446,6 +496,7 @@ test.describe("admin smoke", () => {
     const db = requireAdminSupabaseForE2E();
     let reservationId: string | null = null;
     let noteIds: string[] = [];
+    let auditLogIds: string[] = [];
 
     try {
       const created = await createConfirmedReservationRowForAdminIssueE2E();
@@ -455,6 +506,12 @@ test.describe("admin smoke", () => {
         partnerId: created.partnerId,
       });
       noteIds = notes.map((note) => note.id);
+      const auditLogs = await createPartnerAuditLogsForAdminE2E({
+        reservationId,
+        partnerId: created.partnerId,
+        targetNoteId: notes.find((note) => !note.is_resolved)?.id ?? notes[0].id,
+      });
+      auditLogIds = auditLogs.map((log) => log.id);
 
       await page.goto("/admin/reservations");
       await expect(
@@ -491,7 +548,25 @@ test.describe("admin smoke", () => {
         page.getByText(notes.find((note) => note.is_resolved)?.body ?? ""),
       ).toBeVisible();
       await expect(page.getByText("Resolved", { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Partner Admin Audit" }),
+      ).toBeVisible();
+      await expect(page.getByText("2 logs")).toBeVisible();
+      await expect(page.getByText("Reservation Note Created")).toBeVisible();
+      await expect(page.getByText("Reservation Note Resolved")).toBeVisible();
+      await expect(page.getByText('"noteType": "ISSUE"')).toHaveCount(2);
     } finally {
+      if (auditLogIds.length > 0) {
+        const { error } = await db
+          .from("partner_admin_audit_logs")
+          .delete()
+          .in("id", auditLogIds);
+
+        if (error) {
+          throw error;
+        }
+      }
+
       if (noteIds.length > 0) {
         const { error } = await db
           .from("partner_reservation_notes")

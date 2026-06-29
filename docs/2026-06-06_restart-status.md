@@ -1730,3 +1730,20 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_logs.sql` 
 - `npx tsc --noEmit` 성공.
 - `npm run e2e:partner-admin` 성공. `partner-admin audit 로그 저장 확인`.
 - `npm run build` 성공.
+
+## 42. 2026-06-29 Admin 예약 상세에 partner-admin audit 표시
+
+`partner_admin_audit_logs`가 실제 저장되기 시작했으므로 내부 Admin 예약 상세에서 예약과 연결된 partner-admin audit 이력을 확인할 수 있게 했다.
+
+- `getAdminReservationDetail()`에서 해당 예약의 `partner_admin_audit_logs`를 최근 20건 조회한다.
+- `/admin/reservations/:id`에 `Partner Admin Audit` 섹션을 추가했다.
+- action, target type, target id, actor user id, audit id, before/after state, metadata를 표시한다.
+- audit table이 없는 환경에서는 빈 배열로 fallback하고 Admin 상세는 깨지지 않는다.
+- Admin E2E에 audit section 표시와 `RESERVATION_NOTE_CREATED`, `RESERVATION_NOTE_RESOLVED` 로그 검증을 추가했다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run verify:admin` 성공.
+- `npm run build` 성공.

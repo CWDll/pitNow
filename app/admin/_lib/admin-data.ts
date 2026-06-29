@@ -104,6 +104,21 @@ interface AdminPaymentRow {
 
 type AdminPartnerNoteType = "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW";
 
+type AdminPartnerAuditAction =
+  | "BAY_ACTIVE_UPDATED"
+  | "AVAILABILITY_BLOCK_CREATED"
+  | "AVAILABILITY_BLOCK_UPDATED"
+  | "AVAILABILITY_BLOCK_DEACTIVATED"
+  | "AVAILABILITY_BLOCK_REACTIVATED"
+  | "RESERVATION_NOTE_CREATED"
+  | "RESERVATION_NOTE_RESOLVED"
+  | "RESERVATION_NOTE_REOPENED";
+
+type AdminPartnerAuditTargetType =
+  | "BAY"
+  | "AVAILABILITY_BLOCK"
+  | "RESERVATION_NOTE";
+
 interface AdminPartnerNoteRow {
   id: string;
   reservation_id: string;
@@ -116,6 +131,20 @@ interface AdminPartnerNoteRow {
   resolved_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface AdminPartnerAuditLogRow {
+  id: string;
+  partner_id: string;
+  actor_user_id: string | null;
+  action: AdminPartnerAuditAction;
+  target_type: AdminPartnerAuditTargetType;
+  target_id: string;
+  reservation_id: string | null;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
 }
 
 interface PartnerPackagePriceRow {
@@ -247,6 +276,19 @@ export interface AdminReservationDetail {
     createdAt: string;
     updatedAt: string;
   }>;
+  partnerAuditLogs: Array<{
+    id: string;
+    partnerId: string;
+    actorUserId: string | null;
+    action: AdminPartnerAuditAction;
+    targetType: AdminPartnerAuditTargetType;
+    targetId: string;
+    reservationId: string | null;
+    beforeState: Record<string, unknown>;
+    afterState: Record<string, unknown>;
+    metadata: Record<string, unknown>;
+    createdAt: string;
+  }>;
   statusLogs: Array<{
     id: string;
     fromStatus: AdminReservationStatus | null;
@@ -296,6 +338,15 @@ function isMissingPartnerNotesSchema(error: { code?: string; message?: string } 
     error?.code === "42P01" ||
     error?.code === "PGRST205" ||
     message.includes("partner_reservation_notes")
+  );
+}
+
+function isMissingPartnerAuditSchema(error: { code?: string; message?: string } | null) {
+  const message = error?.message ?? "";
+  return (
+    error?.code === "42P01" ||
+    error?.code === "PGRST205" ||
+    message.includes("partner_admin_audit_logs")
   );
 }
 
@@ -546,6 +597,7 @@ export async function getAdminReservationDetail(
     checkoutResult,
     paymentResult,
     partnerNotesResult,
+    partnerAuditLogsResult,
     statusLogsResult,
     reviewResult,
   ] =
@@ -580,6 +632,15 @@ export async function getAdminReservationDetail(
         .eq("reservation_id", reservation.id)
         .order("created_at", { ascending: false })
         .returns<AdminPartnerNoteRow[]>(),
+      supabaseAdmin
+        .from("partner_admin_audit_logs")
+        .select(
+          "id, partner_id, actor_user_id, action, target_type, target_id, reservation_id, before_state, after_state, metadata, created_at",
+        )
+        .eq("reservation_id", reservation.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .returns<AdminPartnerAuditLogRow[]>(),
       supabaseAdmin
         .from("reservation_status_logs")
         .select(
@@ -616,6 +677,19 @@ export async function getAdminReservationDetail(
       console.error(
         "ADMIN PARTNER NOTE DETAIL LOOKUP ERROR:",
         partnerNotesResult.error,
+      );
+    }
+  }
+
+  if (partnerAuditLogsResult.error) {
+    if (isMissingPartnerAuditSchema(partnerAuditLogsResult.error)) {
+      console.warn(
+        "ADMIN PARTNER AUDIT LOOKUP SKIPPED: apply db/migrations/20260629_partner_admin_audit_logs.sql",
+      );
+    } else {
+      console.error(
+        "ADMIN PARTNER AUDIT DETAIL LOOKUP ERROR:",
+        partnerAuditLogsResult.error,
       );
     }
   }
@@ -721,6 +795,21 @@ export async function getAdminReservationDetail(
           resolvedBy: note.resolved_by,
           createdAt: note.created_at,
           updatedAt: note.updated_at,
+        })),
+    partnerAuditLogs: partnerAuditLogsResult.error
+      ? []
+      : (partnerAuditLogsResult.data ?? []).map((log) => ({
+          id: log.id,
+          partnerId: log.partner_id,
+          actorUserId: log.actor_user_id,
+          action: log.action,
+          targetType: log.target_type,
+          targetId: log.target_id,
+          reservationId: log.reservation_id,
+          beforeState: log.before_state ?? {},
+          afterState: log.after_state ?? {},
+          metadata: log.metadata ?? {},
+          createdAt: log.created_at,
         })),
     statusLogs: (statusLogsResult.data ?? []).map((log) => ({
       id: log.id,

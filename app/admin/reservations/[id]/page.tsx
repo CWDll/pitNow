@@ -116,6 +116,29 @@ function partnerNoteClass(type: "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW") {
   }
 }
 
+function auditActionLabel(action: string) {
+  return action
+    .split("_")
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function auditActionClass(action: string) {
+  if (action.includes("RESOLVED") || action.includes("CREATED")) {
+    return "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30";
+  }
+
+  if (action.includes("DEACTIVATED") || action.includes("REOPENED")) {
+    return "bg-amber-400/15 text-amber-100 ring-amber-300/30";
+  }
+
+  return "bg-cyan-400/15 text-cyan-200 ring-cyan-300/30";
+}
+
+function hasObjectValues(value: Record<string, unknown>) {
+  return Object.keys(value).length > 0;
+}
+
 export default async function AdminReservationDetailPage(props: PageProps) {
   const { id } = await props.params;
   const detail = await getAdminReservationDetail(id);
@@ -130,6 +153,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
     checkout,
     payments,
     partnerNotes,
+    partnerAuditLogs,
     statusLogs,
     review,
     evidenceIssues,
@@ -489,6 +513,95 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                     </span>
                   ) : null}
                 </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-2xl font-semibold text-white">
+              Partner Admin Audit
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              정비소 운영자가 이 예약과 연결해 수행한 운영 변경 이력입니다.
+            </p>
+          </div>
+          <span className="rounded-full bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-300 ring-1 ring-white/10">
+            {partnerAuditLogs.length} logs
+          </span>
+        </div>
+
+        {partnerAuditLogs.length === 0 ? (
+          <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+            이 예약에 연결된 partner-admin audit 로그가 없습니다.
+          </p>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {partnerAuditLogs.map((log) => (
+              <article
+                key={log.id}
+                className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${auditActionClass(
+                          log.action,
+                        )}`}
+                      >
+                        {auditActionLabel(log.action)}
+                      </span>
+                      <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold text-slate-300 ring-1 ring-white/10">
+                        {log.targetType}
+                      </span>
+                    </div>
+                    <p className="mt-3 break-all font-mono text-xs text-slate-500">
+                      {log.targetId}
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {formatAdminDateTime(log.createdAt)}
+                  </p>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+                  {log.actorUserId ? (
+                    <span className="break-all">Actor {log.actorUserId}</span>
+                  ) : null}
+                  <span className="break-all">Audit {log.id}</span>
+                </div>
+                {hasObjectValues(log.beforeState) || hasObjectValues(log.afterState) ? (
+                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    {hasObjectValues(log.beforeState) ? (
+                      <div>
+                        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Before
+                        </p>
+                        <pre className="overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                          {JSON.stringify(log.beforeState, null, 2)}
+                        </pre>
+                      </div>
+                    ) : null}
+                    {hasObjectValues(log.afterState) ? (
+                      <div>
+                        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          After
+                        </p>
+                        <pre className="overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                          {JSON.stringify(log.afterState, null, 2)}
+                        </pre>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {hasObjectValues(log.metadata) ? (
+                  <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                    {JSON.stringify(log.metadata, null, 2)}
+                  </pre>
+                ) : null}
               </article>
             ))}
           </div>
