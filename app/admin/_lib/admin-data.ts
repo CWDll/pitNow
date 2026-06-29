@@ -147,6 +147,11 @@ interface AdminPartnerAuditLogRow {
   created_at: string;
 }
 
+interface AdminPartnerAuditSearchRow extends AdminPartnerAuditLogRow {
+  partner_name: string | null;
+  total_count: number | string | null;
+}
+
 interface PartnerPackagePriceRow {
   partner_id: string;
   labor_price: number | string;
@@ -253,6 +258,7 @@ export interface AdminPartnerAuditQueryOptions {
   limit?: number;
   page?: number;
   partnerId?: string;
+  query?: string;
   targetType?: AdminPartnerAuditTargetType;
 }
 
@@ -1073,6 +1079,36 @@ function emptyAdminPartnerAuditList(
   };
 }
 
+function mapAdminPartnerAuditLog(
+  log: AdminPartnerAuditLogRow,
+  partnerName: string,
+): AdminPartnerAuditItem {
+  return {
+    id: log.id,
+    partnerId: log.partner_id,
+    partnerName,
+    actorUserId: log.actor_user_id,
+    action: log.action,
+    targetType: log.target_type,
+    targetId: log.target_id,
+    reservationId: log.reservation_id,
+    beforeState: log.before_state ?? {},
+    afterState: log.after_state ?? {},
+    metadata: log.metadata ?? {},
+    createdAt: log.created_at,
+  };
+}
+
+function isMissingPartnerAuditSearchFunction(error: {
+  code?: string;
+  message?: string;
+}) {
+  return (
+    error.code === "PGRST202" ||
+    error.message?.includes("admin_search_partner_admin_audit_logs") === true
+  );
+}
+
 export async function getAdminPartnerOptions(): Promise<AdminPartnerOption[]> {
   if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return [];
@@ -1090,6 +1126,7 @@ export async function getAdminPartnerAuditLogs(
 ): Promise<AdminPartnerAuditListResult> {
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.max(1, Math.min(options.limit ?? 50, 100));
+  const queryText = options.query?.trim();
 
   if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return emptyAdminPartnerAuditList(page, limit);
@@ -1097,6 +1134,51 @@ export async function getAdminPartnerAuditLogs(
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
+
+  if (queryText) {
+    const searchResult = await supabaseAdmin.rpc(
+      "admin_search_partner_admin_audit_logs",
+      {
+        p_action: options.action ?? null,
+        p_created_after: options.createdAfter ?? null,
+        p_limit: limit,
+        p_offset: from,
+        p_partner_id: options.partnerId ?? null,
+        p_query: queryText,
+        p_target_type: options.targetType ?? null,
+      },
+    );
+    const data = searchResult.data as AdminPartnerAuditSearchRow[] | null;
+    const error = searchResult.error;
+
+    if (!error) {
+      const rows = data ?? [];
+      const totalCount = toNumber(rows[0]?.total_count ?? 0);
+      const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+
+      return {
+        logs: rows.map((log) =>
+          mapAdminPartnerAuditLog(
+            log,
+            log.partner_name ?? "Unknown partner",
+          ),
+        ),
+        page,
+        limit,
+        totalCount,
+        totalPages,
+      };
+    }
+
+    if (isMissingPartnerAuditSearchFunction(error)) {
+      console.warn(
+        "ADMIN PARTNER AUDIT SEARCH RPC SKIPPED: apply db/migrations/20260629_partner_admin_audit_search.sql",
+      );
+    } else {
+      console.error("ADMIN PARTNER AUDIT SEARCH RPC ERROR:", error);
+    }
+  }
+
   let query = supabaseAdmin
     .from("partner_admin_audit_logs")
     .select(
@@ -1144,20 +1226,12 @@ export async function getAdminPartnerAuditLogs(
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
   return {
-    logs: (auditResult.data ?? []).map((log) => ({
-      id: log.id,
-      partnerId: log.partner_id,
-      partnerName: partnerMap.get(log.partner_id) ?? "Unknown partner",
-      actorUserId: log.actor_user_id,
-      action: log.action,
-      targetType: log.target_type,
-      targetId: log.target_id,
-      reservationId: log.reservation_id,
-      beforeState: log.before_state ?? {},
-      afterState: log.after_state ?? {},
-      metadata: log.metadata ?? {},
-      createdAt: log.created_at,
-    })),
+    logs: (auditResult.data ?? []).map((log) =>
+      mapAdminPartnerAuditLog(
+        log,
+        partnerMap.get(log.partner_id) ?? "Unknown partner",
+      ),
+    ),
     page,
     limit,
     totalCount,

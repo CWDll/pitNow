@@ -76,12 +76,14 @@ git log --oneline --decorate --graph -5
 - `db/migrations/20260624_partner_admin_foundation.sql`
 - `db/migrations/20260626_partner_reservation_notes.sql`
 - `db/migrations/20260629_partner_admin_audit_logs.sql`
+- `db/migrations/20260629_partner_admin_audit_search.sql`
 
 특히 partner-admin 검증 전에는 아래 3개가 필수다.
 
 - `20260624_partner_admin_foundation.sql`
 - `20260626_partner_reservation_notes.sql`
 - `20260629_partner_admin_audit_logs.sql`
+- `20260629_partner_admin_audit_search.sql`
 
 현재 Supabase 적용 상태는 아래 명령으로 읽기 전용 점검한다.
 

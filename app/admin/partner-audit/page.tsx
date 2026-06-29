@@ -309,6 +309,7 @@ export default async function AdminPartnerAuditPage({
       limit: searchState.limit,
       page: searchState.page,
       partnerId: searchState.partnerId || undefined,
+      query: searchState.query || undefined,
       targetType: targetFilterToTargetType(searchState.targetFilter),
     }),
     getAdminPartnerOptions(),
@@ -332,7 +333,7 @@ export default async function AdminPartnerAuditPage({
           Partner Admin Audit
         </h2>
         <p className="mt-2 text-sm text-slate-400">
-          정비소 운영자가 수행한 베이, 예약 차단, 현장 메모 변경 이력을 서버 필터와 페이지 단위로 조회합니다.
+          정비소 운영자가 수행한 베이, 예약 차단, 현장 메모 변경 이력을 서버 검색과 페이지 단위로 조회합니다.
         </p>
       </header>
 
@@ -474,7 +475,7 @@ export default async function AdminPartnerAuditPage({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-white/10 bg-slate-900 p-4 text-sm text-slate-400">
         <p>
-          Showing {visibleLogs.length} of {logs.length} loaded rows. Server
+          Showing {visibleLogs.length} of {logs.length} loaded rows. Database
           match {auditResult.totalCount} rows.
         </p>
         <div className="flex gap-2">

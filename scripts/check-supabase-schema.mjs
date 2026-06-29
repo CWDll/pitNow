@@ -87,6 +87,23 @@ async function checkStorageBucket({ db, label, bucketId }) {
   };
 }
 
+async function checkRpc({ db, label, fn, args }) {
+  const { error } = await db.rpc(fn, args);
+
+  if (error) {
+    return {
+      ok: false,
+      label,
+      message: summarizePostgrestError(error),
+    };
+  }
+
+  return {
+    ok: true,
+    label,
+  };
+}
+
 const checks = [
   {
     label: "20260329 seed catalog: partners/bays/service package tables",
@@ -325,6 +342,22 @@ async function main() {
       db,
       label: "20260609/20260621 storage bucket: reservation-photos",
       bucketId: "reservation-photos",
+    }),
+  );
+  results.push(
+    await checkRpc({
+      db,
+      label: "20260629 partner admin audit search rpc",
+      fn: "admin_search_partner_admin_audit_logs",
+      args: {
+        p_action: null,
+        p_created_after: null,
+        p_limit: 1,
+        p_offset: 0,
+        p_partner_id: null,
+        p_query: "__pitnow_schema_check_no_match__",
+        p_target_type: null,
+      },
     }),
   );
 

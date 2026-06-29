@@ -608,7 +608,7 @@ test.describe("admin smoke", () => {
         "RESERVATION_NOTE_RESOLVED",
       );
       await expect(page.getByLabel("Limit")).toHaveValue("25");
-      await expect(page.getByText("Server match")).toBeVisible();
+      await expect(page.getByText("Database match")).toBeVisible();
     } finally {
       if (auditLogIds.length > 0) {
         const { error } = await db

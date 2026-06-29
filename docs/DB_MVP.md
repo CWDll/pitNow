@@ -182,10 +182,12 @@ Rules:
 - Write APIs use this as best-effort operational audit; business mutations must not fail only because audit insert fails.
 - Logged actions include bay active changes, availability block create/update/deactivate/reactivate, and reservation note create/resolve/reopen.
 - User-facing app must not expose this table.
+- Internal Admin uses `admin_search_partner_admin_audit_logs()` for text search across audit ids, partner ids/names, actor ids, action, target ids, reservation ids, before/after state, and metadata.
 
 Migration:
 
 - `db/migrations/20260629_partner_admin_audit_logs.sql`
+- `db/migrations/20260629_partner_admin_audit_search.sql`
 
 ---
 
