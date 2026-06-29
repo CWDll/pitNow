@@ -352,6 +352,16 @@ async function findAvailabilityBlockWindow({ admin, bay, startAfter }) {
 async function cleanup(admin, records) {
   const tasks = [];
 
+  if (records.partnerAdminUserId && records.auditSince) {
+    tasks.push(
+      admin
+        .from("partner_admin_audit_logs")
+        .delete()
+        .eq("actor_user_id", records.partnerAdminUserId)
+        .gte("created_at", records.auditSince),
+    );
+  }
+
   if (records.noteIds?.length) {
     tasks.push(
       admin.from("partner_reservation_notes").delete().in("id", records.noteIds),
@@ -389,6 +399,34 @@ async function cleanup(admin, records) {
     if (error) {
       console.warn(`bay restore warning: ${error.message}`);
     }
+  }
+}
+
+async function getPartnerAdminAuditLogs({ admin, partnerId, actorUserId, since }) {
+  const { data, error } = await admin
+    .from("partner_admin_audit_logs")
+    .select(
+      "id,partner_id,actor_user_id,action,target_type,target_id,reservation_id,before_state,after_state,metadata,created_at",
+    )
+    .eq("partner_id", partnerId)
+    .eq("actor_user_id", actorUserId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`partner admin audit 로그 조회 실패: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+function countAuditAction(logs, action) {
+  return logs.filter((log) => log.action === action).length;
+}
+
+function assertAuditLog(logs, predicate, message) {
+  if (!logs.some(predicate)) {
+    throw new Error(message);
   }
 }
 
@@ -436,6 +474,7 @@ async function main() {
       userId: partnerAdminUser.id,
       partnerId: bay.partnerId,
     });
+    records.partnerAdminUserId = partnerAdminUser.id;
     formatStep("partner_admins 연결");
 
     const [adminToken, outsiderToken] = await Promise.all([
@@ -453,6 +492,7 @@ async function main() {
       }),
     ]);
     formatStep("테스트 유저 로그인");
+    records.auditSince = new Date(Date.now() - 1000).toISOString();
 
     records.vehicleId = await createVehicle({
       admin,
@@ -788,6 +828,94 @@ async function main() {
       expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
     });
     formatStep("비권한 유저 reservation note 수정 403 확인");
+
+    const auditLogs = await getPartnerAdminAuditLogs({
+      admin,
+      partnerId: bay.partnerId,
+      actorUserId: partnerAdminUser.id,
+      since: records.auditSince,
+    });
+
+    if (countAuditAction(auditLogs, "BAY_ACTIVE_UPDATED") < 2) {
+      throw new Error("bay 활성 상태 변경 audit 로그가 부족합니다.");
+    }
+
+    assertAuditLog(
+      auditLogs,
+      (log) =>
+        log.action === "BAY_ACTIVE_UPDATED" &&
+        log.target_type === "BAY" &&
+        log.target_id === bay.id &&
+        log.before_state?.isActive === bay.isActive &&
+        log.after_state?.isActive === !bay.isActive,
+      "bay 비활성/활성 변경 audit before/after 상태가 없습니다.",
+    );
+
+    assertAuditLog(
+      auditLogs,
+      (log) =>
+        log.action === "AVAILABILITY_BLOCK_CREATED" &&
+        log.target_type === "AVAILABILITY_BLOCK" &&
+        log.target_id === records.blockId,
+      "availability block 생성 audit 로그가 없습니다.",
+    );
+
+    assertAuditLog(
+      auditLogs,
+      (log) =>
+        log.action === "AVAILABILITY_BLOCK_UPDATED" &&
+        log.target_type === "AVAILABILITY_BLOCK" &&
+        log.target_id === records.blockId,
+      "availability block 수정 audit 로그가 없습니다.",
+    );
+
+    assertAuditLog(
+      auditLogs,
+      (log) =>
+        log.action === "AVAILABILITY_BLOCK_DEACTIVATED" &&
+        log.target_type === "AVAILABILITY_BLOCK" &&
+        log.target_id === records.blockId &&
+        log.before_state?.isActive === true &&
+        log.after_state?.isActive === false,
+      "availability block 해제 audit 로그가 없습니다.",
+    );
+
+    if (countAuditAction(auditLogs, "RESERVATION_NOTE_CREATED") < 4) {
+      throw new Error("reservation note 생성 audit 로그가 부족합니다.");
+    }
+
+    assertAuditLog(
+      auditLogs,
+      (log) =>
+        log.action === "RESERVATION_NOTE_CREATED" &&
+        log.target_type === "RESERVATION_NOTE" &&
+        log.reservation_id === reservation.id &&
+        log.metadata?.noteType === "ISSUE",
+      "ISSUE note 생성 audit 로그가 없습니다.",
+    );
+
+    assertAuditLog(
+      auditLogs,
+      (log) =>
+        log.action === "RESERVATION_NOTE_RESOLVED" &&
+        log.target_type === "RESERVATION_NOTE" &&
+        log.target_id === records.noteIds.at(-1) &&
+        log.before_state?.isResolved === false &&
+        log.after_state?.isResolved === true,
+      "reservation note 해결 audit 로그가 없습니다.",
+    );
+
+    assertAuditLog(
+      auditLogs,
+      (log) =>
+        log.action === "RESERVATION_NOTE_REOPENED" &&
+        log.target_type === "RESERVATION_NOTE" &&
+        log.target_id === records.noteIds.at(-1) &&
+        log.before_state?.isResolved === true &&
+        log.after_state?.isResolved === false,
+      "reservation note 다시 열기 audit 로그가 없습니다.",
+    );
+    formatStep("partner-admin audit 로그 저장 확인");
 
     console.log("partner-admin API E2E passed");
   } finally {

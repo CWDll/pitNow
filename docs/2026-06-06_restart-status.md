@@ -1706,3 +1706,27 @@ Toss test key 환경에서 실제 카카오페이 인증 플로우를 통해 성
 - `npm run e2e:partner-admin` 성공.
 - `npm run build` 성공.
 - 현재 Supabase에는 `partner_admin_audit_logs`가 아직 없어 `PGRST205`로 확인됨. SQL Editor에서 `20260629_partner_admin_audit_logs.sql` 적용 후 audit 저장이 활성화된다.
+
+## 41. 2026-06-29 Partner-admin audit SQL 적용 후 검증 편입
+
+Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_logs.sql` 적용 성공을 확인한 뒤, audit table을 자동 검증에 포함했다.
+
+- `scripts/check-supabase-schema.mjs`에 `partner_admin_audit_logs` 컬럼 점검을 추가했다.
+- `scripts/e2e-partner-admin-api.mjs`에 실제 audit row 저장 검증을 추가했다.
+- 검증 대상 action:
+  - `BAY_ACTIVE_UPDATED`
+  - `AVAILABILITY_BLOCK_CREATED`
+  - `AVAILABILITY_BLOCK_UPDATED`
+  - `AVAILABILITY_BLOCK_DEACTIVATED`
+  - `RESERVATION_NOTE_CREATED`
+  - `RESERVATION_NOTE_RESOLVED`
+  - `RESERVATION_NOTE_REOPENED`
+- E2E가 생성한 audit row는 테스트 종료 시 `actor_user_id`와 `created_at` 기준으로 정리한다.
+
+검증:
+
+- `npm run check:supabase` 성공. `20260629 partner admin audit logs` 확인.
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run e2e:partner-admin` 성공. `partner-admin audit 로그 저장 확인`.
+- `npm run build` 성공.

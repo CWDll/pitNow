@@ -283,6 +283,23 @@ const checks = [
       "updated_at",
     ],
   },
+  {
+    label: "20260629 partner admin audit logs",
+    table: "partner_admin_audit_logs",
+    columns: [
+      "id",
+      "partner_id",
+      "actor_user_id",
+      "action",
+      "target_type",
+      "target_id",
+      "reservation_id",
+      "before_state",
+      "after_state",
+      "metadata",
+      "created_at",
+    ],
+  },
 ];
 
 async function main() {
