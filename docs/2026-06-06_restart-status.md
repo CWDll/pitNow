@@ -1667,3 +1667,20 @@ Toss test key 환경에서 실제 카카오페이 인증 플로우를 통해 성
 
 - `npm run e2e:ui` 성공: 8 passed.
 - `npm run verify:release` 성공.
+
+## 39. 2026-06-29 Admin partner issue 필터 보강
+
+`/admin/reservations`에서 partner field issue가 있는 예약을 더 빨리 찾을 수 있도록 목록 상단에 카운터와 필터를 추가했다.
+
+- `Total`, `Open issues`, `Visible` 요약 카드를 추가했다.
+- `All`, `Open issues`, `No open issues` 필터 링크를 추가했다.
+- `filter=open-issues`는 미해결 partner note가 있는 예약만 표시한다.
+- `filter=clean`은 미해결 partner note가 없는 예약만 표시한다.
+- Admin E2E에 open issue 필터/clean 필터 검증을 추가했다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run verify:admin` 성공.
+- `npm run build` 성공.

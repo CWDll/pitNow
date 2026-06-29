@@ -457,11 +457,27 @@ test.describe("admin smoke", () => {
       noteIds = notes.map((note) => note.id);
 
       await page.goto("/admin/reservations");
+      await expect(
+        page.getByRole("link", { name: /^Open issues \(/ }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: /^No open issues \(/ }),
+      ).toBeVisible();
+
       const reservationRow = page.locator("tbody tr").filter({
         has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
       });
       await expect(reservationRow).toHaveCount(1);
       await expect(reservationRow.getByText("Open 2")).toBeVisible();
+
+      await page.getByRole("link", { name: /^Open issues \(/ }).click();
+      await expect(page).toHaveURL(/\/admin\/reservations\?filter=open-issues/);
+      await expect(reservationRow).toHaveCount(1);
+      await expect(reservationRow.getByText("Open 2")).toBeVisible();
+
+      await page.getByRole("link", { name: /^No open issues \(/ }).click();
+      await expect(page).toHaveURL(/\/admin\/reservations\?filter=clean/);
+      await expect(reservationRow).toHaveCount(0);
 
       await page.goto(`/admin/reservations/${reservationId}`);
       await expect(

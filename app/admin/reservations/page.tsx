@@ -2,10 +2,64 @@ import {
   formatAdminCurrency,
   formatAdminDateTime,
   getAdminReservations,
+  type AdminReservationItem,
   type AdminReservationStatus,
   type AdminReservationType,
 } from "../_lib/admin-data";
 import Link from "next/link";
+
+type ReservationFilter = "all" | "open-issues" | "clean";
+
+interface AdminReservationsPageProps {
+  searchParams?: Promise<{
+    filter?: string | string[];
+  }>;
+}
+
+function normalizeFilter(value: string | string[] | undefined): ReservationFilter {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (rawValue === "open-issues" || rawValue === "clean") {
+    return rawValue;
+  }
+
+  return "all";
+}
+
+function filterReservations(
+  reservations: AdminReservationItem[],
+  filter: ReservationFilter,
+): AdminReservationItem[] {
+  switch (filter) {
+    case "open-issues":
+      return reservations.filter(
+        (reservation) => reservation.openPartnerNoteCount > 0,
+      );
+    case "clean":
+      return reservations.filter(
+        (reservation) => reservation.openPartnerNoteCount === 0,
+      );
+    default:
+      return reservations;
+  }
+}
+
+function filterHref(filter: ReservationFilter): string {
+  return filter === "all"
+    ? "/admin/reservations"
+    : `/admin/reservations?filter=${filter}`;
+}
+
+function filterLabel(filter: ReservationFilter): string {
+  switch (filter) {
+    case "open-issues":
+      return "Open issues";
+    case "clean":
+      return "No open issues";
+    default:
+      return "All";
+  }
+}
 
 function statusClass(status: AdminReservationStatus): string {
   if (status === "CONFIRMED") {
@@ -47,8 +101,24 @@ function paymentClass(status: string | null): string {
   return "bg-white/[0.04] text-slate-300 ring-white/10";
 }
 
-export default async function AdminReservationsPage() {
+export default async function AdminReservationsPage({
+  searchParams,
+}: AdminReservationsPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const activeFilter = normalizeFilter(resolvedSearchParams?.filter);
   const reservations = await getAdminReservations();
+  const openIssueReservations = reservations.filter(
+    (reservation) => reservation.openPartnerNoteCount > 0,
+  );
+  const cleanReservations = reservations.filter(
+    (reservation) => reservation.openPartnerNoteCount === 0,
+  );
+  const visibleReservations = filterReservations(reservations, activeFilter);
+  const filters: Array<{ id: ReservationFilter; count: number }> = [
+    { id: "all", count: reservations.length },
+    { id: "open-issues", count: openIssueReservations.length },
+    { id: "clean", count: cleanReservations.length },
+  ];
 
   return (
     <section className="space-y-6">
@@ -63,6 +133,60 @@ export default async function AdminReservationsPage() {
           최근 100개 예약을 기준으로 상태, 베이, 버퍼 블로킹 시간을 확인합니다.
         </p>
       </header>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="rounded-3xl border border-white/10 bg-slate-900 p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Total
+          </p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {reservations.length}
+          </p>
+          <p className="mt-1 text-sm text-slate-400">최근 예약 조회 범위</p>
+        </div>
+        <div className="rounded-3xl border border-rose-300/20 bg-rose-400/10 p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-200/80">
+            Open issues
+          </p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {openIssueReservations.length}
+          </p>
+          <p className="mt-1 text-sm text-rose-50/70">
+            미해결 현장 메모가 있는 예약
+          </p>
+        </div>
+        <div className="rounded-3xl border border-emerald-300/20 bg-emerald-400/10 p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200/80">
+            Visible
+          </p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {visibleReservations.length}
+          </p>
+          <p className="mt-1 text-sm text-emerald-50/70">
+            {filterLabel(activeFilter)} 필터 적용 중
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {filters.map((filter) => {
+          const isActive = activeFilter === filter.id;
+
+          return (
+            <Link
+              key={filter.id}
+              href={filterHref(filter.id)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ring-1 transition ${
+                isActive
+                  ? "bg-cyan-300 text-slate-950 ring-cyan-200"
+                  : "bg-white/[0.04] text-slate-300 ring-white/10 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              {filterLabel(filter.id)} ({filter.count})
+            </Link>
+          );
+        })}
+      </div>
 
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
         <table className="w-full border-collapse text-left text-sm">
@@ -82,14 +206,14 @@ export default async function AdminReservationsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {reservations.length === 0 ? (
+            {visibleReservations.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-4 py-10 text-center text-slate-400">
-                  예약 데이터가 없습니다.
+                  조건에 맞는 예약 데이터가 없습니다.
                 </td>
               </tr>
             ) : (
-              reservations.map((reservation) => (
+              visibleReservations.map((reservation) => (
                 <tr key={reservation.id} className="text-slate-200">
                   <td className="px-4 py-4">
                     <span
