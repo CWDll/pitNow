@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "@/src/lib/auth";
+import { recordPartnerAdminAudit } from "@/src/lib/partner-admin-audit";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
 import {
   getSupabaseEnvErrorResponse,
@@ -292,6 +293,30 @@ export async function PATCH(req: Request, context: Context) {
     console.error("PARTNER ADMIN AVAILABILITY UPDATE ERROR:", updateError);
     return blockDbError(updateError);
   }
+
+  let auditAction:
+    | "AVAILABILITY_BLOCK_UPDATED"
+    | "AVAILABILITY_BLOCK_DEACTIVATED"
+    | "AVAILABILITY_BLOCK_REACTIVATED" = "AVAILABILITY_BLOCK_UPDATED";
+
+  if (currentBlock.is_active === true && updatedBlock.is_active === false) {
+    auditAction = "AVAILABILITY_BLOCK_DEACTIVATED";
+  }
+
+  if (currentBlock.is_active === false && updatedBlock.is_active === true) {
+    auditAction = "AVAILABILITY_BLOCK_REACTIVATED";
+  }
+
+  await recordPartnerAdminAudit({
+    db: supabaseAdmin,
+    partnerId: updatedBlock.partner_id,
+    actorUserId: authResult.auth.userId,
+    action: auditAction,
+    targetType: "AVAILABILITY_BLOCK",
+    targetId: updatedBlock.id,
+    beforeState: normalizeBlock(currentBlock),
+    afterState: normalizeBlock(updatedBlock),
+  });
 
   return NextResponse.json({
     success: true,

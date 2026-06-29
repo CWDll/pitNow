@@ -1684,3 +1684,25 @@ Toss test key 환경에서 실제 카카오페이 인증 플로우를 통해 성
 - `npx tsc --noEmit` 성공.
 - `npm run verify:admin` 성공.
 - `npm run build` 성공.
+
+## 40. 2026-06-29 Partner-admin 운영 액션 audit 기반 추가
+
+정비소 운영자가 수행하는 주요 write action을 추적할 수 있도록 `partner_admin_audit_logs` 설계와 best-effort 기록 유틸을 추가했다.
+
+- 신규 마이그레이션: `db/migrations/20260629_partner_admin_audit_logs.sql`.
+- 신규 유틸: `src/lib/partner-admin-audit.ts`.
+- audit 대상:
+  - 베이 활성/비활성 변경: `BAY_ACTIVE_UPDATED`
+  - availability block 생성/수정/해제/재활성화
+  - reservation note 생성/해결/재오픈
+- audit row에는 `partner_id`, `actor_user_id`, `action`, `target_type`, `target_id`, 선택적 `reservation_id`, `before_state`, `after_state`, `metadata`를 저장한다.
+- audit insert는 best-effort로 처리한다. 테이블이 없거나 insert가 실패해도 primary write action은 성공 상태를 유지하고 서버 로그에만 남긴다.
+- `docs/DB_MVP.md`, `docs/API_MVP.md`, `docs/Policies_MVP.md`, `docs/Release_Checklist.md`에 반영했다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run e2e:partner-admin` 성공.
+- `npm run build` 성공.
+- 현재 Supabase에는 `partner_admin_audit_logs`가 아직 없어 `PGRST205`로 확인됨. SQL Editor에서 `20260629_partner_admin_audit_logs.sql` 적용 후 audit 저장이 활성화된다.

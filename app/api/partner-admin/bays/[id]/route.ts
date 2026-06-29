@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "@/src/lib/auth";
+import { recordPartnerAdminAudit } from "@/src/lib/partner-admin-audit";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
 import {
   getSupabaseEnvErrorResponse,
@@ -128,6 +129,24 @@ export async function PATCH(req: Request, context: Context) {
     console.error("PARTNER ADMIN BAY UPDATE ERROR:", updateError);
     return jsonError(500, "DB_ERROR", "베이 상태 변경 중 오류가 발생했습니다.");
   }
+
+  await recordPartnerAdminAudit({
+    db,
+    partnerId: updatedBay.partner_id,
+    actorUserId: authResult.auth.userId,
+    action: "BAY_ACTIVE_UPDATED",
+    targetType: "BAY",
+    targetId: updatedBay.id,
+    beforeState: {
+      isActive: bay.is_active,
+    },
+    afterState: {
+      isActive: updatedBay.is_active,
+    },
+    metadata: {
+      bayName: updatedBay.name,
+    },
+  });
 
   return NextResponse.json({
     success: true,

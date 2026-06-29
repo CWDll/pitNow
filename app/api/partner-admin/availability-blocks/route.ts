@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "@/src/lib/auth";
+import { recordPartnerAdminAudit } from "@/src/lib/partner-admin-audit";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
 import {
   getSupabaseEnvErrorResponse,
@@ -377,6 +378,16 @@ export async function POST(req: Request) {
     console.error("PARTNER ADMIN AVAILABILITY CREATE ERROR:", error);
     return blockDbError()(error);
   }
+
+  await recordPartnerAdminAudit({
+    db: supabaseAdmin,
+    partnerId: data.partner_id,
+    actorUserId: authResult.auth.userId,
+    action: "AVAILABILITY_BLOCK_CREATED",
+    targetType: "AVAILABILITY_BLOCK",
+    targetId: data.id,
+    afterState: normalizeBlock(data),
+  });
 
   return NextResponse.json({
     success: true,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "@/src/lib/auth";
+import { recordPartnerAdminAudit } from "@/src/lib/partner-admin-audit";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
 import {
   getSupabaseEnvErrorResponse,
@@ -178,6 +179,21 @@ export async function PATCH(req: Request, context: Context) {
     console.error("PARTNER NOTE UPDATE ERROR:", updateError);
     return jsonError(500, "DB_ERROR", "현장 메모 수정 중 오류가 발생했습니다.");
   }
+
+  await recordPartnerAdminAudit({
+    db: supabaseAdmin,
+    partnerId: updatedNote.partner_id,
+    actorUserId: authResult.auth.userId,
+    action: isResolved ? "RESERVATION_NOTE_RESOLVED" : "RESERVATION_NOTE_REOPENED",
+    targetType: "RESERVATION_NOTE",
+    targetId: updatedNote.id,
+    reservationId: updatedNote.reservation_id,
+    beforeState: normalizeNote(currentNote),
+    afterState: normalizeNote(updatedNote),
+    metadata: {
+      noteType: updatedNote.note_type,
+    },
+  });
 
   return NextResponse.json({
     success: true,

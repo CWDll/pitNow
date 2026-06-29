@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "@/src/lib/auth";
+import { recordPartnerAdminAudit } from "@/src/lib/partner-admin-audit";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
 import {
   getSupabaseEnvErrorResponse,
@@ -289,6 +290,20 @@ export async function POST(req: Request, context: Context) {
     console.error("PARTNER NOTE CREATE ERROR:", error);
     return jsonError(500, "DB_ERROR", "현장 메모 저장 중 오류가 발생했습니다.");
   }
+
+  await recordPartnerAdminAudit({
+    db: supabaseAdmin!,
+    partnerId: data.partner_id,
+    actorUserId: authResult.auth.userId,
+    action: "RESERVATION_NOTE_CREATED",
+    targetType: "RESERVATION_NOTE",
+    targetId: data.id,
+    reservationId: data.reservation_id,
+    afterState: normalizeNote(data),
+    metadata: {
+      noteType: data.note_type,
+    },
+  });
 
   return NextResponse.json({
     success: true,

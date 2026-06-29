@@ -70,4 +70,6 @@
 - Reservation prepare must reject requested windows overlapping:
   - active whole-partner block for the partner
   - active bay-specific block for the selected bay
-- Store-admin block creation and update must be logged in app-level audit/status metadata when write APIs are implemented.
+- Store-admin write actions must be logged in `partner_admin_audit_logs` as best-effort operational audit.
+- Audit-covered MVP actions: bay active changes, availability block create/update/deactivate/reactivate, reservation note create/resolve/reopen.
+- Audit insert failure must be logged server-side, but must not roll back the primary business mutation.

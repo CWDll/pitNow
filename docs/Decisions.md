@@ -742,3 +742,21 @@ Rules:
 
 Reason:
 로컬 개발 중 3000번 서버가 Toss test mode로 떠 있으면 `PITNOW_PAYMENT_PROVIDER=FAKE playwright test`만으로는 서버 provider가 바뀌지 않아 booking-flow E2E가 Toss 외부 결제창으로 빠졌다. 또한 production `next start` 검증 중 `/admin/logout` 링크 prefetch가 쿠키를 삭제하는 실제 운영성 버그가 드러났다. 릴리즈 검증은 독립 포트와 FAKE provider를 강제하고, Admin 인증은 실제 로그인 흐름으로 검증해야 재현성과 배포 유사성이 모두 확보된다.
+
+---
+
+## 2026-06-29
+
+Decision:
+Partner-admin 운영 액션은 별도 `partner_admin_audit_logs` ledger에 best-effort로 기록한다.
+
+Rules:
+
+- 예약 상태 전환은 계속 `reservation_status_logs`에 기록한다.
+- 정비소 운영자가 수행하는 베이 상태 변경, availability block 변경, 현장 메모 생성/해결/재오픈은 `partner_admin_audit_logs`에 기록한다.
+- audit row에는 actor, partner, action, target, before/after state, metadata를 저장한다.
+- audit insert 실패는 서버 로그에 남기되 primary business mutation을 롤백하지 않는다.
+- store-admin은 본인 partner의 audit row만 조회할 수 있다.
+
+Reason:
+베이 활성/비활성, 예약 차단 시간, 현장 이슈 처리는 예약 상태 자체를 바꾸지 않는 운영 액션이다. 이를 `reservation_status_logs`에 억지로 넣으면 예약 상태 전환과 운영 변경 이력이 섞인다. 별도 audit ledger를 두면 운영 책임 추적과 향후 admin 감사 화면을 만들기 쉽고, audit 테이블 장애가 예약 운영 자체를 막지 않도록 best-effort로 유지할 수 있다.

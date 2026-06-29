@@ -156,6 +156,39 @@ Migration:
 
 ---
 
+## partner_admin_audit_logs
+
+Store-admin operational audit ledger for partner-owned write actions.
+
+```sql
+create table partner_admin_audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  partner_id uuid not null references partners(id) on delete cascade,
+  actor_user_id uuid references auth.users(id) on delete set null,
+  action text not null,
+  target_type text not null,
+  target_id uuid not null,
+  reservation_id uuid references reservations(id) on delete set null,
+  before_state jsonb not null default '{}'::jsonb,
+  after_state jsonb not null default '{}'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+```
+
+Rules:
+
+- Store-admin may select audit rows only for their own partner.
+- Write APIs use this as best-effort operational audit; business mutations must not fail only because audit insert fails.
+- Logged actions include bay active changes, availability block create/update/deactivate/reactivate, and reservation note create/resolve/reopen.
+- User-facing app must not expose this table.
+
+Migration:
+
+- `db/migrations/20260629_partner_admin_audit_logs.sql`
+
+---
+
 ## service_packages
 
 Global package catalog reused from the Figma package set.

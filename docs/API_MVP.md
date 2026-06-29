@@ -661,6 +661,7 @@ isActive: boolean
 검증:
 • Supabase Auth session 필수
 • bay.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+• 성공 시 `partner_admin_audit_logs.action = BAY_ACTIVE_UPDATED` best-effort 기록
 
 성공 응답:
 {
@@ -733,6 +734,7 @@ reason?: string
 • bayId가 있으면 해당 bay.partner_id = partnerId
 • startsAt < endsAt
 • 같은 scope의 active block과 겹치면 DB constraint 또는 API에서 거부
+• 성공 시 `partner_admin_audit_logs.action = AVAILABILITY_BLOCK_CREATED` best-effort 기록
 
 성공 응답:
 {
@@ -772,6 +774,7 @@ isActive?: boolean
 • block.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
 • 수정 후에도 startsAt < endsAt
 • bayId 변경은 MVP에서 허용하지 않는다
+• 성공 시 변경 내용에 따라 `AVAILABILITY_BLOCK_UPDATED`, `AVAILABILITY_BLOCK_DEACTIVATED`, `AVAILABILITY_BLOCK_REACTIVATED` best-effort 기록
 
 성공 응답:
 {
@@ -811,6 +814,7 @@ POST 검증:
 • Supabase Auth session 필수
 • reservation.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
 • body는 빈 문자열 불가
+• 성공 시 `partner_admin_audit_logs.action = RESERVATION_NOTE_CREATED` best-effort 기록
 
 성공 응답:
 {
@@ -854,6 +858,7 @@ isResolved: boolean
 검증:
 • Supabase Auth session 필수
 • note.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+• 성공 시 `RESERVATION_NOTE_RESOLVED` 또는 `RESERVATION_NOTE_REOPENED` best-effort 기록
 
 성공 응답:
 {
