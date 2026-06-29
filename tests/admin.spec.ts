@@ -592,7 +592,7 @@ test.describe("admin smoke", () => {
       ).toBeVisible();
 
       await page.goto(
-        `/admin/partner-audit?filter=notes&action=RESERVATION_NOTE_RESOLVED&q=${targetAuditNoteId}`,
+        `/admin/partner-audit?filter=notes&action=RESERVATION_NOTE_RESOLVED&q=${targetAuditNoteId}&limit=25`,
       );
       await expect(
         page.getByRole("heading", { name: "Partner Admin Audit" }),
@@ -607,6 +607,8 @@ test.describe("admin smoke", () => {
       await expect(page.getByLabel("Action")).toHaveValue(
         "RESERVATION_NOTE_RESOLVED",
       );
+      await expect(page.getByLabel("Limit")).toHaveValue("25");
+      await expect(page.getByText("Server match")).toBeVisible();
     } finally {
       if (auditLogIds.length > 0) {
         const { error } = await db

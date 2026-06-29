@@ -247,6 +247,28 @@ export interface AdminPartnerAuditItem {
   createdAt: string;
 }
 
+export interface AdminPartnerAuditQueryOptions {
+  action?: AdminPartnerAuditAction;
+  createdAfter?: string;
+  limit?: number;
+  page?: number;
+  partnerId?: string;
+  targetType?: AdminPartnerAuditTargetType;
+}
+
+export interface AdminPartnerAuditListResult {
+  logs: AdminPartnerAuditItem[];
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+export interface AdminPartnerOption {
+  id: string;
+  name: string;
+}
+
 export interface AdminReservationDetail {
   reservation: AdminReservationItem;
   checkin: {
@@ -1038,20 +1060,71 @@ export async function getAdminPackages(): Promise<AdminPackageItem[]> {
   });
 }
 
-export async function getAdminPartnerAuditLogs(): Promise<AdminPartnerAuditItem[]> {
+function emptyAdminPartnerAuditList(
+  page = 1,
+  limit = 50,
+): AdminPartnerAuditListResult {
+  return {
+    logs: [],
+    page,
+    limit,
+    totalCount: 0,
+    totalPages: 1,
+  };
+}
+
+export async function getAdminPartnerOptions(): Promise<AdminPartnerOption[]> {
   if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return [];
   }
 
+  const partnerMap = await getPartnerMap();
+
+  return Array.from(partnerMap.entries())
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+}
+
+export async function getAdminPartnerAuditLogs(
+  options: AdminPartnerAuditQueryOptions = {},
+): Promise<AdminPartnerAuditListResult> {
+  const page = Math.max(1, options.page ?? 1);
+  const limit = Math.max(1, Math.min(options.limit ?? 50, 100));
+
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
+    return emptyAdminPartnerAuditList(page, limit);
+  }
+
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+  let query = supabaseAdmin
+    .from("partner_admin_audit_logs")
+    .select(
+      "id, partner_id, actor_user_id, action, target_type, target_id, reservation_id, before_state, after_state, metadata, created_at",
+      { count: "exact" },
+    );
+
+  if (options.action) {
+    query = query.eq("action", options.action);
+  }
+
+  if (options.createdAfter) {
+    query = query.gte("created_at", options.createdAfter);
+  }
+
+  if (options.partnerId) {
+    query = query.eq("partner_id", options.partnerId);
+  }
+
+  if (options.targetType) {
+    query = query.eq("target_type", options.targetType);
+  }
+
   const [partnerMap, auditResult] = await Promise.all([
     getPartnerMap(),
-    supabaseAdmin
-      .from("partner_admin_audit_logs")
-      .select(
-        "id, partner_id, actor_user_id, action, target_type, target_id, reservation_id, before_state, after_state, metadata, created_at",
-      )
+    query
       .order("created_at", { ascending: false })
-      .limit(100)
+      .range(from, to)
       .returns<AdminPartnerAuditLogRow[]>(),
   ]);
 
@@ -1064,23 +1137,32 @@ export async function getAdminPartnerAuditLogs(): Promise<AdminPartnerAuditItem[
       console.error("ADMIN PARTNER AUDIT LIST LOOKUP ERROR:", auditResult.error);
     }
 
-    return [];
+    return emptyAdminPartnerAuditList(page, limit);
   }
 
-  return (auditResult.data ?? []).map((log) => ({
-    id: log.id,
-    partnerId: log.partner_id,
-    partnerName: partnerMap.get(log.partner_id) ?? "Unknown partner",
-    actorUserId: log.actor_user_id,
-    action: log.action,
-    targetType: log.target_type,
-    targetId: log.target_id,
-    reservationId: log.reservation_id,
-    beforeState: log.before_state ?? {},
-    afterState: log.after_state ?? {},
-    metadata: log.metadata ?? {},
-    createdAt: log.created_at,
-  }));
+  const totalCount = auditResult.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+
+  return {
+    logs: (auditResult.data ?? []).map((log) => ({
+      id: log.id,
+      partnerId: log.partner_id,
+      partnerName: partnerMap.get(log.partner_id) ?? "Unknown partner",
+      actorUserId: log.actor_user_id,
+      action: log.action,
+      targetType: log.target_type,
+      targetId: log.target_id,
+      reservationId: log.reservation_id,
+      beforeState: log.before_state ?? {},
+      afterState: log.after_state ?? {},
+      metadata: log.metadata ?? {},
+      createdAt: log.created_at,
+    })),
+    page,
+    limit,
+    totalCount,
+    totalPages,
+  };
 }
 
 export function formatAdminCurrency(value: number): string {
