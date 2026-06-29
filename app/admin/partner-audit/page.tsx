@@ -3,16 +3,41 @@ import Link from "next/link";
 import {
   formatAdminDateTime,
   getAdminPartnerAuditLogs,
+  type AdminPartnerAuditAction,
   type AdminPartnerAuditItem,
   type AdminPartnerAuditTargetType,
 } from "../_lib/admin-data";
 
 type AuditFilter = "all" | "bay" | "availability" | "notes";
+type AuditRange = "all" | "24h" | "7d" | "30d";
+
+const auditActions: AdminPartnerAuditAction[] = [
+  "BAY_ACTIVE_UPDATED",
+  "AVAILABILITY_BLOCK_CREATED",
+  "AVAILABILITY_BLOCK_UPDATED",
+  "AVAILABILITY_BLOCK_DEACTIVATED",
+  "AVAILABILITY_BLOCK_REACTIVATED",
+  "RESERVATION_NOTE_CREATED",
+  "RESERVATION_NOTE_RESOLVED",
+  "RESERVATION_NOTE_REOPENED",
+];
 
 interface AdminPartnerAuditPageProps {
   searchParams?: Promise<{
+    action?: string | string[];
     filter?: string | string[];
+    partner?: string | string[];
+    q?: string | string[];
+    range?: string | string[];
   }>;
+}
+
+interface AuditSearchState {
+  action: AdminPartnerAuditAction | "all";
+  partnerId: string;
+  query: string;
+  range: AuditRange;
+  targetFilter: AuditFilter;
 }
 
 function normalizeFilter(value: string | string[] | undefined): AuditFilter {
@@ -25,26 +50,154 @@ function normalizeFilter(value: string | string[] | undefined): AuditFilter {
   return "all";
 }
 
-function filterAuditLogs(
-  logs: AdminPartnerAuditItem[],
-  filter: AuditFilter,
-): AdminPartnerAuditItem[] {
+function normalizeAction(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  return auditActions.find((action) => action === rawValue) ?? "all";
+}
+
+function normalizeString(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  return rawValue?.trim() ?? "";
+}
+
+function normalizeRange(value: string | string[] | undefined): AuditRange {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (rawValue === "24h" || rawValue === "7d" || rawValue === "30d") {
+    return rawValue;
+  }
+
+  return "all";
+}
+
+function matchesTargetFilter(log: AdminPartnerAuditItem, filter: AuditFilter) {
   switch (filter) {
     case "bay":
-      return logs.filter((log) => log.targetType === "BAY");
+      return log.targetType === "BAY";
     case "availability":
-      return logs.filter((log) => log.targetType === "AVAILABILITY_BLOCK");
+      return log.targetType === "AVAILABILITY_BLOCK";
     case "notes":
-      return logs.filter((log) => log.targetType === "RESERVATION_NOTE");
+      return log.targetType === "RESERVATION_NOTE";
     default:
-      return logs;
+      return true;
   }
 }
 
-function filterHref(filter: AuditFilter): string {
-  return filter === "all"
-    ? "/admin/partner-audit"
-    : `/admin/partner-audit?filter=${filter}`;
+function matchesRange(log: AdminPartnerAuditItem, range: AuditRange) {
+  if (range === "all") {
+    return true;
+  }
+
+  const hoursByRange = {
+    "24h": 24,
+    "7d": 24 * 7,
+    "30d": 24 * 30,
+  } satisfies Record<Exclude<AuditRange, "all">, number>;
+  const cutoff = Date.now() - hoursByRange[range] * 60 * 60 * 1000;
+
+  return new Date(log.createdAt).getTime() >= cutoff;
+}
+
+function searchableLogText(log: AdminPartnerAuditItem) {
+  return [
+    log.id,
+    log.partnerId,
+    log.partnerName,
+    log.actorUserId,
+    log.action,
+    log.targetType,
+    log.targetId,
+    log.reservationId,
+    JSON.stringify(log.beforeState),
+    JSON.stringify(log.afterState),
+    JSON.stringify(log.metadata),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function filterAuditLogs(
+  logs: AdminPartnerAuditItem[],
+  state: AuditSearchState,
+): AdminPartnerAuditItem[] {
+  const query = state.query.toLowerCase();
+
+  return logs.filter((log) => {
+    if (!matchesTargetFilter(log, state.targetFilter)) {
+      return false;
+    }
+
+    if (state.action !== "all" && log.action !== state.action) {
+      return false;
+    }
+
+    if (state.partnerId && log.partnerId !== state.partnerId) {
+      return false;
+    }
+
+    if (!matchesRange(log, state.range)) {
+      return false;
+    }
+
+    if (query && !searchableLogText(log).includes(query)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function targetFilterLogs(
+  logs: AdminPartnerAuditItem[],
+  filter: AuditFilter,
+): AdminPartnerAuditItem[] {
+  return logs.filter((log) => matchesTargetFilter(log, filter));
+}
+
+function buildFilterHref(filter: AuditFilter, state: AuditSearchState): string {
+  const params = new URLSearchParams();
+
+  if (filter !== "all") {
+    params.set("filter", filter);
+  }
+
+  if (state.action !== "all") {
+    params.set("action", state.action);
+  }
+
+  if (state.partnerId) {
+    params.set("partner", state.partnerId);
+  }
+
+  if (state.query) {
+    params.set("q", state.query);
+  }
+
+  if (state.range !== "all") {
+    params.set("range", state.range);
+  }
+
+  const queryString = params.toString();
+
+  return queryString
+    ? `/admin/partner-audit?${queryString}`
+    : "/admin/partner-audit";
+}
+
+function rangeLabel(range: AuditRange) {
+  switch (range) {
+    case "24h":
+      return "24시간";
+    case "7d":
+      return "7일";
+    case "30d":
+      return "30일";
+    default:
+      return "전체 기간";
+  }
 }
 
 function filterLabel(filter: AuditFilter): string {
@@ -108,18 +261,31 @@ function metricCard(label: string, value: string, description: string) {
   );
 }
 
+function getPartnerOptions(logs: AdminPartnerAuditItem[]) {
+  return Array.from(
+    new Map(logs.map((log) => [log.partnerId, log.partnerName])).entries(),
+  ).sort(([, aName], [, bName]) => aName.localeCompare(bName, "ko-KR"));
+}
+
 export default async function AdminPartnerAuditPage({
   searchParams,
 }: AdminPartnerAuditPageProps) {
   const resolvedSearchParams = await searchParams;
-  const activeFilter = normalizeFilter(resolvedSearchParams?.filter);
+  const searchState: AuditSearchState = {
+    action: normalizeAction(resolvedSearchParams?.action),
+    partnerId: normalizeString(resolvedSearchParams?.partner),
+    query: normalizeString(resolvedSearchParams?.q),
+    range: normalizeRange(resolvedSearchParams?.range),
+    targetFilter: normalizeFilter(resolvedSearchParams?.filter),
+  };
   const logs = await getAdminPartnerAuditLogs();
-  const visibleLogs = filterAuditLogs(logs, activeFilter);
+  const visibleLogs = filterAuditLogs(logs, searchState);
+  const partnerOptions = getPartnerOptions(logs);
   const filters: Array<{ id: AuditFilter; count: number }> = [
     { id: "all", count: logs.length },
-    { id: "bay", count: filterAuditLogs(logs, "bay").length },
-    { id: "availability", count: filterAuditLogs(logs, "availability").length },
-    { id: "notes", count: filterAuditLogs(logs, "notes").length },
+    { id: "bay", count: targetFilterLogs(logs, "bay").length },
+    { id: "availability", count: targetFilterLogs(logs, "availability").length },
+    { id: "notes", count: targetFilterLogs(logs, "notes").length },
   ];
 
   return (
@@ -132,7 +298,7 @@ export default async function AdminPartnerAuditPage({
           Partner Admin Audit
         </h2>
         <p className="mt-2 text-sm text-slate-400">
-          정비소 운영자가 수행한 베이, 예약 차단, 현장 메모 변경 이력을 최근 100건 기준으로 확인합니다.
+          정비소 운영자가 수행한 베이, 예약 차단, 현장 메모 변경 이력을 최근 100건 기준으로 검색합니다.
         </p>
       </header>
 
@@ -140,29 +306,106 @@ export default async function AdminPartnerAuditPage({
         {metricCard("Total", String(logs.length), "최근 audit 조회 범위")}
         {metricCard(
           "Availability",
-          String(filterAuditLogs(logs, "availability").length),
+          String(targetFilterLogs(logs, "availability").length),
           "예약 차단 생성/수정/해제",
         )}
         {metricCard(
           "Notes",
-          String(filterAuditLogs(logs, "notes").length),
+          String(targetFilterLogs(logs, "notes").length),
           "현장 메모 생성/해결/재오픈",
         )}
         {metricCard(
           "Visible",
           String(visibleLogs.length),
-          `${filterLabel(activeFilter)} 필터 적용 중`,
+          `${filterLabel(searchState.targetFilter)} / ${rangeLabel(
+            searchState.range,
+          )}`,
         )}
       </div>
 
+      <form
+        action="/admin/partner-audit"
+        className="grid gap-4 rounded-3xl border border-white/10 bg-slate-900 p-5 xl:grid-cols-[1.1fr_1fr_1fr_1fr_auto]"
+      >
+        {searchState.targetFilter !== "all" ? (
+          <input type="hidden" name="filter" value={searchState.targetFilter} />
+        ) : null}
+        <label className="space-y-2 text-sm font-medium text-slate-300">
+          <span>Search</span>
+          <input
+            name="q"
+            defaultValue={searchState.query}
+            placeholder="예약 ID, target ID, metadata"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300"
+          />
+        </label>
+        <label className="space-y-2 text-sm font-medium text-slate-300">
+          <span>Partner</span>
+          <select
+            name="partner"
+            defaultValue={searchState.partnerId}
+            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+          >
+            <option value="">All partners</option>
+            {partnerOptions.map(([partnerId, partnerName]) => (
+              <option key={partnerId} value={partnerId}>
+                {partnerName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-2 text-sm font-medium text-slate-300">
+          <span>Action</span>
+          <select
+            name="action"
+            defaultValue={searchState.action}
+            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+          >
+            <option value="all">All actions</option>
+            {auditActions.map((action) => (
+              <option key={action} value={action}>
+                {auditActionLabel(action)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-2 text-sm font-medium text-slate-300">
+          <span>Range</span>
+          <select
+            name="range"
+            defaultValue={searchState.range}
+            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+          >
+            <option value="all">All time</option>
+            <option value="24h">Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+        </label>
+        <div className="flex items-end gap-2">
+          <button
+            type="submit"
+            className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+          >
+            Filter
+          </button>
+          <Link
+            href="/admin/partner-audit"
+            className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+          >
+            Reset
+          </Link>
+        </div>
+      </form>
+
       <div className="flex flex-wrap gap-2">
         {filters.map((filter) => {
-          const isActive = activeFilter === filter.id;
+          const isActive = searchState.targetFilter === filter.id;
 
           return (
             <Link
               key={filter.id}
-              href={filterHref(filter.id)}
+              href={buildFilterHref(filter.id, searchState)}
               className={`rounded-full px-4 py-2 text-sm font-semibold ring-1 transition ${
                 isActive
                   ? "bg-cyan-300 text-slate-950 ring-cyan-200"

@@ -500,6 +500,7 @@ test.describe("admin smoke", () => {
     let reservationId: string | null = null;
     let noteIds: string[] = [];
     let auditLogIds: string[] = [];
+    let targetAuditNoteId: string | null = null;
 
     try {
       const created = await createConfirmedReservationRowForAdminIssueE2E();
@@ -509,10 +510,16 @@ test.describe("admin smoke", () => {
         partnerId: created.partnerId,
       });
       noteIds = notes.map((note) => note.id);
+      targetAuditNoteId =
+        notes.find((note) => !note.is_resolved)?.id ?? notes[0].id;
+      if (!targetAuditNoteId) {
+        throw new Error("Target audit note id was not created");
+      }
+
       const auditLogs = await createPartnerAuditLogsForAdminE2E({
         reservationId,
         partnerId: created.partnerId,
-        targetNoteId: notes.find((note) => !note.is_resolved)?.id ?? notes[0].id,
+        targetNoteId: targetAuditNoteId,
       });
       auditLogIds = auditLogs.map((log) => log.id);
 
@@ -564,8 +571,12 @@ test.describe("admin smoke", () => {
         page.getByRole("heading", { name: "Partner Admin Audit" }),
       ).toBeVisible();
       await expect(page.getByRole("link", { name: /^Notes \(/ })).toBeVisible();
-      await expect(page.getByText("Reservation Note Created")).toBeVisible();
-      await expect(page.getByText("Reservation Note Resolved")).toBeVisible();
+      await expect(
+        page.locator("article").filter({ hasText: "Reservation Note Created" }),
+      ).toBeVisible();
+      await expect(
+        page.locator("article").filter({ hasText: "Reservation Note Resolved" }),
+      ).toBeVisible();
       await expect(
         page.getByRole("link", { name: `Reservation ${reservationId}` }),
       ).toHaveCount(2);
@@ -573,8 +584,29 @@ test.describe("admin smoke", () => {
 
       await page.getByRole("link", { name: /^Notes \(/ }).click();
       await expect(page).toHaveURL(/\/admin\/partner-audit\?filter=notes/);
-      await expect(page.getByText("Reservation Note Created")).toBeVisible();
-      await expect(page.getByText("Reservation Note Resolved")).toBeVisible();
+      await expect(
+        page.locator("article").filter({ hasText: "Reservation Note Created" }),
+      ).toBeVisible();
+      await expect(
+        page.locator("article").filter({ hasText: "Reservation Note Resolved" }),
+      ).toBeVisible();
+
+      await page.goto(
+        `/admin/partner-audit?filter=notes&action=RESERVATION_NOTE_RESOLVED&q=${targetAuditNoteId}`,
+      );
+      await expect(
+        page.getByRole("heading", { name: "Partner Admin Audit" }),
+      ).toBeVisible();
+      await expect(
+        page.locator("article").filter({ hasText: "Reservation Note Resolved" }),
+      ).toBeVisible();
+      await expect(
+        page.locator("article").filter({ hasText: "Reservation Note Created" }),
+      ).toHaveCount(0);
+      await expect(page.getByLabel("Search")).toHaveValue(targetAuditNoteId);
+      await expect(page.getByLabel("Action")).toHaveValue(
+        "RESERVATION_NOTE_RESOLVED",
+      );
     } finally {
       if (auditLogIds.length > 0) {
         const { error } = await db
