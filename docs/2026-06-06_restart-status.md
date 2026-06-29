@@ -1747,3 +1747,21 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_logs.sql` 
 - `npx tsc --noEmit` 성공.
 - `npm run verify:admin` 성공.
 - `npm run build` 성공.
+
+## 43. 2026-06-29 Admin 전체 partner-admin audit 목록 추가
+
+Admin에서 예약 상세로 들어가지 않아도 정비소 운영 액션 이력을 한 번에 볼 수 있도록 `/admin/partner-audit` 목록 페이지를 추가했다.
+
+- Admin 사이드바에 `Partner Audit` 메뉴를 추가했다.
+- 최근 100건의 `partner_admin_audit_logs`를 최신순으로 조회한다.
+- 정비소명, action, target type/id, actor user id, reservation link, before/after state, metadata를 표시한다.
+- `All`, `Bay`, `Availability`, `Notes` 필터와 요약 카운터를 제공한다.
+- audit table이 없는 환경에서는 빈 목록으로 fallback하고 Admin 화면은 깨지지 않는다.
+- Admin E2E에 보호 라우트 렌더링, Notes 필터, reservation detail 링크 표시 검증을 추가했다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run verify:admin` 성공.
+- `npm run build` 성공.

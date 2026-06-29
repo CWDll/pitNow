@@ -104,7 +104,7 @@ interface AdminPaymentRow {
 
 type AdminPartnerNoteType = "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW";
 
-type AdminPartnerAuditAction =
+export type AdminPartnerAuditAction =
   | "BAY_ACTIVE_UPDATED"
   | "AVAILABILITY_BLOCK_CREATED"
   | "AVAILABILITY_BLOCK_UPDATED"
@@ -114,7 +114,7 @@ type AdminPartnerAuditAction =
   | "RESERVATION_NOTE_RESOLVED"
   | "RESERVATION_NOTE_REOPENED";
 
-type AdminPartnerAuditTargetType =
+export type AdminPartnerAuditTargetType =
   | "BAY"
   | "AVAILABILITY_BLOCK"
   | "RESERVATION_NOTE";
@@ -230,6 +230,21 @@ export interface AdminPackageItem {
   durationMinutes: number;
   laborPrice: number;
   isActive: boolean;
+}
+
+export interface AdminPartnerAuditItem {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  actorUserId: string | null;
+  action: AdminPartnerAuditAction;
+  targetType: AdminPartnerAuditTargetType;
+  targetId: string;
+  reservationId: string | null;
+  beforeState: Record<string, unknown>;
+  afterState: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface AdminReservationDetail {
@@ -1021,6 +1036,51 @@ export async function getAdminPackages(): Promise<AdminPackageItem[]> {
       isActive: row.is_active && Boolean(servicePackage?.is_active),
     };
   });
+}
+
+export async function getAdminPartnerAuditLogs(): Promise<AdminPartnerAuditItem[]> {
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
+    return [];
+  }
+
+  const [partnerMap, auditResult] = await Promise.all([
+    getPartnerMap(),
+    supabaseAdmin
+      .from("partner_admin_audit_logs")
+      .select(
+        "id, partner_id, actor_user_id, action, target_type, target_id, reservation_id, before_state, after_state, metadata, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .returns<AdminPartnerAuditLogRow[]>(),
+  ]);
+
+  if (auditResult.error) {
+    if (isMissingPartnerAuditSchema(auditResult.error)) {
+      console.warn(
+        "ADMIN PARTNER AUDIT LIST LOOKUP SKIPPED: apply db/migrations/20260629_partner_admin_audit_logs.sql",
+      );
+    } else {
+      console.error("ADMIN PARTNER AUDIT LIST LOOKUP ERROR:", auditResult.error);
+    }
+
+    return [];
+  }
+
+  return (auditResult.data ?? []).map((log) => ({
+    id: log.id,
+    partnerId: log.partner_id,
+    partnerName: partnerMap.get(log.partner_id) ?? "Unknown partner",
+    actorUserId: log.actor_user_id,
+    action: log.action,
+    targetType: log.target_type,
+    targetId: log.target_id,
+    reservationId: log.reservation_id,
+    beforeState: log.before_state ?? {},
+    afterState: log.after_state ?? {},
+    metadata: log.metadata ?? {},
+    createdAt: log.created_at,
+  }));
 }
 
 export function formatAdminCurrency(value: number): string {

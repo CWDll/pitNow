@@ -331,6 +331,9 @@ test.describe("admin smoke", () => {
 
     await page.goto("/admin/settlement");
     await expect(page.getByRole("heading", { name: "Checkout Settlement" })).toBeVisible();
+
+    await page.goto("/admin/partner-audit");
+    await expect(page.getByRole("heading", { name: "Partner Admin Audit" })).toBeVisible();
   });
 
   test("payment ledger filters and safety copy render", async ({ page }) => {
@@ -555,6 +558,23 @@ test.describe("admin smoke", () => {
       await expect(page.getByText("Reservation Note Created")).toBeVisible();
       await expect(page.getByText("Reservation Note Resolved")).toBeVisible();
       await expect(page.getByText('"noteType": "ISSUE"')).toHaveCount(2);
+
+      await page.goto("/admin/partner-audit");
+      await expect(
+        page.getByRole("heading", { name: "Partner Admin Audit" }),
+      ).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Notes \(/ })).toBeVisible();
+      await expect(page.getByText("Reservation Note Created")).toBeVisible();
+      await expect(page.getByText("Reservation Note Resolved")).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: `Reservation ${reservationId}` }),
+      ).toHaveCount(2);
+      await expect(page.getByText('"noteType": "ISSUE"')).toHaveCount(2);
+
+      await page.getByRole("link", { name: /^Notes \(/ }).click();
+      await expect(page).toHaveURL(/\/admin\/partner-audit\?filter=notes/);
+      await expect(page.getByText("Reservation Note Created")).toBeVisible();
+      await expect(page.getByText("Reservation Note Resolved")).toBeVisible();
     } finally {
       if (auditLogIds.length > 0) {
         const { error } = await db
