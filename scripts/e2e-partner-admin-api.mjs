@@ -336,6 +336,214 @@ async function createReservation({ admin, userId, vehicleId, bay }) {
   throw new Error("테스트 예약 가능한 시간대를 찾지 못했습니다.");
 }
 
+async function createPastReservation({ admin, userId, vehicleId, bay }) {
+  const startBase = addHours(new Date(), -24 * 365);
+
+  for (let attempt = 0; attempt < 72; attempt += 1) {
+    const start = addHours(startBase, attempt * 4);
+    start.setUTCMinutes(0, 0, 0);
+    const end = addHours(start, 1);
+    const blockedUntil = addHours(end, 1);
+
+    const { data, error } = await admin
+      .from("reservations")
+      .insert({
+        user_id: userId,
+        vehicle_id: vehicleId,
+        partner_id: bay.partnerId,
+        bay_id: bay.id,
+        reservation_type: "SELF_SERVICE",
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        reserved_end_time: end.toISOString(),
+        blocked_until: blockedUntil.toISOString(),
+        duration_minutes: 60,
+        selected_task_count: 1,
+        helper_verify_requested: false,
+        helper_verify_fee: 0,
+        status: "CONFIRMED",
+        total_price: bay.hourlyPrice,
+      })
+      .select("id,start_time,end_time")
+      .single();
+
+    if (data) {
+      return data;
+    }
+
+    const message = error?.message ?? "unknown";
+
+    if (
+      message.includes("no_overlap") ||
+      message.includes("conflicting key value violates exclusion constraint")
+    ) {
+      continue;
+    }
+
+    throw new Error(`과거 테스트 예약 생성 실패: ${message}`);
+  }
+
+  throw new Error("과거 테스트 예약 가능한 시간대를 찾지 못했습니다.");
+}
+
+async function createLegacyPackageReservation({
+  admin,
+  userId,
+  vehicleId,
+  bay,
+  packageId,
+}) {
+  const startBase = addHours(new Date(), -24 * 240);
+
+  for (let attempt = 0; attempt < 72; attempt += 1) {
+    const start = addHours(startBase, attempt * 4);
+    start.setUTCMinutes(0, 0, 0);
+    const end = addHours(start, 1);
+    const blockedUntil = addHours(end, 1);
+
+    const { data, error } = await admin
+      .from("reservations")
+      .insert({
+        user_id: userId,
+        vehicle_id: vehicleId,
+        partner_id: bay.partnerId,
+        bay_id: bay.id,
+        reservation_type: "SHOP_SERVICE",
+        package_id: packageId,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        reserved_end_time: end.toISOString(),
+        blocked_until: blockedUntil.toISOString(),
+        duration_minutes: 60,
+        selected_task_count: 0,
+        helper_verify_requested: false,
+        helper_verify_fee: 0,
+        status: "CANCELLED",
+        total_price: bay.hourlyPrice,
+      })
+      .select("id,start_time,end_time")
+      .single();
+
+    if (data) {
+      return data;
+    }
+
+    const message = error?.message ?? "unknown";
+
+    if (
+      message.includes("no_overlap") ||
+      message.includes("conflicting key value violates exclusion constraint")
+    ) {
+      continue;
+    }
+
+    throw new Error(`legacy package 테스트 예약 생성 실패: ${message}`);
+  }
+
+  throw new Error("legacy package 테스트 예약 가능한 시간대를 찾지 못했습니다.");
+}
+
+async function assertReservationListRelatedLookups({ client, userId }) {
+  const { data, error: reservationError } = await client
+    .from("reservations")
+    .select(
+      "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, reserved_end_time, status, total_price, vehicles(plate_number, model, year)",
+    )
+    .eq("user_id", userId)
+    .order("start_time", { ascending: false });
+
+  if (reservationError) {
+    throw new Error(`reservation list 조회 실패: ${reservationError.message}`);
+  }
+
+  const reservationRows = data ?? [];
+  const completedReservationIds = reservationRows
+    .filter((reservation) => reservation.status === "COMPLETED")
+    .map((reservation) => reservation.id);
+  const partnerIds = uniqueValues(
+    reservationRows.map((reservation) => reservation.partner_id),
+  );
+  const bayIds = uniqueValues(reservationRows.map((reservation) => reservation.bay_id));
+  const packageIds = uniqueValues(
+    reservationRows.map((reservation) => reservation.package_id),
+  ).filter(isUuid);
+  const reservationIds = reservationRows.map((reservation) => reservation.id);
+
+  const [
+    partnerResult,
+    bayResult,
+    packageResult,
+    reservationTaskResult,
+    checkoutResult,
+    settlementPaymentResult,
+    reservationPaymentResult,
+  ] = await Promise.all([
+    partnerIds.length > 0
+      ? client.from("partners").select("id,name").in("id", partnerIds)
+      : Promise.resolve({ data: [], error: null }),
+    bayIds.length > 0
+      ? client.from("bays").select("id,name").in("id", bayIds)
+      : Promise.resolve({ data: [], error: null }),
+    packageIds.length > 0
+      ? client.from("service_packages").select("id,name").in("id", packageIds)
+      : Promise.resolve({ data: [], error: null }),
+    reservationIds.length > 0
+      ? client
+          .from("reservation_tasks")
+          .select("reservation_id,task_id")
+          .in("reservation_id", reservationIds)
+      : Promise.resolve({ data: [], error: null }),
+    completedReservationIds.length > 0
+      ? client
+          .from("checkouts")
+          .select("id,reservation_id,total_settlement")
+          .in("reservation_id", completedReservationIds)
+      : Promise.resolve({ data: [], error: null }),
+    completedReservationIds.length > 0
+      ? client
+          .from("payments")
+          .select("reservation_id,status,amount,created_at")
+          .eq("payment_purpose", "CHECKOUT_SETTLEMENT")
+          .in("reservation_id", completedReservationIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    reservationIds.length > 0
+      ? client
+          .from("payments")
+          .select("reservation_id,status,refunded_at,created_at")
+          .eq("payment_purpose", "RESERVATION")
+          .in("reservation_id", reservationIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const errors = [
+    partnerResult.error,
+    bayResult.error,
+    packageResult.error,
+    reservationTaskResult.error,
+    checkoutResult.error,
+    settlementPaymentResult.error,
+    reservationPaymentResult.error,
+  ].filter(Boolean);
+
+  if (errors.length > 0) {
+    throw new Error(`reservation list 연관 조회 실패: ${errors[0].message}`);
+  }
+
+  return reservationRows;
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 async function findAvailabilityBlockWindow({ admin, bay, startAfter }) {
   const startBase = addHours(startAfter, 72);
 
@@ -396,6 +604,18 @@ async function cleanup(admin, records) {
 
   if (records.reservationId) {
     tasks.push(admin.from("reservations").delete().eq("id", records.reservationId));
+  }
+
+  if (records.staleReservationId) {
+    tasks.push(
+      admin.from("reservations").delete().eq("id", records.staleReservationId),
+    );
+  }
+
+  if (records.legacyReservationId) {
+    tasks.push(
+      admin.from("reservations").delete().eq("id", records.legacyReservationId),
+    );
   }
 
   if (records.vehicleId) {
@@ -520,6 +740,35 @@ async function main() {
       runId,
     });
     const legalTaskId = await getLegalSelfTaskId(admin);
+    const userClient = createClient(supabaseUrl, anonKey);
+    const { error: userClientSignInError } =
+      await userClient.auth.signInWithPassword({
+        email: ADMIN_EMAIL,
+        password: DEFAULT_PASSWORD,
+      });
+
+    if (userClientSignInError) {
+      throw new Error(
+        `예약 목록 테스트 유저 로그인 실패: ${userClientSignInError.message}`,
+      );
+    }
+
+    const staleReservation = await createPastReservation({
+      admin,
+      userId: partnerAdminUser.id,
+      vehicleId: records.vehicleId,
+      bay,
+    });
+    records.staleReservationId = staleReservation.id;
+
+    const legacyReservation = await createLegacyPackageReservation({
+      admin,
+      userId: partnerAdminUser.id,
+      vehicleId: records.vehicleId,
+      bay,
+      packageId: `legacy-package-${runId}`,
+    });
+    records.legacyReservationId = legacyReservation.id;
 
     const mePayload = await apiRequest({
       baseUrl,
@@ -547,9 +796,46 @@ async function main() {
       testBayPayload.activeReservationCount !== 0 ||
       testBayPayload.canDeactivate !== true
     ) {
-      throw new Error("bays API 응답의 예약 보유/비활성화 가능 상태가 올바르지 않습니다.");
+      throw new Error(
+        "bays API 응답의 예약 보유/비활성화 가능 상태가 올바르지 않습니다.",
+      );
     }
-    formatStep("bays API 확인");
+    formatStep("bays API 과거 예약 제외 확인");
+
+    const reservationRows = await assertReservationListRelatedLookups({
+      client: userClient,
+      userId: partnerAdminUser.id,
+    });
+    if (
+      !reservationRows.some((reservation) => reservation.id === legacyReservation.id)
+    ) {
+      throw new Error("예약 목록 테스트 응답에 legacy package 예약이 없습니다.");
+    }
+    formatStep("reservation list 사용자 필터/legacy package 조회 확인");
+
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: "/api/payments/prepare",
+      method: "POST",
+      body: {
+        method: "CARD",
+        reservation: {
+          reservationType: "SELF_SERVICE",
+          bayId: bay.id,
+          vehicleId: records.vehicleId,
+          taskIds: [legalTaskId],
+          agreeOnlySelectedTasks: true,
+          consentMethod: "CHECKBOX",
+          helperVerifyRequested: false,
+          startTime: staleReservation.start_time,
+          endTime: staleReservation.end_time,
+        },
+      },
+      expectedStatus: 400,
+      expectedErrorCode: "PAST_RESERVATION_TIME",
+    });
+    formatStep("과거 시간 결제 준비 거부 확인");
 
     await apiRequest({
       baseUrl,

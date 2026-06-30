@@ -1914,3 +1914,19 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_search.sql
 - `npm run lint` 성공.
 - `npm run e2e:partner-admin` 성공.
 - `npm run e2e:ui` 성공.
+
+## 51. 2026-06-30 수동 QA 회귀 케이스 자동 검증 보강
+
+배포 URL 수동 QA에서 확인된 bay 잠금 카운트, `/reservation` 연관 조회, 과거 시간 예약 문제를 `npm run e2e:partner-admin`에 회귀 테스트로 추가했다.
+
+- 과거 `CONFIRMED` 예약을 생성한 뒤 `GET /api/partner-admin/bays`가 `activeReservationCount = 0`, `canDeactivate = true`를 반환하는지 검증한다.
+- 현재 사용자에게 legacy 문자열 `package_id` 예약을 생성한 뒤 `/reservation`과 같은 연관 조회 흐름이 실패하지 않는지 검증한다.
+- 과거 시간으로 `/api/payments/prepare`를 호출하면 400 `PAST_RESERVATION_TIME`으로 거부되는지 검증한다.
+- 테스트가 만든 stale/legacy 예약은 cleanup에서 삭제한다.
+
+검증:
+
+- `npx tsc --noEmit` 성공.
+- `npm run lint` 성공.
+- `npm run e2e:partner-admin` 성공.
+- `npm run e2e:ui` 성공.
