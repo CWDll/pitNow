@@ -91,7 +91,7 @@ git log --oneline --decorate --graph -5
 npm run check:supabase
 ```
 
-2026-06-28 점검 결과: 위 schema/bucket checks 통과.
+2026-06-30 점검 결과: 위 schema/bucket/RPC checks 통과.
 
 ## 5. Automated Verification
 
@@ -118,6 +118,12 @@ Admin만 확인:
 ```bash
 npm run verify:admin
 ```
+
+2026-06-30 점검 결과:
+
+- `npm run check:supabase` 성공.
+- `npm run verify:release` 성공.
+- 첫 `verify:release` 시 booking-flow 로그인 redirect 대기 5초가 짧아 1회 실패했고, 로그인 URL 대기 timeout을 15초로 늘린 뒤 `npm run e2e:ui`, `npm run verify:release` 모두 성공했다.
 
 ## 6. User Manual QA
 
@@ -151,6 +157,12 @@ npm run verify:admin
 
 ## 8. Partner-admin Manual QA
 
+- QA 계정은 `npm run e2e:partner-admin`가 준비한다.
+  - email: `pitnow-e2e-partner-admin@example.com`
+  - password: `Pitnow-partner-admin-e2e-2026!`
+- 위 계정은 `partner_admins` membership이 연결된 테스트 정비소에 접근한다.
+- E2E가 만든 예약/메모/block/audit row는 종료 시 정리하므로, `/admin/partner-audit`가 0건이어도 화면 오류로 보지 않는다.
+- Admin audit 목록을 눈으로 확인하려면 `/partner-admin`에서 베이 활성/비활성, availability block, 현장 메모 같은 write action을 수동으로 한 번 수행한 뒤 `/admin/partner-audit`를 다시 확인한다.
 - `/partner-admin`은 active `partner_admins` membership이 있는 사용자만 본인 정비소에 접근한다.
 - 오늘/예정 예약 목록이 본인 정비소 기준으로 보인다.
 - 예약 상세에서 체크인/체크아웃 증적을 확인할 수 있다.
