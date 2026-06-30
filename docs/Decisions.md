@@ -760,3 +760,22 @@ Rules:
 
 Reason:
 베이 활성/비활성, 예약 차단 시간, 현장 이슈 처리는 예약 상태 자체를 바꾸지 않는 운영 액션이다. 이를 `reservation_status_logs`에 억지로 넣으면 예약 상태 전환과 운영 변경 이력이 섞인다. 별도 audit ledger를 두면 운영 책임 추적과 향후 admin 감사 화면을 만들기 쉽고, audit 테이블 장애가 예약 운영 자체를 막지 않도록 best-effort로 유지할 수 있다.
+
+---
+
+## 2026-06-30
+
+Decision:
+사용자 예약 흐름에서 bay 총 개수와 예약 가능한 active bay 개수를 분리해 표시하고, 예약 선택 단계에는 active bay만 노출한다.
+
+Rules:
+
+- 정비소 목록과 상세 화면은 총 bay 개수를 기준으로 `베이 N개`를 표시한다.
+- inactive bay가 있으면 `베이 N개 중 M개 사용 가능`처럼 총 개수와 active 개수를 함께 표시한다.
+- 예약 시간/베이 선택 화면은 active bay만 버튼으로 노출한다.
+- 예약 생성 공통 검증은 inactive bay 요청을 `BAY_INACTIVE`로 거부한다.
+- store-admin이 active bay를 비활성화할 때 해당 bay에 `CONFIRMED`, `CHECKED_IN`, `IN_USE` 예약이 있으면 `BAY_HAS_ACTIVE_RESERVATION`으로 거부한다.
+- `COMPLETED`, `CANCELLED` 예약은 과거 이력으로 보고 bay 비활성화를 막지 않는다.
+
+Reason:
+store-admin의 bay 활성 상태가 사용자 목록/상세/예약 단계에서 다르게 보이면 사용자가 예약 불가능한 bay를 선택할 수 있다. 최종 예약 API는 이미 inactive bay를 거부하지만, 사용자는 결제 직전에야 실패를 알게 된다. 따라서 표시와 선택 가능성을 active 상태에 맞추고, 동시에 운영자가 진행 중인 예약이 있는 bay를 꺼서 예약과 운영 상태가 충돌하는 상황을 API에서 막는다.

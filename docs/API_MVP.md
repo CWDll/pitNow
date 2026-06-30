@@ -661,6 +661,7 @@ isActive: boolean
 검증:
 • Supabase Auth session 필수
 • bay.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
+• active bay를 비활성화할 때 해당 bay에 `CONFIRMED`, `CHECKED_IN`, `IN_USE` 예약이 있으면 409 `BAY_HAS_ACTIVE_RESERVATION`
 • 성공 시 `partner_admin_audit_logs.action = BAY_ACTIVE_UPDATED` best-effort 기록
 
 성공 응답:

@@ -37,6 +37,7 @@ interface HomePartnerCard {
   lat: number | null;
   lng: number | null;
   bayCount: number;
+  activeBayCount: number;
   averageRating: number | null;
   reviewCount: number;
   cheapestPackagePrice: number | null;
@@ -56,7 +57,6 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
   const { data: bays, error: bayError } = await supabase
     .from("bays")
     .select("id,partner_id,is_active")
-    .eq("is_active", true)
     .returns<BayRow[]>();
 
   if (bayError) {
@@ -83,11 +83,19 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
   }
 
   const bayCountByPartner = new Map<string, number>();
+  const activeBayCountByPartner = new Map<string, number>();
   for (const bay of bays ?? []) {
     bayCountByPartner.set(
       bay.partner_id,
       (bayCountByPartner.get(bay.partner_id) ?? 0) + 1,
     );
+
+    if (bay.is_active) {
+      activeBayCountByPartner.set(
+        bay.partner_id,
+        (activeBayCountByPartner.get(bay.partner_id) ?? 0) + 1,
+      );
+    }
   }
 
   const cheapestPackageByPartner = new Map<string, number>();
@@ -124,6 +132,7 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
       lat: partner.lat,
       lng: partner.lng,
       bayCount: bayCountByPartner.get(partner.id) ?? 0,
+      activeBayCount: activeBayCountByPartner.get(partner.id) ?? 0,
       averageRating:
         reviewStats && reviewStats.count > 0
           ? reviewStats.sum / reviewStats.count

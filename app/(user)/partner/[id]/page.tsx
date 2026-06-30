@@ -46,6 +46,14 @@ function formatDate(iso: string): string {
   });
 }
 
+function formatBaySummary(params: { bayCount: number; activeBayCount: number }) {
+  if (params.activeBayCount === params.bayCount) {
+    return `베이 ${params.bayCount}개`;
+  }
+
+  return `베이 ${params.bayCount}개 중 ${params.activeBayCount}개 사용 가능`;
+}
+
 async function getSelfTasks(): Promise<SelfTaskRow[]> {
   if (!hasSupabaseEnv) {
     return [];
@@ -119,7 +127,9 @@ export default async function PartnerDetailPage({
         </p>
         <p className="text-lg text-zinc-700">📍 {garage.address}</p>
         <p className="text-lg text-zinc-700">🕒 {garage.hours}</p>
-        <p className="text-lg text-zinc-700">🚗 베이 {garage.bayCount}개</p>
+        <p className="text-lg text-zinc-700">
+          🚗 {formatBaySummary(garage)}
+        </p>
         <p className="text-lg text-zinc-700">📞 {garage.phone}</p>
       </div>
 

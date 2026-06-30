@@ -30,6 +30,7 @@ const MIN_BLOCKS = 1;
 
 interface BayRow {
   id: string;
+  name: string;
 }
 
 interface ReservationRangeRow {
@@ -48,6 +49,7 @@ interface PartnerInfo {
   hourlyPrice: number;
   bayIds: string[];
   bayCount: number;
+  activeBayCount: number;
 }
 
 interface PartnerResponse {
@@ -126,6 +128,7 @@ function PartnerSchedulePageContent() {
   const [carMasterVerifyRequested, setCarMasterVerifyRequested] =
     useState<boolean>(false);
   const [bayIds, setBayIds] = useState<string[]>([]);
+  const [bayLabels, setBayLabels] = useState<string[]>([]);
   const [reservationRanges, setReservationRanges] = useState<
     Array<{ bayId: string; startMs: number; endMs: number }>
   >([]);
@@ -182,8 +185,17 @@ function PartnerSchedulePageContent() {
     () => (bayIds.length > 0 ? bayIds : (safeGarage?.bayIds ?? [])),
     [bayIds, safeGarage?.bayIds],
   );
+  const resolvedBayLabels = useMemo(
+    () =>
+      bayLabels.length > 0
+        ? bayLabels
+        : resolvedBayIds.map((_, index) => `${index + 1}번 베이`),
+    [bayLabels, resolvedBayIds],
+  );
   const selectedBayId =
     resolvedBayIds[selectedBay - 1] ?? resolvedBayIds[0] ?? null;
+  const selectedBayLabel =
+    resolvedBayLabels[selectedBay - 1] ?? resolvedBayLabels[0] ?? "베이";
 
   useEffect(() => {
     let isCancelled = false;
@@ -195,8 +207,10 @@ function PartnerSchedulePageContent() {
 
       const { data, error } = await supabase
         .from("bays")
-        .select("id")
+        .select("id,name")
         .eq("partner_id", safeGarage.id)
+        .eq("is_active", true)
+        .order("name", { ascending: true })
         .returns<BayRow[]>();
 
       if (error || !data || data.length === 0 || isCancelled) {
@@ -204,6 +218,7 @@ function PartnerSchedulePageContent() {
       }
 
       setBayIds(data.map((row) => row.id));
+      setBayLabels(data.map((row) => row.name));
       setSelectedBay((prev) => {
         const max = data.length;
         if (max < 1) {
@@ -334,9 +349,10 @@ function PartnerSchedulePageContent() {
 
   const meetsMinimum = selectedBlocks >= MIN_BLOCKS;
   const canProceed =
-    bookingMode === "PACKAGE"
+    resolvedBayIds.length > 0 &&
+    (bookingMode === "PACKAGE"
       ? hasSelection && selectedBlocks === packageDurationBlocks
-      : hasSelection && meetsMinimum;
+      : hasSelection && meetsMinimum);
   const hasValidHourlyPrice =
     bookingMode === "PACKAGE" ||
     Boolean(
@@ -491,7 +507,7 @@ function PartnerSchedulePageContent() {
       carId,
       carLabel,
       dateLabel: `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}(${selectedWeekdayLabel}) ${startTime} - ${endTime}`,
-      bayLabel: `${selectedBay}번 베이`,
+      bayLabel: selectedBayLabel,
       bayId: selectedBayId,
       startTime: toIsoByDateAndTime(selectedDate, startTime),
       endTime: toIsoByDateAndTime(selectedDate, endTime),
@@ -618,22 +634,29 @@ function PartnerSchedulePageContent() {
       <div
         className={`grid gap-2 ${resolvedBayIds.length > 4 ? "grid-cols-6" : "grid-cols-4"}`}
       >
-        {Array.from({ length: resolvedBayIds.length }).map((_, index) => {
+        {resolvedBayIds.map((bayId, index) => {
           const bayNumber = index + 1;
           const active = bayNumber === selectedBay;
+          const bayLabel = resolvedBayLabels[index] ?? `${bayNumber}번 베이`;
 
           return (
             <button
-              key={bayNumber}
+              key={bayId}
               type="button"
               onClick={() => handleBayChange(bayNumber)}
               className={`rounded-xl px-2 py-3 text-lg font-medium ${active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-800"}`}
             >
-              {bayNumber}번
+              {bayLabel}
             </button>
           );
         })}
       </div>
+
+      {resolvedBayIds.length === 0 ? (
+        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          현재 예약 가능한 베이가 없습니다. 다른 정비소를 선택해 주세요.
+        </p>
+      ) : null}
 
       <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
         <div className="mb-2 flex items-center justify-between">

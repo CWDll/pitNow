@@ -1855,3 +1855,23 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_search.sql
 - `npm run check:supabase` 성공.
 - `npm run e2e:ui` 성공.
 - `npm run verify:release` 성공.
+
+## 48. 2026-06-30 User-facing bay active 상태 동기화 보강
+
+수동 QA에서 store-admin이 테스트 파트너의 B-1, B-2를 비활성화했을 때 사용자 상세와 예약 시간/베이 선택 화면의 bay 표시가 서로 다르게 보이는 문제가 확인되었다.
+
+- 정비소 목록과 상세는 총 bay 수와 active bay 수를 분리해서 표시한다.
+  - inactive bay가 없으면 `베이 4개`.
+  - inactive bay가 있으면 `베이 4개 중 2개 사용 가능`.
+- `/partner/[id]/schedule`은 active bay만 조회하고 버튼 라벨도 실제 bay 이름을 사용한다.
+- active bay가 하나도 없으면 예약 진행 버튼을 비활성화하고 안내 문구를 표시한다.
+- 예약 생성 공통 검증의 `BAY_INACTIVE` guard는 유지한다.
+- `PATCH /api/partner-admin/bays/:id`는 해당 bay에 `CONFIRMED`, `CHECKED_IN`, `IN_USE` 예약이 있으면 비활성화를 409 `BAY_HAS_ACTIVE_RESERVATION`으로 거부한다.
+- Partner-admin API E2E에 예약 보유 bay 비활성화 거부 케이스를 추가했다.
+
+검증:
+
+- `npx tsc --noEmit` 성공.
+- `npm run lint` 성공.
+- `npm run e2e:partner-admin` 성공.
+- `npm run e2e:ui` 성공.

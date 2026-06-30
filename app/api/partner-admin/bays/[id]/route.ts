@@ -20,6 +20,10 @@ interface BayRow {
   is_active: boolean;
 }
 
+interface ActiveReservationRow {
+  id: string;
+}
+
 function jsonError(status: number, code: string, message: string) {
   return NextResponse.json(
     {
@@ -116,6 +120,36 @@ export async function PATCH(req: Request, context: Context) {
       "PARTNER_ADMIN_FORBIDDEN",
       "이 베이에 대한 관리자 권한이 없습니다.",
     );
+  }
+
+  if (bay.is_active && !body.isActive) {
+    const { data: activeReservation, error: activeReservationError } = await db
+      .from("reservations")
+      .select("id")
+      .eq("bay_id", bay.id)
+      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
+      .limit(1)
+      .maybeSingle<ActiveReservationRow>();
+
+    if (activeReservationError) {
+      console.error(
+        "PARTNER ADMIN BAY ACTIVE RESERVATION LOOKUP ERROR:",
+        activeReservationError,
+      );
+      return jsonError(
+        500,
+        "DB_ERROR",
+        "베이 예약 상태 확인 중 오류가 발생했습니다.",
+      );
+    }
+
+    if (activeReservation) {
+      return jsonError(
+        409,
+        "BAY_HAS_ACTIVE_RESERVATION",
+        "확정/이용 중인 예약이 있는 베이는 비활성화할 수 없습니다.",
+      );
+    }
   }
 
   const { data: updatedBay, error: updateError } = await db

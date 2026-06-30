@@ -9,6 +9,7 @@ export interface PartnerProfile {
   hourlyPrice: number;
   bayIds: string[];
   bayCount: number;
+  activeBayCount: number;
 }
 
 interface PartnerRow {
@@ -48,7 +49,6 @@ export async function getPartnerProfileById(
     .from("bays")
     .select("id,partner_id,is_active")
     .eq("partner_id", partnerId)
-    .eq("is_active", true)
     .returns<BayRow[]>();
 
   if (bayError) {
@@ -56,7 +56,8 @@ export async function getPartnerProfileById(
     return null;
   }
 
-  const bayIds = (bays ?? []).map((bay) => bay.id);
+  const allBays = bays ?? [];
+  const bayIds = allBays.filter((bay) => bay.is_active).map((bay) => bay.id);
   const hourlyPrice = Number(partner.hourly_price);
 
   return {
@@ -67,6 +68,7 @@ export async function getPartnerProfileById(
     phone: partner.phone ?? "전화번호 정보 준비중",
     hourlyPrice: Number.isFinite(hourlyPrice) ? hourlyPrice : 0,
     bayIds,
-    bayCount: bayIds.length,
+    bayCount: allBays.length,
+    activeBayCount: bayIds.length,
   };
 }

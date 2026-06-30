@@ -9,6 +9,7 @@ type SortMode = "FASTEST" | "DISTANCE" | "PRICE" | "RATING";
 
 export interface HomePartnerExplorerItem extends PartnerMapItem {
   bayCount: number;
+  activeBayCount: number;
   averageRating: number | null;
   reviewCount: number;
   cheapestPackagePrice: number | null;
@@ -69,6 +70,14 @@ function distanceLabel(distanceKm: number | null): string | null {
   }
 
   return `${distanceKm.toFixed(1)}km`;
+}
+
+function formatBaySummary(partner: HomePartnerExplorerItem) {
+  if (partner.activeBayCount === partner.bayCount) {
+    return `베이 ${partner.bayCount}개`;
+  }
+
+  return `베이 ${partner.bayCount}개 중 ${partner.activeBayCount}개 사용 가능`;
 }
 
 function sortPartners(
@@ -225,7 +234,7 @@ export function HomePartnerExplorer({
                     {partner.name}
                   </h2>
                   <p className="mt-1 text-sm text-zinc-500">
-                    {partner.address} · 베이 {partner.bayCount}개
+                    {partner.address} · {formatBaySummary(partner)}
                   </p>
                 </div>
                 <Link

@@ -185,14 +185,34 @@ async function getTestBay(admin) {
     throw new Error(`테스트 베이 조회 실패: ${error.message}`);
   }
 
-  const bay = (data ?? []).find((row) => {
+  const candidates = (data ?? []).filter((row) => {
     const partner = Array.isArray(row.partners) ? row.partners[0] : row.partners;
     const hourlyPrice = Number(partner?.hourly_price ?? 0);
-    return Number.isFinite(hourlyPrice) && hourlyPrice > 0;
+    return row.is_active && Number.isFinite(hourlyPrice) && hourlyPrice > 0;
   });
 
+  let bay = null;
+  for (const candidate of candidates) {
+    const { data: activeReservation, error: reservationError } = await admin
+      .from("reservations")
+      .select("id")
+      .eq("bay_id", candidate.id)
+      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
+      .limit(1)
+      .maybeSingle();
+
+    if (reservationError) {
+      throw new Error(`테스트 베이 예약 상태 조회 실패: ${reservationError.message}`);
+    }
+
+    if (!activeReservation) {
+      bay = candidate;
+      break;
+    }
+  }
+
   if (!bay) {
-    throw new Error("시간당 요금이 설정된 테스트 베이가 없습니다.");
+    throw new Error("시간당 요금이 설정되고 진행 중 예약이 없는 활성 테스트 베이가 없습니다.");
   }
 
   const partner = Array.isArray(bay.partners) ? bay.partners[0] : bay.partners;
@@ -500,15 +520,6 @@ async function main() {
       runId,
     });
     const legalTaskId = await getLegalSelfTaskId(admin);
-    const reservation = await createReservation({
-      admin,
-      userId: partnerAdminUser.id,
-      vehicleId: records.vehicleId,
-      bay,
-    });
-    records.reservationId = reservation.id;
-    const reservationDate = formatKstDate(new Date(reservation.start_time));
-    formatStep("테스트 예약 생성", reservation.id);
 
     const mePayload = await apiRequest({
       baseUrl,
@@ -548,6 +559,27 @@ async function main() {
       body: { isActive: bay.isActive },
     });
     formatStep("bay 활성 상태 변경/복구 API 확인");
+
+    const reservation = await createReservation({
+      admin,
+      userId: partnerAdminUser.id,
+      vehicleId: records.vehicleId,
+      bay,
+    });
+    records.reservationId = reservation.id;
+    const reservationDate = formatKstDate(new Date(reservation.start_time));
+    formatStep("테스트 예약 생성", reservation.id);
+
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/bays/${bay.id}`,
+      method: "PATCH",
+      body: { isActive: false },
+      expectedStatus: 409,
+      expectedErrorCode: "BAY_HAS_ACTIVE_RESERVATION",
+    });
+    formatStep("예약 보유 베이 비활성화 거부 확인");
 
     const reservationsPayload = await apiRequest({
       baseUrl,
