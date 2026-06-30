@@ -182,9 +182,30 @@ export async function PATCH(req: Request, context: Context) {
     },
   });
 
+  const { count: activeReservationCount, error: activeReservationCountError } =
+    await db
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("bay_id", updatedBay.id)
+      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"]);
+
+  if (activeReservationCountError) {
+    console.error(
+      "PARTNER ADMIN BAY RESERVATION COUNT ERROR:",
+      activeReservationCountError,
+    );
+    return jsonError(
+      500,
+      "DB_ERROR",
+      "베이 예약 상태 조회 중 오류가 발생했습니다.",
+    );
+  }
+
   return NextResponse.json({
     success: true,
     bay: {
+      activeReservationCount: activeReservationCount ?? 0,
+      canDeactivate: (activeReservationCount ?? 0) === 0,
       id: updatedBay.id,
       partnerId: updatedBay.partner_id,
       name: updatedBay.name,

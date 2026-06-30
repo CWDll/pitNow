@@ -167,7 +167,7 @@ npm run verify:admin
 - 오늘/예정 예약 목록이 본인 정비소 기준으로 보인다.
 - 예약 상세에서 체크인/체크아웃 증적을 확인할 수 있다.
 - 베이 활성/비활성 변경 후 사용자 목록/상세에는 `베이 N개 중 M개 사용 가능`으로 보이고, 예약 시간/베이 선택 단계에는 active bay만 보인다.
-- `CONFIRMED`, `CHECKED_IN`, `IN_USE` 예약이 있는 bay는 비활성화가 거부된다.
+- `CONFIRMED`, `CHECKED_IN`, `IN_USE` 예약이 있는 bay는 진행 중 예약 건수와 함께 `비활성화 불가`로 표시되고 API에서도 거부된다.
 - availability block 생성/수정/해제 후 겹치는 예약 준비가 `PARTNER_AVAILABILITY_BLOCKED`로 거부된다.
 - 현장 메모/이슈/지연/노쇼를 생성하고 해결/다시 열기할 수 있다.
 - partner field notes는 사용자 앱에는 보이지 않고 internal admin에는 보인다.

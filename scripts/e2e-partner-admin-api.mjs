@@ -539,8 +539,15 @@ async function main() {
       token: adminToken,
       path: `/api/partner-admin/bays?partnerId=${bay.partnerId}`,
     });
-    if (!baysPayload.bays?.some((item) => item.id === bay.id)) {
+    const testBayPayload = baysPayload.bays?.find((item) => item.id === bay.id);
+    if (!testBayPayload) {
       throw new Error("bays API 응답에 테스트 베이가 없습니다.");
+    }
+    if (
+      testBayPayload.activeReservationCount !== 0 ||
+      testBayPayload.canDeactivate !== true
+    ) {
+      throw new Error("bays API 응답의 예약 보유/비활성화 가능 상태가 올바르지 않습니다.");
     }
     formatStep("bays API 확인");
 
@@ -569,6 +576,23 @@ async function main() {
     records.reservationId = reservation.id;
     const reservationDate = formatKstDate(new Date(reservation.start_time));
     formatStep("테스트 예약 생성", reservation.id);
+
+    const baysWithReservationPayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/bays?partnerId=${bay.partnerId}`,
+    });
+    const reservedBayPayload = baysWithReservationPayload.bays?.find(
+      (item) => item.id === bay.id,
+    );
+    if (
+      !reservedBayPayload ||
+      reservedBayPayload.activeReservationCount < 1 ||
+      reservedBayPayload.canDeactivate !== false
+    ) {
+      throw new Error("예약 보유 베이의 비활성화 가능 상태가 올바르지 않습니다.");
+    }
+    formatStep("예약 보유 베이 상태 표시 API 확인");
 
     await apiRequest({
       baseUrl,

@@ -48,6 +48,8 @@ interface PartnerAdminReservation {
 }
 
 interface PartnerBay {
+  activeReservationCount: number;
+  canDeactivate: boolean;
   id: string;
   partnerId: string;
   name: string;
@@ -805,6 +807,11 @@ export function PartnerAdminDashboard() {
   }
 
   async function updateBayActiveState(bay: PartnerBay, isActive: boolean) {
+    if (!isActive && !bay.canDeactivate) {
+      setError("확정/이용 중인 예약이 있는 베이는 비활성화할 수 없습니다.");
+      return;
+    }
+
     setUpdatingBayId(bay.id);
     setError("");
 
@@ -1128,7 +1135,7 @@ export function PartnerAdminDashboard() {
               <div>
                 <h2 className="text-base font-semibold">베이 관리</h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  비활성 베이는 사용자가 새 예약을 만들 수 없습니다.
+                  진행 중 예약이 있는 베이는 완료 또는 취소 전까지 비활성화할 수 없습니다.
                 </p>
               </div>
               {isLoadingBays ? (
@@ -1142,39 +1149,68 @@ export function PartnerAdminDashboard() {
               {bays.length === 0 ? (
                 <p className="text-sm text-zinc-500">등록된 베이가 없습니다.</p>
               ) : (
-                bays.map((bay) => (
-                  <div
-                    key={bay.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3"
-                  >
-                    <div>
-                      <p className="font-semibold">{bay.name}</p>
-                      <p
-                        className={`mt-1 text-xs font-semibold ${
-                          bay.isActive ? "text-emerald-700" : "text-zinc-500"
+                bays.map((bay) => {
+                  const hasActiveReservations = bay.activeReservationCount > 0;
+                  const disableDeactivateButton =
+                    bay.isActive &&
+                    (!bay.canDeactivate || updatingBayId === bay.id);
+                  const isButtonDisabled =
+                    updatingBayId === bay.id || disableDeactivateButton;
+
+                  return (
+                    <div
+                      key={bay.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3"
+                    >
+                      <div>
+                        <p className="font-semibold">{bay.name}</p>
+                        <p
+                          className={`mt-1 text-xs font-semibold ${
+                            bay.isActive ? "text-emerald-700" : "text-zinc-500"
+                          }`}
+                        >
+                          {bay.isActive ? "예약 가능" : "예약 중지"}
+                        </p>
+                        <p
+                          className={`mt-1 text-xs ${
+                            hasActiveReservations
+                              ? "font-semibold text-amber-700"
+                              : "text-zinc-500"
+                          }`}
+                        >
+                          {hasActiveReservations
+                            ? `진행 중 예약 ${bay.activeReservationCount}건`
+                            : "진행 중 예약 없음"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isButtonDisabled}
+                        title={
+                          disableDeactivateButton
+                            ? "진행 중 예약이 있어 비활성화할 수 없습니다."
+                            : undefined
+                        }
+                        onClick={() =>
+                          void updateBayActiveState(bay, !bay.isActive)
+                        }
+                        className={`h-9 rounded-full px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          bay.isActive
+                            ? "bg-zinc-900 text-white hover:bg-zinc-700"
+                            : "bg-blue-600 text-white hover:bg-blue-500"
                         }`}
                       >
-                        {bay.isActive ? "예약 가능" : "예약 중지"}
-                      </p>
+                        {updatingBayId === bay.id
+                          ? "변경 중"
+                          : disableDeactivateButton
+                            ? "비활성화 불가"
+                            : bay.isActive
+                              ? "비활성화"
+                              : "활성화"}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      disabled={updatingBayId === bay.id}
-                      onClick={() => void updateBayActiveState(bay, !bay.isActive)}
-                      className={`h-9 rounded-full px-3 text-xs font-semibold transition disabled:opacity-50 ${
-                        bay.isActive
-                          ? "bg-zinc-900 text-white hover:bg-zinc-700"
-                          : "bg-blue-600 text-white hover:bg-blue-500"
-                      }`}
-                    >
-                      {updatingBayId === bay.id
-                        ? "변경 중"
-                        : bay.isActive
-                          ? "비활성화"
-                          : "활성화"}
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </section>

@@ -15,6 +15,10 @@ interface BayRow {
   is_active: boolean;
 }
 
+interface ReservationBayRow {
+  bay_id: string;
+}
+
 function jsonError(status: number, code: string, message: string) {
   return NextResponse.json(
     {
@@ -82,13 +86,51 @@ export async function GET(req: Request) {
     return jsonError(500, "DB_ERROR", "베이 목록 조회 중 오류가 발생했습니다.");
   }
 
+  const bayIds = (data ?? []).map((bay) => bay.id);
+  const activeReservationCountByBay = new Map<string, number>();
+
+  if (bayIds.length > 0) {
+    const { data: activeReservations, error: activeReservationsError } = await db
+      .from("reservations")
+      .select("bay_id")
+      .in("bay_id", bayIds)
+      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
+      .returns<ReservationBayRow[]>();
+
+    if (activeReservationsError) {
+      console.error(
+        "PARTNER ADMIN BAY RESERVATION COUNT ERROR:",
+        activeReservationsError,
+      );
+      return jsonError(
+        500,
+        "DB_ERROR",
+        "베이 예약 상태 조회 중 오류가 발생했습니다.",
+      );
+    }
+
+    for (const reservation of activeReservations ?? []) {
+      activeReservationCountByBay.set(
+        reservation.bay_id,
+        (activeReservationCountByBay.get(reservation.bay_id) ?? 0) + 1,
+      );
+    }
+  }
+
   return NextResponse.json({
     success: true,
-    bays: (data ?? []).map((bay) => ({
-      id: bay.id,
-      partnerId: bay.partner_id,
-      name: bay.name,
-      isActive: bay.is_active,
-    })),
+    bays: (data ?? []).map((bay) => {
+      const activeReservationCount =
+        activeReservationCountByBay.get(bay.id) ?? 0;
+
+      return {
+        activeReservationCount,
+        canDeactivate: activeReservationCount === 0,
+        id: bay.id,
+        partnerId: bay.partner_id,
+        name: bay.name,
+        isActive: bay.is_active,
+      };
+    }),
   });
 }

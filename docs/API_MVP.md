@@ -639,7 +639,9 @@ bays: [
 id,
 partnerId,
 name,
-isActive
+isActive,
+activeReservationCount,
+canDeactivate
 }
 ]
 }

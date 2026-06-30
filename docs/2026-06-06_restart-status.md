@@ -1875,3 +1875,20 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_search.sql
 - `npm run lint` 성공.
 - `npm run e2e:partner-admin` 성공.
 - `npm run e2e:ui` 성공.
+
+## 49. 2026-06-30 Partner-admin bay 비활성화 UX 보강
+
+진행 중 예약이 있는 bay를 운영자가 비활성화하려고 할 때 서버 409를 보기 전 화면에서 이유를 알 수 있도록 partner-admin 베이 관리 UX를 보강했다.
+
+- `GET /api/partner-admin/bays` 응답에 `activeReservationCount`, `canDeactivate`를 추가했다.
+- `PATCH /api/partner-admin/bays/:id` 성공 응답도 같은 bay 상태 필드를 내려준다.
+- `/partner-admin` 베이 카드에 진행 중 예약 건수를 표시한다.
+- 진행 중 예약이 있는 active bay는 버튼을 `비활성화 불가`로 표시하고 disabled 처리한다.
+- Partner-admin API E2E가 예약 생성 전/후의 `activeReservationCount`, `canDeactivate` 상태를 검증한다.
+
+검증:
+
+- `npx tsc --noEmit` 성공.
+- `npm run lint` 성공.
+- `npm run e2e:partner-admin` 성공.
+- `npm run e2e:ui` 성공.
