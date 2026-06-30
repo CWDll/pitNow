@@ -124,6 +124,7 @@ function PartnerSchedulePageContent() {
   const [selectedBay, setSelectedBay] = useState<number>(1);
   const [selectedStartIdx, setSelectedStartIdx] = useState<number | null>(null);
   const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
   const [carMasterVerifyRequested, setCarMasterVerifyRequested] =
     useState<boolean>(false);
@@ -196,6 +197,15 @@ function PartnerSchedulePageContent() {
     resolvedBayIds[selectedBay - 1] ?? resolvedBayIds[0] ?? null;
   const selectedBayLabel =
     resolvedBayLabels[selectedBay - 1] ?? resolvedBayLabels[0] ?? "베이";
+  const todayMs = useMemo(() => stripTime(new Date(nowMs)).getTime(), [nowMs]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
@@ -399,6 +409,13 @@ function PartnerSchedulePageContent() {
       endExclusiveIdx > blockCount ||
       startIdx >= endExclusiveIdx
     ) {
+      return false;
+    }
+
+    const startIso = toIsoByDateAndTime(selectedDate, timeBoundaries[startIdx]);
+    const startMs = new Date(startIso).getTime();
+
+    if (!Number.isFinite(startMs) || startMs <= nowMs) {
       return false;
     }
 
@@ -610,12 +627,16 @@ function PartnerSchedulePageContent() {
       <div className="mb-6 grid grid-cols-7 gap-2">
         {weekDates.map((date) => {
           const active = date.getTime() === selectedDate.getTime();
+          const disabled = date.getTime() < todayMs;
           return (
             <button
               key={`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
               type="button"
+              disabled={disabled}
               onClick={() => setSelectedDate(date)}
-              className={`rounded-2xl px-2 py-3 text-center ${active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"}`}
+              className={`rounded-2xl px-2 py-3 text-center disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 ${
+                active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"
+              }`}
             >
               <p className="text-xs">{weekdayLabels[date.getDay()]}</p>
               <p className="text-2xl font-semibold">{date.getDate()}</p>

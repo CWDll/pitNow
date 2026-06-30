@@ -332,6 +332,7 @@ endTime: string
 • Authorization Bearer session 또는 local dev fallback 필요
 • 예약 생성과 같은 서버 검증/가격 계산 경로 사용
 • 선택한 bay/time window가 active `partner_availability_blocks`와 겹치면 거부
+• 예약 시작 시간이 현재 시각 이전이면 400 `PAST_RESERVATION_TIME`
 • 클라이언트 결제 금액을 신뢰하지 않음
 • 이 단계에서는 reservations row를 만들지 않음
 

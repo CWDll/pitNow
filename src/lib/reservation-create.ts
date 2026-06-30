@@ -276,6 +276,16 @@ function validateReservationWindow(
     };
   }
 
+  if (startDate.getTime() <= Date.now()) {
+    return {
+      error: apiError(
+        400,
+        "PAST_RESERVATION_TIME",
+        "현재 시각 이후의 예약 시간을 선택해 주세요.",
+      ),
+    };
+  }
+
   const durationMs = endDate.getTime() - startDate.getTime();
   const hourMs = 60 * 60 * 1000;
 

@@ -1878,16 +1878,38 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_search.sql
 
 ## 49. 2026-06-30 Partner-admin bay 비활성화 UX 보강
 
-진행 중 예약이 있는 bay를 운영자가 비활성화하려고 할 때 서버 409를 보기 전 화면에서 이유를 알 수 있도록 partner-admin 베이 관리 UX를 보강했다.
+진행/예정 예약이 있는 bay를 운영자가 비활성화하려고 할 때 서버 409를 보기 전 화면에서 이유를 알 수 있도록 partner-admin 베이 관리 UX를 보강했다.
 
 - `GET /api/partner-admin/bays` 응답에 `activeReservationCount`, `canDeactivate`를 추가했다.
 - `PATCH /api/partner-admin/bays/:id` 성공 응답도 같은 bay 상태 필드를 내려준다.
-- `/partner-admin` 베이 카드에 진행 중 예약 건수를 표시한다.
-- 진행 중 예약이 있는 active bay는 버튼을 `비활성화 불가`로 표시하고 disabled 처리한다.
+- `/partner-admin` 베이 카드에 진행/예정 예약 건수를 표시한다.
+- 진행/예정 예약이 있는 active bay는 버튼을 `비활성화 불가`로 표시하고 disabled 처리한다.
 - Partner-admin API E2E가 예약 생성 전/후의 `activeReservationCount`, `canDeactivate` 상태를 검증한다.
 
 검증:
 
+- `npx tsc --noEmit` 성공.
+- `npm run lint` 성공.
+- `npm run e2e:partner-admin` 성공.
+- `npm run e2e:ui` 성공.
+
+## 50. 2026-06-30 과거 예약/예약 목록 연관 조회 수정
+
+배포 URL 수동 QA에서 테스트 파트너 B-3 예약 후 `/reservation`이 `예약 연관 정보를 불러오지 못했습니다.`를 표시하고, B-1에 `진행 중 예약 1건`이 보이는 문제가 확인되었다.
+
+- B-1 카운트 원인은 2026-03-10 과거 `CONFIRMED` seed/test 예약이 DB에 남아 있었기 때문이다.
+- Partner-admin bay 잠금 카운트는 `CHECKED_IN`, `IN_USE` 또는 `blocked_until > now`인 `CONFIRMED` 예약만 세도록 변경했다.
+- `/partner-admin` 문구를 `진행/예정 예약`으로 조정했다.
+- `/reservation`은 RLS에만 기대지 않고 현재 로그인 사용자 `user_id`로 예약을 명시 필터링한다.
+- 오래된 문자열 `package_id`가 UUID 조회에 들어가 `service_packages.id` 조회를 깨지 않도록 UUID package id만 연관 조회한다.
+- 예약 시작 시간이 현재 시각 이전이면 `PAST_RESERVATION_TIME`으로 결제 준비를 거부한다.
+- 사용자 스케줄 화면에서 과거 날짜와 과거 시간 블록 선택을 비활성화한다.
+
+검증:
+
+- DB 확인: 테스트 파트너 B-1의 과거 예약은 bay 잠금 카운트에서 제외됨.
+- RLS 조건 재현: `/reservation` 연관 조회가 현재 사용자 예약 1건 기준으로 성공.
+- API 확인: 과거 시간 결제 준비가 400 `PAST_RESERVATION_TIME`으로 거부됨.
 - `npx tsc --noEmit` 성공.
 - `npm run lint` 성공.
 - `npm run e2e:partner-admin` 성공.

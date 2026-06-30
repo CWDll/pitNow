@@ -97,6 +97,12 @@ function uniqueValues(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 function mapReservationItem(
   reservation: ReservationRow,
   maps: {
@@ -176,6 +182,7 @@ export default function ReservationListPage() {
       const { data, error: reservationError } = await supabase
         .from("reservations")
         .select("id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, reserved_end_time, status, total_price, vehicles(plate_number, model, year)")
+        .eq("user_id", sessionData.session.user.id)
         .order("start_time", { ascending: false })
         .returns<ReservationRow[]>();
 
@@ -202,7 +209,7 @@ export default function ReservationListPage() {
       );
       const packageIds = uniqueValues(
         reservationRows.map((reservation) => reservation.package_id),
-      );
+      ).filter(isUuid);
       const reservationIds = reservationRows.map((reservation) => reservation.id);
 
       const [

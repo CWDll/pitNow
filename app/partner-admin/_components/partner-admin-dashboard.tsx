@@ -808,7 +808,7 @@ export function PartnerAdminDashboard() {
 
   async function updateBayActiveState(bay: PartnerBay, isActive: boolean) {
     if (!isActive && !bay.canDeactivate) {
-      setError("확정/이용 중인 예약이 있는 베이는 비활성화할 수 없습니다.");
+      setError("진행/예정 예약이 있는 베이는 비활성화할 수 없습니다.");
       return;
     }
 
@@ -1135,7 +1135,7 @@ export function PartnerAdminDashboard() {
               <div>
                 <h2 className="text-base font-semibold">베이 관리</h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  진행 중 예약이 있는 베이는 완료 또는 취소 전까지 비활성화할 수 없습니다.
+                  진행/예정 예약이 있는 베이는 완료 또는 취소 전까지 비활성화할 수 없습니다.
                 </p>
               </div>
               {isLoadingBays ? (
@@ -1179,8 +1179,8 @@ export function PartnerAdminDashboard() {
                           }`}
                         >
                           {hasActiveReservations
-                            ? `진행 중 예약 ${bay.activeReservationCount}건`
-                            : "진행 중 예약 없음"}
+                            ? `진행/예정 예약 ${bay.activeReservationCount}건`
+                            : "진행/예정 예약 없음"}
                         </p>
                       </div>
                       <button
@@ -1188,7 +1188,7 @@ export function PartnerAdminDashboard() {
                         disabled={isButtonDisabled}
                         title={
                           disableDeactivateButton
-                            ? "진행 중 예약이 있어 비활성화할 수 없습니다."
+                            ? "진행/예정 예약이 있어 비활성화할 수 없습니다."
                             : undefined
                         }
                         onClick={() =>

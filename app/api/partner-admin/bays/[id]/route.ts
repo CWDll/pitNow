@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "@/src/lib/auth";
+import {
+  BAY_BLOCKING_RESERVATION_STATUSES,
+  isBayBlockingReservation,
+} from "@/src/lib/bay-reservations";
 import { recordPartnerAdminAudit } from "@/src/lib/partner-admin-audit";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
 import {
@@ -21,7 +25,9 @@ interface BayRow {
 }
 
 interface ActiveReservationRow {
+  blocked_until: string | null;
   id: string;
+  status: string;
 }
 
 function jsonError(status: number, code: string, message: string) {
@@ -123,13 +129,12 @@ export async function PATCH(req: Request, context: Context) {
   }
 
   if (bay.is_active && !body.isActive) {
-    const { data: activeReservation, error: activeReservationError } = await db
+    const { data: activeReservations, error: activeReservationError } = await db
       .from("reservations")
-      .select("id")
+      .select("id,status,blocked_until")
       .eq("bay_id", bay.id)
-      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
-      .limit(1)
-      .maybeSingle<ActiveReservationRow>();
+      .in("status", BAY_BLOCKING_RESERVATION_STATUSES)
+      .returns<ActiveReservationRow[]>();
 
     if (activeReservationError) {
       console.error(
@@ -143,7 +148,17 @@ export async function PATCH(req: Request, context: Context) {
       );
     }
 
-    if (activeReservation) {
+    const now = new Date();
+    const hasBlockingReservation = (activeReservations ?? []).some(
+      (reservation) =>
+        isBayBlockingReservation({
+          blockedUntil: reservation.blocked_until,
+          now,
+          status: reservation.status,
+        }),
+    );
+
+    if (hasBlockingReservation) {
       return jsonError(
         409,
         "BAY_HAS_ACTIVE_RESERVATION",
@@ -182,12 +197,12 @@ export async function PATCH(req: Request, context: Context) {
     },
   });
 
-  const { count: activeReservationCount, error: activeReservationCountError } =
-    await db
+  const { data: activeReservations, error: activeReservationCountError } = await db
       .from("reservations")
-      .select("id", { count: "exact", head: true })
+      .select("id,status,blocked_until")
       .eq("bay_id", updatedBay.id)
-      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"]);
+      .in("status", BAY_BLOCKING_RESERVATION_STATUSES)
+      .returns<ActiveReservationRow[]>();
 
   if (activeReservationCountError) {
     console.error(
@@ -201,11 +216,21 @@ export async function PATCH(req: Request, context: Context) {
     );
   }
 
+  const now = new Date();
+  const activeReservationCount = (activeReservations ?? []).filter(
+    (reservation) =>
+      isBayBlockingReservation({
+        blockedUntil: reservation.blocked_until,
+        now,
+        status: reservation.status,
+      }),
+  ).length;
+
   return NextResponse.json({
     success: true,
     bay: {
-      activeReservationCount: activeReservationCount ?? 0,
-      canDeactivate: (activeReservationCount ?? 0) === 0,
+      activeReservationCount,
+      canDeactivate: activeReservationCount === 0,
       id: updatedBay.id,
       partnerId: updatedBay.partner_id,
       name: updatedBay.name,

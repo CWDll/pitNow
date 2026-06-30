@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "@/src/lib/auth";
+import {
+  BAY_BLOCKING_RESERVATION_STATUSES,
+  isBayBlockingReservation,
+} from "@/src/lib/bay-reservations";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
 import {
   getSupabaseEnvErrorResponse,
@@ -17,6 +21,8 @@ interface BayRow {
 
 interface ReservationBayRow {
   bay_id: string;
+  blocked_until: string | null;
+  status: string;
 }
 
 function jsonError(status: number, code: string, message: string) {
@@ -92,9 +98,9 @@ export async function GET(req: Request) {
   if (bayIds.length > 0) {
     const { data: activeReservations, error: activeReservationsError } = await db
       .from("reservations")
-      .select("bay_id")
+      .select("bay_id,status,blocked_until")
       .in("bay_id", bayIds)
-      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
+      .in("status", BAY_BLOCKING_RESERVATION_STATUSES)
       .returns<ReservationBayRow[]>();
 
     if (activeReservationsError) {
@@ -109,7 +115,19 @@ export async function GET(req: Request) {
       );
     }
 
+    const now = new Date();
+
     for (const reservation of activeReservations ?? []) {
+      if (
+        !isBayBlockingReservation({
+          blockedUntil: reservation.blocked_until,
+          now,
+          status: reservation.status,
+        })
+      ) {
+        continue;
+      }
+
       activeReservationCountByBay.set(
         reservation.bay_id,
         (activeReservationCountByBay.get(reservation.bay_id) ?? 0) + 1,
