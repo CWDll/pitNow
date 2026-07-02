@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { redirectToLogin } from "@/src/lib/client-auth";
 
+// type, interface, API는 나중에 분리해야 함. 한번에 옮길 것.
+
 type ReservationStatus =
   | "CONFIRMED"
   | "CHECKED_IN"
@@ -347,7 +349,9 @@ export function PartnerAdminDashboard() {
   const [partners, setPartners] = useState<PartnerMembership[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
   const [selectedDate, setSelectedDate] = useState(todayKstDate);
-  const [reservations, setReservations] = useState<PartnerAdminReservation[]>([]);
+  const [reservations, setReservations] = useState<PartnerAdminReservation[]>(
+    [],
+  );
   const [bays, setBays] = useState<PartnerBay[]>([]);
   const [availabilityBlocks, setAvailabilityBlocks] = useState<
     AvailabilityBlock[]
@@ -361,7 +365,9 @@ export function PartnerAdminDashboard() {
   const [editBlockEndsAt, setEditBlockEndsAt] = useState("");
   const [editBlockReason, setEditBlockReason] = useState("");
   const [selectedReservationId, setSelectedReservationId] = useState("");
-  const [detail, setDetail] = useState<PartnerAdminReservationDetail | null>(null);
+  const [detail, setDetail] = useState<PartnerAdminReservationDetail | null>(
+    null,
+  );
   const [notes, setNotes] = useState<PartnerReservationNote[]>([]);
   const [noteFilter, setNoteFilter] = useState<NoteFilter>("ALL");
   const [noteType, setNoteType] = useState<PartnerNoteType>("NOTE");
@@ -420,7 +426,7 @@ export function PartnerAdminDashboard() {
         payload &&
         typeof payload === "object" &&
         Array.isArray((payload as { partners?: unknown }).partners)
-          ? ((payload as { partners: PartnerMembership[] }).partners)
+          ? (payload as { partners: PartnerMembership[] }).partners
           : [];
 
       if (mounted) {
@@ -475,9 +481,11 @@ export function PartnerAdminDashboard() {
         payload &&
         typeof payload === "object" &&
         Array.isArray((payload as { reservations?: unknown }).reservations)
-          ? ((payload as {
-              reservations: PartnerAdminReservation[];
-            }).reservations)
+          ? (
+              payload as {
+                reservations: PartnerAdminReservation[];
+              }
+            ).reservations
           : [];
 
       if (mounted) {
@@ -514,7 +522,9 @@ export function PartnerAdminDashboard() {
 
       if (!response.ok) {
         if (mounted) {
-          setError(extractErrorMessage(payload) ?? "베이 목록을 불러오지 못했습니다.");
+          setError(
+            extractErrorMessage(payload) ?? "베이 목록을 불러오지 못했습니다.",
+          );
           setBays([]);
           setIsLoadingBays(false);
         }
@@ -525,7 +535,7 @@ export function PartnerAdminDashboard() {
         payload &&
         typeof payload === "object" &&
         Array.isArray((payload as { bays?: unknown }).bays)
-          ? ((payload as { bays: PartnerBay[] }).bays)
+          ? (payload as { bays: PartnerBay[] }).bays
           : [];
 
       if (mounted) {
@@ -576,7 +586,7 @@ export function PartnerAdminDashboard() {
         payload &&
         typeof payload === "object" &&
         Array.isArray((payload as { blocks?: unknown }).blocks)
-          ? ((payload as { blocks: AvailabilityBlock[] }).blocks)
+          ? (payload as { blocks: AvailabilityBlock[] }).blocks
           : [];
 
       if (mounted) {
@@ -610,7 +620,8 @@ export function PartnerAdminDashboard() {
 
     if (!detailResponse.ok) {
       setError(
-        extractErrorMessage(detailPayload) ?? "예약 상세를 불러오지 못했습니다.",
+        extractErrorMessage(detailPayload) ??
+          "예약 상세를 불러오지 못했습니다.",
       );
       setDetail(null);
       setNotes([]);
@@ -635,7 +646,7 @@ export function PartnerAdminDashboard() {
       notesPayload &&
       typeof notesPayload === "object" &&
       Array.isArray((notesPayload as { notes?: unknown }).notes)
-        ? ((notesPayload as { notes: PartnerReservationNote[] }).notes)
+        ? (notesPayload as { notes: PartnerReservationNote[] }).notes
         : [];
 
     setNotes(nextNotes);
@@ -668,7 +679,9 @@ export function PartnerAdminDashboard() {
     const payload = await readJson(response);
 
     if (!response.ok) {
-      setError(extractErrorMessage(payload) ?? "현장 메모를 저장하지 못했습니다.");
+      setError(
+        extractErrorMessage(payload) ?? "현장 메모를 저장하지 못했습니다.",
+      );
       setIsCreatingNote(false);
       return;
     }
@@ -688,7 +701,10 @@ export function PartnerAdminDashboard() {
   }
 
   function openOperationalActionModal(action: OperationalAction) {
-    if (!detail || !action.allowedStatuses.includes(detail.reservation.status)) {
+    if (
+      !detail ||
+      !action.allowedStatuses.includes(detail.reservation.status)
+    ) {
       return;
     }
 
@@ -787,7 +803,9 @@ export function PartnerAdminDashboard() {
     const payload = await readJson(response);
 
     if (!response.ok) {
-      setError(extractErrorMessage(payload) ?? "현장 메모를 수정하지 못했습니다.");
+      setError(
+        extractErrorMessage(payload) ?? "현장 메모를 수정하지 못했습니다.",
+      );
       setUpdatingNoteId("");
       return;
     }
@@ -799,7 +817,9 @@ export function PartnerAdminDashboard() {
 
     if (updatedNote) {
       setNotes((current) =>
-        current.map((item) => (item.id === updatedNote.id ? updatedNote : item)),
+        current.map((item) =>
+          item.id === updatedNote.id ? updatedNote : item,
+        ),
       );
     }
 
@@ -825,7 +845,9 @@ export function PartnerAdminDashboard() {
     const payload = await readJson(response);
 
     if (!response.ok) {
-      setError(extractErrorMessage(payload) ?? "베이 상태를 변경하지 못했습니다.");
+      setError(
+        extractErrorMessage(payload) ?? "베이 상태를 변경하지 못했습니다.",
+      );
       setUpdatingBayId("");
       return;
     }
@@ -1033,7 +1055,8 @@ export function PartnerAdminDashboard() {
         detail.checkout.wasteDisposalCompleted,
       ]
     : [];
-  const checkoutChecklistCompletedCount = checkoutChecklistItems.filter(Boolean).length;
+  const checkoutChecklistCompletedCount =
+    checkoutChecklistItems.filter(Boolean).length;
 
   return (
     <section className="space-y-5">
@@ -1135,7 +1158,8 @@ export function PartnerAdminDashboard() {
               <div>
                 <h2 className="text-base font-semibold">베이 관리</h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  진행/예정 예약이 있는 베이는 완료 또는 취소 전까지 비활성화할 수 없습니다.
+                  진행/예정 예약이 있는 베이는 완료 또는 취소 전까지 비활성화할
+                  수 없습니다.
                 </p>
               </div>
               {isLoadingBays ? (
@@ -1235,7 +1259,9 @@ export function PartnerAdminDashboard() {
               className="grid gap-3 border-b border-zinc-200 p-4 lg:grid-cols-[180px_1fr_1fr_1fr_auto]"
             >
               <label className="block">
-                <span className="text-xs font-semibold text-zinc-500">범위</span>
+                <span className="text-xs font-semibold text-zinc-500">
+                  범위
+                </span>
                 <select
                   value={blockBayId}
                   onChange={(event) => setBlockBayId(event.target.value)}
@@ -1251,7 +1277,9 @@ export function PartnerAdminDashboard() {
               </label>
 
               <label className="block">
-                <span className="text-xs font-semibold text-zinc-500">시작</span>
+                <span className="text-xs font-semibold text-zinc-500">
+                  시작
+                </span>
                 <input
                   type="datetime-local"
                   required
@@ -1262,7 +1290,9 @@ export function PartnerAdminDashboard() {
               </label>
 
               <label className="block">
-                <span className="text-xs font-semibold text-zinc-500">종료</span>
+                <span className="text-xs font-semibold text-zinc-500">
+                  종료
+                </span>
                 <input
                   type="datetime-local"
                   required
@@ -1273,7 +1303,9 @@ export function PartnerAdminDashboard() {
               </label>
 
               <label className="block">
-                <span className="text-xs font-semibold text-zinc-500">사유</span>
+                <span className="text-xs font-semibold text-zinc-500">
+                  사유
+                </span>
                 <input
                   value={blockReason}
                   onChange={(event) => setBlockReason(event.target.value)}
@@ -1387,7 +1419,9 @@ export function PartnerAdminDashboard() {
                         <button
                           type="button"
                           disabled={updatingBlockId === block.id}
-                          onClick={() => void deactivateAvailabilityBlock(block)}
+                          onClick={() =>
+                            void deactivateAvailabilityBlock(block)
+                          }
                           className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
                         >
                           {updatingBlockId === block.id ? "해제 중" : "해제"}
@@ -1450,14 +1484,18 @@ export function PartnerAdminDashboard() {
                               ? "bg-blue-50"
                               : ""
                           }`}
-                          onClick={() => void loadReservationDetail(reservation.id)}
+                          onClick={() =>
+                            void loadReservationDetail(reservation.id)
+                          }
                         >
                           <td className="px-4 py-3 font-semibold">
                             {formatTime(reservation.startTime)} -{" "}
                             {formatTime(reservation.endTime)}
                           </td>
                           <td className="px-4 py-3">{reservation.bayLabel}</td>
-                          <td className="px-4 py-3">{reservation.vehicleLabel}</td>
+                          <td className="px-4 py-3">
+                            {reservation.vehicleLabel}
+                          </td>
                           <td className="px-4 py-3">
                             {reservationTypeLabel(reservation.reservationType)}
                           </td>
@@ -1471,7 +1509,8 @@ export function PartnerAdminDashboard() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-xs text-zinc-600">
-                            체크인 {reservation.checkinCompleted ? "완료" : "대기"} ·
+                            체크인{" "}
+                            {reservation.checkinCompleted ? "완료" : "대기"} ·
                             체크아웃{" "}
                             {reservation.checkoutCompleted ? "완료" : "대기"}
                           </td>
@@ -1580,7 +1619,9 @@ export function PartnerAdminDashboard() {
                           key={label}
                           className="rounded-md border border-zinc-200 bg-white px-2 py-2"
                         >
-                          <dt className="font-semibold text-zinc-500">{label}</dt>
+                          <dt className="font-semibold text-zinc-500">
+                            {label}
+                          </dt>
                           <dd className="mt-1 font-semibold text-zinc-900">
                             {value}
                           </dd>
@@ -1632,23 +1673,28 @@ export function PartnerAdminDashboard() {
                           ],
                           [
                             "폐기물 확인",
-                            checklistValue(detail.checkout.wasteDisposalCompleted),
+                            checklistValue(
+                              detail.checkout.wasteDisposalCompleted,
+                            ),
                           ],
                           [
                             "체크리스트",
                             `${checkoutChecklistCompletedCount}/${checkoutChecklistItems.length}`,
                           ],
-                          [
-                            "추가 요금",
-                            formatPrice(detail.checkout.extraFee),
-                          ],
+                          ["추가 요금", formatPrice(detail.checkout.extraFee)],
                           [
                             "검수 요금",
                             formatPrice(detail.checkout.helperVerifyFee),
                           ],
-                          ["총 정산", formatPrice(detail.checkout.totalSettlement)],
+                          [
+                            "총 정산",
+                            formatPrice(detail.checkout.totalSettlement),
+                          ],
                         ].map(([label, value]) => (
-                          <div key={label} className="flex justify-between gap-4">
+                          <div
+                            key={label}
+                            className="flex justify-between gap-4"
+                          >
                             <dt className="text-zinc-500">{label}</dt>
                             <dd className="font-medium">{value}</dd>
                           </div>
@@ -1693,7 +1739,9 @@ export function PartnerAdminDashboard() {
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="text-sm font-semibold">현장 메모</h3>
                         {isLoadingNotes ? (
-                          <span className="text-xs text-zinc-500">불러오는 중</span>
+                          <span className="text-xs text-zinc-500">
+                            불러오는 중
+                          </span>
                         ) : null}
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
@@ -1706,7 +1754,9 @@ export function PartnerAdminDashboard() {
                             key={label}
                             className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2"
                           >
-                            <p className="font-semibold text-zinc-500">{label}</p>
+                            <p className="font-semibold text-zinc-500">
+                              {label}
+                            </p>
                             <p className="mt-1 text-base font-bold text-zinc-950">
                               {value}
                             </p>
@@ -1714,11 +1764,13 @@ export function PartnerAdminDashboard() {
                         ))}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                        {([
-                          ["ALL", "전체"],
-                          ["OPEN", "미해결"],
-                          ["ISSUES", "이슈만"],
-                        ] as const).map(([value, label]) => (
+                        {(
+                          [
+                            ["ALL", "전체"],
+                            ["OPEN", "미해결"],
+                            ["ISSUES", "이슈만"],
+                          ] as const
+                        ).map(([value, label]) => (
                           <button
                             key={value}
                             type="button"
@@ -1735,7 +1787,10 @@ export function PartnerAdminDashboard() {
                       </div>
                     </div>
 
-                    <form onSubmit={createReservationNote} className="mt-2 space-y-2">
+                    <form
+                      onSubmit={createReservationNote}
+                      className="mt-2 space-y-2"
+                    >
                       <div className="grid grid-cols-[92px_1fr] gap-2">
                         <select
                           value={noteType}
@@ -1836,7 +1891,9 @@ export function PartnerAdminDashboard() {
                     <h3 className="text-sm font-semibold">상태 로그</h3>
                     <div className="mt-2 space-y-2">
                       {detail.statusLogs.length === 0 ? (
-                        <p className="text-sm text-zinc-500">로그가 없습니다.</p>
+                        <p className="text-sm text-zinc-500">
+                          로그가 없습니다.
+                        </p>
                       ) : (
                         detail.statusLogs.map((log) => (
                           <div
@@ -1847,7 +1904,8 @@ export function PartnerAdminDashboard() {
                               {log.fromStatus ?? "START"} → {log.toStatus}
                             </p>
                             <p className="mt-1 text-zinc-500">
-                              {formatDateTime(log.createdAt)} · {log.reason ?? "-"}
+                              {formatDateTime(log.createdAt)} ·{" "}
+                              {log.reason ?? "-"}
                             </p>
                           </div>
                         ))
