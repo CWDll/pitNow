@@ -12,8 +12,7 @@ function PaymentFailContent() {
 
   const paymentId = searchParams.get("paymentId") ?? "";
   const code = searchParams.get("code") ?? "PAYMENT_FAILED";
-  const message =
-    searchParams.get("message") ?? "결제가 완료되지 않았습니다.";
+  const message = searchParams.get("message") ?? "결제가 완료되지 않았습니다.";
 
   useEffect(() => {
     if (!paymentId) {
@@ -52,13 +51,15 @@ function PaymentFailContent() {
           {message}
         </p>
         <p className="mt-3 text-xs text-zinc-400">
-          {recorded ? "실패 기록을 저장했습니다." : "실패 기록을 확인 중입니다."}
+          {recorded
+            ? "실패 기록을 저장했습니다."
+            : "실패 기록을 확인 중입니다."}
         </p>
         <Link
-          href="/reservation"
+          href="/"
           className="mt-6 flex h-12 items-center justify-center rounded-2xl bg-zinc-950 text-base font-semibold text-white"
         >
-          예약 내역으로 이동
+          홈으로 이동
         </Link>
       </div>
     </section>
@@ -72,4 +73,3 @@ export default function PaymentFailPage() {
     </Suspense>
   );
 }
-
