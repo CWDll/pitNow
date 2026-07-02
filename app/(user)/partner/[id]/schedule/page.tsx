@@ -40,6 +40,15 @@ interface ReservationRangeRow {
   blocked_until?: string | null;
 }
 
+interface AvailabilityBlockResponse {
+  success?: boolean;
+  blocks?: Array<{
+    bayId: string | null;
+    startsAt: string;
+    endsAt: string;
+  }>;
+}
+
 interface PartnerInfo {
   id: string;
   name: string;
@@ -132,6 +141,9 @@ function PartnerSchedulePageContent() {
   const [bayLabels, setBayLabels] = useState<string[]>([]);
   const [reservationRanges, setReservationRanges] = useState<
     Array<{ bayId: string; startMs: number; endMs: number }>
+  >([]);
+  const [availabilityBlockRanges, setAvailabilityBlockRanges] = useState<
+    Array<{ bayId: string | null; startMs: number; endMs: number }>
   >([]);
 
   const bookingMode =
@@ -292,6 +304,65 @@ function PartnerSchedulePageContent() {
     };
   }, [safeGarage?.id, selectedDate]);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadAvailabilityBlocks() {
+      if (!safeGarage?.id) {
+        return;
+      }
+
+      const query = new URLSearchParams({
+        endsAfter: toIsoByDateAndTime(selectedDate, timeBoundaries[0]),
+        startsBefore: toIsoByDateAndTime(
+          selectedDate,
+          timeBoundaries[timeBoundaries.length - 1],
+        ),
+      });
+
+      try {
+        const response = await fetch(
+          `/api/partners/${safeGarage.id}/availability-blocks?${query.toString()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok || isCancelled) {
+          setAvailabilityBlockRanges([]);
+          return;
+        }
+
+        const payload = (await response.json()) as AvailabilityBlockResponse;
+        const nextBlocks = Array.isArray(payload.blocks) ? payload.blocks : [];
+
+        if (isCancelled) {
+          return;
+        }
+
+        setAvailabilityBlockRanges(
+          nextBlocks.map((block) => ({
+            bayId: block.bayId,
+            startMs: new Date(block.startsAt).getTime(),
+            endMs: new Date(block.endsAt).getTime(),
+          })),
+        );
+      } catch (error) {
+        console.error("SCHEDULE AVAILABILITY BLOCK LOAD ERROR:", error);
+        if (!isCancelled) {
+          setAvailabilityBlockRanges([]);
+        }
+      }
+    }
+
+    void loadAvailabilityBlocks();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [safeGarage?.id, selectedDate]);
+
   function isReservedBlock(blockIdx: number, bayNumber: number): boolean {
     const bayId = resolvedBayIds[bayNumber - 1];
 
@@ -315,6 +386,32 @@ function PartnerSchedulePageContent() {
         range.bayId === bayId &&
         blockStartMs < range.endMs &&
         range.startMs < blockEndMs,
+    );
+  }
+
+  function isAvailabilityBlockedRange(
+    startIdx: number,
+    endExclusiveIdx: number,
+    bay: number,
+  ): boolean {
+    const bayId = resolvedBayIds[bay - 1];
+
+    if (!bayId) {
+      return true;
+    }
+
+    const rangeStartMs = new Date(
+      toIsoByDateAndTime(selectedDate, timeBoundaries[startIdx]),
+    ).getTime();
+    const rangeEndMs = new Date(
+      toIsoByDateAndTime(selectedDate, timeBoundaries[endExclusiveIdx]),
+    ).getTime();
+
+    return availabilityBlockRanges.some(
+      (range) =>
+        (range.bayId === null || range.bayId === bayId) &&
+        rangeStartMs < range.endMs &&
+        range.startMs < rangeEndMs,
     );
   }
 
@@ -435,6 +532,10 @@ function PartnerSchedulePageContent() {
     const startMs = new Date(startIso).getTime();
 
     if (!Number.isFinite(startMs) || startMs <= nowMs) {
+      return false;
+    }
+
+    if (isAvailabilityBlockedRange(startIdx, endExclusiveIdx, bay)) {
       return false;
     }
 

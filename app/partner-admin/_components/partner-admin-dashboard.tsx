@@ -1434,99 +1434,135 @@ export function PartnerAdminDashboard() {
             </div>
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
-              <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-                <div>
-                  <h2 className="text-base font-semibold">
-                    {selectedPartner?.partnerName ?? "정비소"} 예약
-                  </h2>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    선택 날짜 기준 예약 시작 시간으로 조회합니다.
-                  </p>
-                </div>
-                {isLoadingReservations ? (
-                  <span className="text-xs font-medium text-zinc-500">
-                    불러오는 중
-                  </span>
-                ) : null}
+          <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold">
+                  {selectedPartner?.partnerName ?? "정비소"} 예약
+                </h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  선택 날짜 기준 예약 시작 시간으로 조회합니다.
+                </p>
               </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-sm">
-                  <thead className="bg-zinc-50 text-xs uppercase tracking-[0.14em] text-zinc-500">
-                    <tr>
-                      <th className="px-4 py-3">Time</th>
-                      <th className="px-4 py-3">Bay</th>
-                      <th className="px-4 py-3">Vehicle</th>
-                      <th className="px-4 py-3">Type</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Evidence</th>
-                      <th className="px-4 py-3 text-right">Price</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100">
-                    {reservations.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="px-4 py-8 text-center text-zinc-500"
-                        >
-                          선택한 날짜의 예약이 없습니다.
-                        </td>
-                      </tr>
-                    ) : (
-                      reservations.map((reservation) => (
-                        <tr
-                          key={reservation.id}
-                          className={`cursor-pointer transition hover:bg-blue-50/60 ${
-                            selectedReservationId === reservation.id
-                              ? "bg-blue-50"
-                              : ""
-                          }`}
-                          onClick={() =>
-                            void loadReservationDetail(reservation.id)
-                          }
-                        >
-                          <td className="px-4 py-3 font-semibold">
-                            {formatTime(reservation.startTime)} -{" "}
-                            {formatTime(reservation.endTime)}
-                          </td>
-                          <td className="px-4 py-3">{reservation.bayLabel}</td>
-                          <td className="px-4 py-3">
-                            {reservation.vehicleLabel}
-                          </td>
-                          <td className="px-4 py-3">
-                            {reservationTypeLabel(reservation.reservationType)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
-                                reservation.status,
-                              )}`}
-                            >
-                              {statusLabel(reservation.status)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-zinc-600">
-                            체크인{" "}
-                            {reservation.checkinCompleted ? "완료" : "대기"} ·
-                            체크아웃{" "}
-                            {reservation.checkoutCompleted ? "완료" : "대기"}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold">
-                            {formatPrice(reservation.totalPrice)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {isLoadingReservations ? (
+                <span className="text-xs font-medium text-zinc-500">
+                  불러오는 중
+                </span>
+              ) : null}
             </div>
 
-            <aside className="rounded-lg border border-zinc-200 bg-white p-4">
-              <h2 className="text-base font-semibold">예약 상세</h2>
+            <div className="divide-y divide-zinc-100">
+              {reservations.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-zinc-500">
+                  선택한 날짜의 예약이 없습니다.
+                </p>
+              ) : (
+                reservations.map((reservation) => (
+                  <button
+                    key={reservation.id}
+                    type="button"
+                    onClick={() => void loadReservationDetail(reservation.id)}
+                    className={`grid w-full gap-3 px-4 py-4 text-left transition hover:bg-blue-50/60 xl:grid-cols-[160px_120px_1fr_120px_160px_120px] ${
+                      selectedReservationId === reservation.id
+                        ? "bg-blue-50"
+                        : "bg-white"
+                    }`}
+                  >
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                        Time
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-zinc-950">
+                        {formatTime(reservation.startTime)} -{" "}
+                        {formatTime(reservation.endTime)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                        Bay
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-zinc-900">
+                        {reservation.bayLabel}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                        Vehicle
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-zinc-900">
+                        {reservation.vehicleLabel}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                        Type
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-zinc-900">
+                        {reservationTypeLabel(reservation.reservationType)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                        Status
+                      </p>
+                      <span
+                        className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
+                          reservation.status,
+                        )}`}
+                      >
+                        {statusLabel(reservation.status)}
+                      </span>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        체크인 {reservation.checkinCompleted ? "완료" : "대기"} ·
+                        체크아웃 {reservation.checkoutCompleted ? "완료" : "대기"}
+                      </p>
+                    </div>
+                    <div className="xl:text-right">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                        Price
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-zinc-950">
+                        {formatPrice(reservation.totalPrice)}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+
+          {selectedReservationId ? (
+            <div
+              className="fixed inset-0 z-40 flex items-end justify-center bg-zinc-950/45 p-0 sm:items-center sm:p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="partner-reservation-detail-title"
+            >
+              <aside className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-t-lg border border-zinc-200 bg-white p-4 shadow-2xl sm:rounded-lg sm:p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Reservation detail
+                    </p>
+                    <h2
+                      id="partner-reservation-detail-title"
+                      className="mt-1 text-xl font-bold text-zinc-950"
+                    >
+                      예약 상세
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedReservationId("");
+                      setDetail(null);
+                      setNotes([]);
+                    }}
+                    className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100"
+                  >
+                    닫기
+                  </button>
+                </div>
               {isLoadingDetail ? (
                 <p className="mt-4 text-sm text-zinc-500">
                   상세 정보를 불러오는 중입니다.
@@ -1914,8 +1950,9 @@ export function PartnerAdminDashboard() {
                   </section>
                 </div>
               )}
-            </aside>
-          </section>
+              </aside>
+            </div>
+          ) : null}
         </>
       )}
 
