@@ -358,11 +358,15 @@ function PartnerSchedulePageContent() {
   const totalPriceWithVerify = totalPrice + carMasterVerifyFee;
 
   const meetsMinimum = selectedBlocks >= MIN_BLOCKS;
+  const selectedRangeSelectable =
+    selectedStartIdx !== null &&
+    selectedEndIdx !== null &&
+    isRangeSelectable(selectedStartIdx, selectedEndIdx, selectedBay);
   const canProceed =
     resolvedBayIds.length > 0 &&
     (bookingMode === "PACKAGE"
-      ? hasSelection && selectedBlocks === packageDurationBlocks
-      : hasSelection && meetsMinimum);
+      ? selectedRangeSelectable && selectedBlocks === packageDurationBlocks
+      : selectedRangeSelectable && meetsMinimum);
   const hasValidHourlyPrice =
     bookingMode === "PACKAGE" ||
     Boolean(
@@ -371,10 +375,26 @@ function PartnerSchedulePageContent() {
         safeGarage.hourlyPrice > 0,
     );
 
+  function clearTimeSelection() {
+    setSelectedStartIdx(null);
+    setSelectedEndIdx(null);
+  }
+
+  function selectDate(nextDate: Date) {
+    if (nextDate.getTime() < todayMs) {
+      return;
+    }
+
+    setSelectedDate(nextDate);
+    clearTimeSelection();
+  }
+
   function handleWeekShift(daysToMove: number) {
-    setSelectedDate((prev) =>
-      addDays(prev ?? stripTime(new Date()), daysToMove),
-    );
+    setSelectedDate((prev) => {
+      const next = addDays(prev ?? stripTime(new Date()), daysToMove);
+      return next.getTime() < todayMs ? stripTime(new Date(nowMs)) : next;
+    });
+    clearTimeSelection();
   }
 
   function handleMonthChange(monthValue: string) {
@@ -383,7 +403,7 @@ function PartnerSchedulePageContent() {
       return;
     }
 
-    setSelectedDate(next);
+    selectDate(next.getTime() < todayMs ? stripTime(new Date(nowMs)) : stripTime(next));
   }
 
   function handleBayChange(nextBay: number) {
@@ -394,8 +414,7 @@ function PartnerSchedulePageContent() {
     }
 
     if (!isRangeSelectable(selectedStartIdx, selectedEndIdx, nextBay)) {
-      setSelectedStartIdx(null);
-      setSelectedEndIdx(null);
+      clearTimeSelection();
     }
   }
 
@@ -467,7 +486,12 @@ function PartnerSchedulePageContent() {
   }
 
   function handleBlockClick(blockIdx: number) {
-    if (isReservedBlock(blockIdx, selectedBay)) {
+    const nextEndExclusiveIdx =
+      bookingMode === "PACKAGE"
+        ? blockIdx + packageDurationBlocks
+        : blockIdx + 1;
+
+    if (!isRangeSelectable(blockIdx, nextEndExclusiveIdx, selectedBay)) {
       return;
     }
 
@@ -633,9 +657,11 @@ function PartnerSchedulePageContent() {
               key={`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
               type="button"
               disabled={disabled}
-              onClick={() => setSelectedDate(date)}
+              onClick={() => selectDate(date)}
               className={`rounded-2xl px-2 py-3 text-center disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 ${
-                active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"
+                active && !disabled
+                  ? "bg-blue-600 text-white"
+                  : "bg-zinc-100 text-zinc-700"
               }`}
             >
               <p className="text-xs">{weekdayLabels[date.getDay()]}</p>
@@ -689,7 +715,6 @@ function PartnerSchedulePageContent() {
 
         <div className="grid grid-cols-4 gap-2">
           {Array.from({ length: blockCount }).map((_, idx) => {
-            const reserved = isReservedBlock(idx, selectedBay);
             const selectable =
               bookingMode === "PACKAGE"
                 ? isRangeSelectable(
@@ -697,7 +722,7 @@ function PartnerSchedulePageContent() {
                     idx + packageDurationBlocks,
                     selectedBay,
                   )
-                : !reserved;
+                : isRangeSelectable(idx, idx + 1, selectedBay);
             const selected =
               hasSelection &&
               selectedStartIdx !== null &&

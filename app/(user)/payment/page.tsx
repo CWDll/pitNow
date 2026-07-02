@@ -12,28 +12,7 @@ import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
 
-const paymentMethods = [
-  "신용/체크카드",
-  "카카오페이",
-  "네이버페이",
-  "토스페이",
-] as const;
-
-const paymentMethodMap: Record<
-  (typeof paymentMethods)[number],
-  PaymentMethod
-> = {
-  "신용/체크카드": "CARD",
-  "카카오페이": "KAKAO_PAY",
-  "네이버페이": "NAVER_PAY",
-  "토스페이": "TOSS_PAY",
-};
-
-const tossEasyPayMap: Partial<Record<PaymentMethod, string>> = {
-  KAKAO_PAY: "KAKAOPAY",
-  NAVER_PAY: "NAVERPAY",
-  TOSS_PAY: "TOSSPAY",
-};
+const defaultPaymentMethod: PaymentMethod = "CARD";
 
 interface TossCheckoutPayload {
   type: "TOSS_PAYMENT_WINDOW";
@@ -51,10 +30,6 @@ declare global {
       payment: (params: { customerKey: string }) => {
         requestPayment: (params: {
           method: "CARD";
-          card?: {
-            flowMode: "DIRECT";
-            easyPay: string;
-          };
           amount: {
             value: number;
             currency: "KRW";
@@ -68,19 +43,6 @@ declare global {
       };
     };
   }
-}
-
-function getTossPaymentRequestOptions(selectedMethod: PaymentMethod) {
-  const easyPay = tossEasyPayMap[selectedMethod];
-
-  return easyPay
-    ? {
-        card: {
-          flowMode: "DIRECT" as const,
-          easyPay,
-        },
-      }
-    : {};
 }
 
 function parseStringField(payload: unknown, fieldName: string): string | null {
@@ -190,8 +152,6 @@ function PaymentPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [method, setMethod] =
-    useState<(typeof paymentMethods)[number]>("신용/체크카드");
   const [isPaying, setIsPaying] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
 
@@ -299,9 +259,8 @@ function PaymentPageContent() {
         endTime,
       };
 
-      const selectedPaymentMethod = paymentMethodMap[method];
       const prepareBody: PreparePaymentPayload = {
-        method: selectedPaymentMethod,
+        method: defaultPaymentMethod,
         reservation,
       };
 
@@ -353,7 +312,6 @@ function PaymentPageContent() {
         try {
           await payment.requestPayment({
             method: "CARD",
-            ...getTossPaymentRequestOptions(selectedPaymentMethod),
             amount: {
               value: preparedAmount,
               currency: "KRW",
@@ -517,30 +475,6 @@ function PaymentPageContent() {
             {totalPrice.toLocaleString("ko-KR")}원
           </span>
         </p>
-      </div>
-
-      <div className="mt-5 space-y-2">
-        <h2 className="text-xl font-semibold text-zinc-900">결제 수단</h2>
-        {paymentMethods.map((item) => {
-          const selected = method === item;
-          return (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setMethod(item)}
-              className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-lg ${
-                selected
-                  ? "border-blue-600 bg-blue-50"
-                  : "border-zinc-300 bg-white"
-              }`}
-            >
-              <span>{item}</span>
-              <span
-                className={`h-5 w-5 rounded-full border ${selected ? "border-blue-600 bg-blue-600" : "border-zinc-300"}`}
-              />
-            </button>
-          );
-        })}
       </div>
 
       <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">

@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { PartnerMap, type PartnerMapItem } from "./partner-map";
 
-type SortMode = "FASTEST" | "DISTANCE" | "PRICE" | "RATING";
+type SortMode = "DEFAULT" | "DISTANCE" | "PRICE" | "RATING";
 
 export interface HomePartnerExplorerItem extends PartnerMapItem {
   bayCount: number;
@@ -136,9 +136,10 @@ export function HomePartnerExplorer({
   partners,
   kakaoMapAppKey,
 }: HomePartnerExplorerProps) {
-  const [sortMode, setSortMode] = useState<SortMode>("FASTEST");
+  const [sortMode, setSortMode] = useState<SortMode>("DEFAULT");
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<GeoPoint | null>(null);
+  const [toastMessage, setToastMessage] = useState<string>("");
   const cardRefs = useRef(new Map<string, HTMLElement>());
 
   const sortedPartners = useMemo(
@@ -159,10 +160,27 @@ export function HomePartnerExplorer({
   const handleUserLocationChange = useCallback((location: GeoPoint) => {
     setUserLocation(location);
     setSortMode("DISTANCE");
+    setToastMessage("");
   }, []);
+
+  function handleDistanceSortClick() {
+    if (!userLocation) {
+      setToastMessage("위치 권한을 수락하면 거리 순으로 정비소를 확인할 수 있습니다.");
+      window.setTimeout(() => setToastMessage(""), 2600);
+      return;
+    }
+
+    setSortMode("DISTANCE");
+  }
 
   return (
     <>
+      {toastMessage ? (
+        <div className="fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-100 -translate-x-1/2 rounded-2xl bg-zinc-950 px-4 py-3 text-center text-sm font-semibold text-white shadow-lg">
+          {toastMessage}
+        </div>
+      ) : null}
+
       <PartnerMap
         partners={partners}
         kakaoMapAppKey={kakaoMapAppKey}
@@ -174,15 +192,7 @@ export function HomePartnerExplorer({
       <div className="flex gap-2 overflow-x-auto text-sm">
         <button
           type="button"
-          onClick={() => setSortMode("FASTEST")}
-          className={sortButtonClass(sortMode === "FASTEST")}
-        >
-          가장 빠른 예약
-        </button>
-        <button
-          type="button"
-          onClick={() => setSortMode("DISTANCE")}
-          disabled={!userLocation}
+          onClick={handleDistanceSortClick}
           className={sortButtonClass(sortMode === "DISTANCE", !userLocation)}
         >
           거리

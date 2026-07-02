@@ -56,10 +56,10 @@ function PaymentFailContent() {
             : "실패 기록을 확인 중입니다."}
         </p>
         <Link
-          href="/"
+          href="/reservation"
           className="mt-6 flex h-12 items-center justify-center rounded-2xl bg-zinc-950 text-base font-semibold text-white"
         >
-          홈으로 이동
+          예약 내역으로 이동
         </Link>
       </div>
     </section>

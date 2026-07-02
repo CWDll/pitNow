@@ -6,7 +6,9 @@ test.describe("mobile public smoke", () => {
   }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /PitNow/i })).toBeVisible();
-    await expect(page.getByText("가장 빠른 예약")).toBeVisible();
+    await expect(page.getByRole("button", { name: "거리" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "가격" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "평점" })).toBeVisible();
     await expect(page.getByRole("link", { name: "예약하기" }).first()).toBeVisible();
     await expect(page.getByRole("navigation")).toContainText("예약");
 

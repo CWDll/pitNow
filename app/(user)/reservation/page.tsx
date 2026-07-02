@@ -21,6 +21,7 @@ interface ReservationRow {
   start_time: string;
   end_time: string;
   reserved_end_time: string;
+  blocked_until: string | null;
   status: ReservationStatus;
   total_price: number | string;
   vehicles:
@@ -147,7 +148,9 @@ function mapReservationItem(
     totalPrice: toNumber(reservation.total_price),
     startTime: reservation.start_time,
     endTime: reservation.end_time,
+    blockedUntil: reservation.blocked_until,
     blockedMinutes,
+    canCancel: reservation.status === "CONFIRMED",
     settlementAmountDue: settlement?.amountDue ?? 0,
     settlementPaidAmount: settlement?.paidAmount ?? 0,
     settlementPaymentStatus: settlement?.status ?? null,
@@ -159,11 +162,37 @@ function mapReservationItem(
   };
 }
 
+function getReservationOccupancyEndMs(item: ReservationListItem): number {
+  const fallbackEndMs = new Date(item.endTime).getTime();
+  const occupancyEndMs = item.blockedUntil
+    ? new Date(item.blockedUntil).getTime()
+    : fallbackEndMs;
+
+  return Number.isFinite(occupancyEndMs) ? occupancyEndMs : fallbackEndMs;
+}
+
+function isUpcomingReservation(item: ReservationListItem, nowMs: number): boolean {
+  if (item.status === "COMPLETED" || item.status === "CANCELLED") {
+    return false;
+  }
+
+  return getReservationOccupancyEndMs(item) > nowMs;
+}
+
 export default function ReservationListPage() {
   const [reservations, setReservations] = useState<ReservationListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [error, setError] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,7 +210,7 @@ export default function ReservationListPage() {
 
       const { data, error: reservationError } = await supabase
         .from("reservations")
-        .select("id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, reserved_end_time, status, total_price, vehicles(plate_number, model, year)")
+        .select("id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, reserved_end_time, blocked_until, status, total_price, vehicles(plate_number, model, year)")
         .eq("user_id", sessionData.session.user.id)
         .order("start_time", { ascending: false })
         .returns<ReservationRow[]>();
@@ -455,11 +484,15 @@ export default function ReservationListPage() {
     );
   }
 
-  const upcomingReservations = reservations.filter((item) =>
-    ["CONFIRMED", "CHECKED_IN", "IN_USE"].includes(item.status),
+  const visibleReservations = reservations.map((item) => ({
+    ...item,
+    canCancel: item.status === "CONFIRMED" && isUpcomingReservation(item, nowMs),
+  }));
+  const upcomingReservations = visibleReservations.filter((item) =>
+    isUpcomingReservation(item, nowMs),
   );
-  const pastReservations = reservations.filter((item) =>
-    ["COMPLETED", "CANCELLED"].includes(item.status),
+  const pastReservations = visibleReservations.filter(
+    (item) => !isUpcomingReservation(item, nowMs),
   );
 
   return (

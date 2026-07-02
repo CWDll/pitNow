@@ -571,11 +571,20 @@ test.describe("admin smoke", () => {
         page.getByRole("heading", { name: "Partner Admin Audit" }),
       ).toBeVisible();
       await expect(page.getByRole("link", { name: /^Notes \(/ })).toBeVisible();
+      const currentReservationAuditRows = page
+        .locator("article")
+        .filter({
+          has: page.getByRole("link", { name: `Reservation ${reservationId}` }),
+        });
       await expect(
-        page.locator("article").filter({ hasText: "Reservation Note Created" }),
+        currentReservationAuditRows.filter({
+          hasText: "Reservation Note Created",
+        }),
       ).toBeVisible();
       await expect(
-        page.locator("article").filter({ hasText: "Reservation Note Resolved" }),
+        currentReservationAuditRows.filter({
+          hasText: "Reservation Note Resolved",
+        }),
       ).toBeVisible();
       await expect(
         page.getByRole("link", { name: `Reservation ${reservationId}` }),
@@ -584,11 +593,20 @@ test.describe("admin smoke", () => {
 
       await page.getByRole("link", { name: /^Notes \(/ }).click();
       await expect(page).toHaveURL(/\/admin\/partner-audit\?filter=notes/);
+      const filteredReservationAuditRows = page
+        .locator("article")
+        .filter({
+          has: page.getByRole("link", { name: `Reservation ${reservationId}` }),
+        });
       await expect(
-        page.locator("article").filter({ hasText: "Reservation Note Created" }),
+        filteredReservationAuditRows.filter({
+          hasText: "Reservation Note Created",
+        }),
       ).toBeVisible();
       await expect(
-        page.locator("article").filter({ hasText: "Reservation Note Resolved" }),
+        filteredReservationAuditRows.filter({
+          hasText: "Reservation Note Resolved",
+        }),
       ).toBeVisible();
 
       await page.goto(

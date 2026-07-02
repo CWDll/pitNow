@@ -20,7 +20,9 @@ export interface ReservationListItem {
   totalPrice: number;
   startTime: string;
   endTime: string;
+  blockedUntil: string | null;
   blockedMinutes: number;
+  canCancel: boolean;
   carLabel: string;
   settlementAmountDue: number;
   settlementPaidAmount: number;
@@ -195,7 +197,7 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
   const [cancelReason, setCancelReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
-  const canCancel = item.status === "CONFIRMED";
+  const canCancel = item.canCancel;
   const unpaidSettlementAmount = getUnpaidSettlementAmount(item);
   const hasUnpaidSettlement = unpaidSettlementAmount > 0;
   const statusBadgeClass = hasUnpaidSettlement
