@@ -1930,3 +1930,22 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_search.sql
 - `npm run lint` 성공.
 - `npm run e2e:partner-admin` 성공.
 - `npm run e2e:ui` 성공.
+
+## 52. 2026-07-03 Admin package CRUD 운영 화면 추가
+
+패키지 가격은 예약 시간, 결제 금액, 정산 기대값에 직접 영향을 주므로 MVP에서는 Admin이 직접 관리하고 partner-admin 직접 편집은 보류하기로 결정했다.
+
+- `/admin/packages`를 조회 전용 화면에서 운영 가능한 CRUD 화면으로 확장했다.
+- Admin은 전역 `service_packages` 카탈로그를 추가/수정할 수 있다.
+- Admin은 `partner_package_prices`를 통해 업장별 패키지 가격을 추가/갱신하고 신규 예약 노출 여부를 바꿀 수 있다.
+- 삭제는 hard delete 대신 비활성화로 처리한다.
+- 기존 예약의 `package_id`, `duration_minutes`, `total_price`는 직접 수정하지 않으며 변경은 신규 예약에만 반영한다.
+- 패키지 변경 이력을 best-effort로 남기는 `admin_package_audit_logs` 마이그레이션을 추가했다.
+- Admin smoke E2E가 `/admin/packages` 운영 폼 렌더를 확인한다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+- `npm run e2e:ui` 성공.

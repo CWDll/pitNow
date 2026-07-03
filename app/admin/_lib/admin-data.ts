@@ -2,11 +2,7 @@ import { hasSupabaseServiceRoleEnv, supabaseAdmin } from "@/src/lib/supabase";
 import { formatKstAdminDateTime } from "@/src/lib/timezone";
 
 export type AdminReservationStatus =
-  | "CONFIRMED"
-  | "CHECKED_IN"
-  | "IN_USE"
-  | "COMPLETED"
-  | "CANCELLED";
+  "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
 
 export type AdminReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 
@@ -115,9 +111,7 @@ export type AdminPartnerAuditAction =
   | "RESERVATION_NOTE_REOPENED";
 
 export type AdminPartnerAuditTargetType =
-  | "BAY"
-  | "AVAILABILITY_BLOCK"
-  | "RESERVATION_NOTE";
+  "BAY" | "AVAILABILITY_BLOCK" | "RESERVATION_NOTE";
 
 interface AdminPartnerNoteRow {
   id: string;
@@ -153,21 +147,27 @@ interface AdminPartnerAuditSearchRow extends AdminPartnerAuditLogRow {
 }
 
 interface PartnerPackagePriceRow {
+  id: string;
   partner_id: string;
+  package_id: string;
   labor_price: number | string;
   is_active: boolean;
   partners:
-    | { name: string }
-    | Array<{ name: string }>
-    | null;
+    { id?: string; name: string } | Array<{ id?: string; name: string }> | null;
   service_packages:
     | {
+        id: string;
+        code: string;
         name: string;
+        description: string | null;
         duration_minutes: number;
         is_active: boolean;
       }
     | Array<{
+        id: string;
+        code: string;
         name: string;
+        description: string | null;
         duration_minutes: number;
         is_active: boolean;
       }>
@@ -230,11 +230,37 @@ export interface AdminPaymentItem {
 }
 
 export interface AdminPackageItem {
+  id: string;
+  partnerId: string;
+  packageId: string;
   partnerName: string;
+  packageCode: string;
   packageName: string;
+  packageDescription: string;
   durationMinutes: number;
   laborPrice: number;
   isActive: boolean;
+  servicePackageActive: boolean;
+}
+
+export interface AdminPackagePartnerOption {
+  id: string;
+  name: string;
+}
+
+export interface AdminServicePackageOption {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  durationMinutes: number;
+  isActive: boolean;
+}
+
+export interface AdminPackageManagerData {
+  packages: AdminPackageItem[];
+  partners: AdminPackagePartnerOption[];
+  servicePackages: AdminServicePackageOption[];
 }
 
 export interface AdminPartnerAuditItem {
@@ -375,7 +401,9 @@ function latestPaymentForPurpose(
   return candidates[0] ?? null;
 }
 
-function isMissingPartnerNotesSchema(error: { code?: string; message?: string } | null) {
+function isMissingPartnerNotesSchema(
+  error: { code?: string; message?: string } | null,
+) {
   const message = error?.message ?? "";
   return (
     error?.code === "42P01" ||
@@ -384,7 +412,9 @@ function isMissingPartnerNotesSchema(error: { code?: string; message?: string } 
   );
 }
 
-function isMissingPartnerAuditSchema(error: { code?: string; message?: string } | null) {
+function isMissingPartnerAuditSchema(
+  error: { code?: string; message?: string } | null,
+) {
   const message = error?.message ?? "";
   return (
     error?.code === "42P01" ||
@@ -457,19 +487,21 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
     return [];
   }
 
-  const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all([
-    getPartnerMap(),
-    getBayMap(),
-    getVehicleMap(),
-    supabaseAdmin
-      .from("reservations")
-      .select(
-        "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(100)
-      .returns<AdminReservationRow[]>(),
-  ]);
+  const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all(
+    [
+      getPartnerMap(),
+      getBayMap(),
+      getVehicleMap(),
+      supabaseAdmin
+        .from("reservations")
+        .select(
+          "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .returns<AdminReservationRow[]>(),
+    ],
+  );
 
   let reservationRows = reservationResult.data ?? [];
 
@@ -521,7 +553,10 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
       : { data: [], error: null };
 
   if (paymentResult.error) {
-    console.error("ADMIN RESERVATION PAYMENT LOOKUP ERROR:", paymentResult.error);
+    console.error(
+      "ADMIN RESERVATION PAYMENT LOOKUP ERROR:",
+      paymentResult.error,
+    );
   }
 
   const partnerNotesResult =
@@ -575,31 +610,33 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
   }
 
   return reservationRows.map((reservation) => {
-    const reservationPayment = latestPaymentsByReservationId.get(reservation.id);
+    const reservationPayment = latestPaymentsByReservationId.get(
+      reservation.id,
+    );
 
     return {
-    id: reservation.id,
-    partnerName: partnerMap.get(reservation.partner_id) ?? "Unknown partner",
-    bayName: reservation.bay_id
-      ? bayMap.get(reservation.bay_id) ?? "Unknown bay"
-      : "-",
-    vehicleLabel: reservation.vehicle_id
-      ? vehicleMap.get(reservation.vehicle_id) ?? "Unknown vehicle"
-      : "-",
-    reservationType: reservation.reservation_type,
-    packageId: reservation.package_id,
-    startTime: reservation.start_time,
-    endTime: reservation.end_time,
-    blockedUntil: reservation.blocked_until,
-    status: reservation.status,
-    totalPrice: toNumber(reservation.total_price),
-    helperVerifyRequested: reservation.helper_verify_requested,
-    helperVerifyFee: toNumber(reservation.helper_verify_fee),
-    reservationPaymentStatus: reservationPayment?.status ?? null,
-    reservationRefundedAt: reservationPayment?.refunded_at ?? null,
-    openPartnerNoteCount:
-      openPartnerNoteCountByReservationId.get(reservation.id) ?? 0,
-    createdAt: reservation.created_at,
+      id: reservation.id,
+      partnerName: partnerMap.get(reservation.partner_id) ?? "Unknown partner",
+      bayName: reservation.bay_id
+        ? (bayMap.get(reservation.bay_id) ?? "Unknown bay")
+        : "-",
+      vehicleLabel: reservation.vehicle_id
+        ? (vehicleMap.get(reservation.vehicle_id) ?? "Unknown vehicle")
+        : "-",
+      reservationType: reservation.reservation_type,
+      packageId: reservation.package_id,
+      startTime: reservation.start_time,
+      endTime: reservation.end_time,
+      blockedUntil: reservation.blocked_until,
+      status: reservation.status,
+      totalPrice: toNumber(reservation.total_price),
+      helperVerifyRequested: reservation.helper_verify_requested,
+      helperVerifyFee: toNumber(reservation.helper_verify_fee),
+      reservationPaymentStatus: reservationPayment?.status ?? null,
+      reservationRefundedAt: reservationPayment?.refunded_at ?? null,
+      openPartnerNoteCount:
+        openPartnerNoteCountByReservationId.get(reservation.id) ?? 0,
+      createdAt: reservation.created_at,
     };
   });
 }
@@ -611,21 +648,26 @@ export async function getAdminReservationDetail(
     return null;
   }
 
-  const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all([
-    getPartnerMap(),
-    getBayMap(),
-    getVehicleMap(),
-    supabaseAdmin
-      .from("reservations")
-      .select(
-        "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
-      )
-      .eq("id", reservationId)
-      .maybeSingle<AdminReservationRow>(),
-  ]);
+  const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all(
+    [
+      getPartnerMap(),
+      getBayMap(),
+      getVehicleMap(),
+      supabaseAdmin
+        .from("reservations")
+        .select(
+          "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
+        )
+        .eq("id", reservationId)
+        .maybeSingle<AdminReservationRow>(),
+    ],
+  );
 
   if (reservationResult.error) {
-    console.error("ADMIN RESERVATION DETAIL LOOKUP ERROR:", reservationResult.error);
+    console.error(
+      "ADMIN RESERVATION DETAIL LOOKUP ERROR:",
+      reservationResult.error,
+    );
     return null;
   }
 
@@ -643,61 +685,60 @@ export async function getAdminReservationDetail(
     partnerAuditLogsResult,
     statusLogsResult,
     reviewResult,
-  ] =
-    await Promise.all([
-      supabaseAdmin
-        .from("checkins")
-        .select(
-          "reservation_id, front_img, rear_img, left_img, right_img, checked_in_at",
-        )
-        .eq("reservation_id", reservation.id)
-        .maybeSingle<AdminCheckinRow>(),
-      supabaseAdmin
-        .from("checkouts")
-        .select(
-          "id, reservation_id, base_price, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, checkout_photo_1, checkout_photo_2, completed_at",
-        )
-        .eq("reservation_id", reservation.id)
-        .maybeSingle<AdminCheckoutRow>(),
-      supabaseAdmin
-        .from("payments")
-        .select(
-          "id, reservation_id, checkout_id, payment_purpose, provider, method, status, amount, approved_at, created_at",
-        )
-        .eq("reservation_id", reservation.id)
-        .order("created_at", { ascending: false })
-        .returns<AdminPaymentRow[]>(),
-      supabaseAdmin
-        .from("partner_reservation_notes")
-        .select(
-          "id, reservation_id, partner_id, author_user_id, note_type, body, is_resolved, resolved_at, resolved_by, created_at, updated_at",
-        )
-        .eq("reservation_id", reservation.id)
-        .order("created_at", { ascending: false })
-        .returns<AdminPartnerNoteRow[]>(),
-      supabaseAdmin
-        .from("partner_admin_audit_logs")
-        .select(
-          "id, partner_id, actor_user_id, action, target_type, target_id, reservation_id, before_state, after_state, metadata, created_at",
-        )
-        .eq("reservation_id", reservation.id)
-        .order("created_at", { ascending: false })
-        .limit(20)
-        .returns<AdminPartnerAuditLogRow[]>(),
-      supabaseAdmin
-        .from("reservation_status_logs")
-        .select(
-          "id, reservation_id, from_status, to_status, actor_type, actor_user_id, reason, metadata, created_at",
-        )
-        .eq("reservation_id", reservation.id)
-        .order("created_at", { ascending: true })
-        .returns<AdminStatusLogRow[]>(),
-      supabaseAdmin
-        .from("reviews")
-        .select("id, reservation_id, rating, comment, created_at")
-        .eq("reservation_id", reservation.id)
-        .maybeSingle<AdminReviewRow>(),
-    ]);
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("checkins")
+      .select(
+        "reservation_id, front_img, rear_img, left_img, right_img, checked_in_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .maybeSingle<AdminCheckinRow>(),
+    supabaseAdmin
+      .from("checkouts")
+      .select(
+        "id, reservation_id, base_price, extra_fee, helper_verify_requested, helper_verify_fee, total_settlement, tool_check_completed, cleaning_completed, waste_disposal_completed, checkout_photo_1, checkout_photo_2, completed_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .maybeSingle<AdminCheckoutRow>(),
+    supabaseAdmin
+      .from("payments")
+      .select(
+        "id, reservation_id, checkout_id, payment_purpose, provider, method, status, amount, approved_at, created_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .order("created_at", { ascending: false })
+      .returns<AdminPaymentRow[]>(),
+    supabaseAdmin
+      .from("partner_reservation_notes")
+      .select(
+        "id, reservation_id, partner_id, author_user_id, note_type, body, is_resolved, resolved_at, resolved_by, created_at, updated_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .order("created_at", { ascending: false })
+      .returns<AdminPartnerNoteRow[]>(),
+    supabaseAdmin
+      .from("partner_admin_audit_logs")
+      .select(
+        "id, partner_id, actor_user_id, action, target_type, target_id, reservation_id, before_state, after_state, metadata, created_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .returns<AdminPartnerAuditLogRow[]>(),
+    supabaseAdmin
+      .from("reservation_status_logs")
+      .select(
+        "id, reservation_id, from_status, to_status, actor_type, actor_user_id, reason, metadata, created_at",
+      )
+      .eq("reservation_id", reservation.id)
+      .order("created_at", { ascending: true })
+      .returns<AdminStatusLogRow[]>(),
+    supabaseAdmin
+      .from("reviews")
+      .select("id, reservation_id, rating, comment, created_at")
+      .eq("reservation_id", reservation.id)
+      .maybeSingle<AdminReviewRow>(),
+  ]);
 
   if (checkinResult.error) {
     console.error("ADMIN CHECKIN DETAIL LOOKUP ERROR:", checkinResult.error);
@@ -738,7 +779,10 @@ export async function getAdminReservationDetail(
   }
 
   if (statusLogsResult.error) {
-    console.error("ADMIN STATUS LOG DETAIL LOOKUP ERROR:", statusLogsResult.error);
+    console.error(
+      "ADMIN STATUS LOG DETAIL LOOKUP ERROR:",
+      statusLogsResult.error,
+    );
   }
 
   if (reviewResult.error) {
@@ -768,7 +812,7 @@ export async function getAdminReservationDetail(
         checkoutPhoto1: checkoutResult.data.checkout_photo_1 ?? null,
         checkoutPhoto2: checkoutResult.data.checkout_photo_2 ?? null,
         completedAt: checkoutResult.data.completed_at,
-    }
+      }
     : null;
   const payments = (paymentResult.data ?? []).map((payment) => ({
     id: payment.id,
@@ -801,10 +845,10 @@ export async function getAdminReservationDetail(
       id: reservation.id,
       partnerName: partnerMap.get(reservation.partner_id) ?? "Unknown partner",
       bayName: reservation.bay_id
-        ? bayMap.get(reservation.bay_id) ?? "Unknown bay"
+        ? (bayMap.get(reservation.bay_id) ?? "Unknown bay")
         : "-",
       vehicleLabel: reservation.vehicle_id
-        ? vehicleMap.get(reservation.vehicle_id) ?? "Unknown vehicle"
+        ? (vehicleMap.get(reservation.vehicle_id) ?? "Unknown vehicle")
         : "-",
       reservationType: reservation.reservation_type,
       packageId: reservation.package_id,
@@ -963,7 +1007,7 @@ export async function getAdminSettlements(): Promise<AdminSettlementItem[]> {
     return {
       reservationId: checkout.reservation_id,
       partnerName: reservation
-        ? partnerMap.get(reservation.partner_id) ?? "Unknown partner"
+        ? (partnerMap.get(reservation.partner_id) ?? "Unknown partner")
         : "Unknown partner",
       reservationType: reservation?.reservation_type ?? "SELF_SERVICE",
       status: reservation?.status ?? "COMPLETED",
@@ -1042,9 +1086,10 @@ export async function getAdminPackages(): Promise<AdminPackageItem[]> {
   const { data, error } = await supabaseAdmin
     .from("partner_package_prices")
     .select(
-      "partner_id, labor_price, is_active, partners!inner(name), service_packages!inner(name, duration_minutes, is_active)",
+      "id, partner_id, package_id, labor_price, is_active, partners!inner(id, name), service_packages!inner(id, code, name, description, duration_minutes, is_active)",
     )
     .order("partner_id", { ascending: true })
+    .order("is_active", { ascending: false })
     .returns<PartnerPackagePriceRow[]>();
 
   if (error) {
@@ -1057,13 +1102,81 @@ export async function getAdminPackages(): Promise<AdminPackageItem[]> {
     const servicePackage = firstOrSelf(row.service_packages);
 
     return {
+      id: row.id,
+      partnerId: row.partner_id,
+      packageId: row.package_id,
       partnerName: partner?.name ?? "Unknown partner",
+      packageCode: servicePackage?.code ?? "",
       packageName: servicePackage?.name ?? "Unknown package",
+      packageDescription: servicePackage?.description ?? "",
       durationMinutes: servicePackage?.duration_minutes ?? 0,
       laborPrice: toNumber(row.labor_price),
       isActive: row.is_active && Boolean(servicePackage?.is_active),
+      servicePackageActive: Boolean(servicePackage?.is_active),
     };
   });
+}
+
+export async function getAdminPackageManagerData(): Promise<AdminPackageManagerData> {
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
+    return {
+      packages: [],
+      partners: [],
+      servicePackages: [],
+    };
+  }
+
+  const [packages, partnersResult, servicePackagesResult] = await Promise.all([
+    getAdminPackages(),
+    supabaseAdmin
+      .from("partners")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .returns<Array<{ id: string; name: string }>>(),
+    supabaseAdmin
+      .from("service_packages")
+      .select("id, code, name, description, duration_minutes, is_active")
+      .order("name", { ascending: true })
+      .returns<
+        Array<{
+          id: string;
+          code: string;
+          name: string;
+          description: string | null;
+          duration_minutes: number;
+          is_active: boolean;
+        }>
+      >(),
+  ]);
+
+  if (partnersResult.error) {
+    console.error("ADMIN PACKAGE PARTNER LOOKUP ERROR:", partnersResult.error);
+  }
+
+  if (servicePackagesResult.error) {
+    console.error(
+      "ADMIN SERVICE PACKAGE LOOKUP ERROR:",
+      servicePackagesResult.error,
+    );
+  }
+
+  return {
+    packages,
+    partners: (partnersResult.data ?? []).map((partner) => ({
+      id: partner.id,
+      name: partner.name,
+    })),
+    servicePackages: (servicePackagesResult.data ?? []).map(
+      (servicePackage) => ({
+        id: servicePackage.id,
+        code: servicePackage.code,
+        name: servicePackage.name,
+        description: servicePackage.description ?? "",
+        durationMinutes: servicePackage.duration_minutes,
+        isActive: servicePackage.is_active,
+      }),
+    ),
+  };
 }
 
 function emptyAdminPartnerAuditList(
@@ -1158,10 +1271,7 @@ export async function getAdminPartnerAuditLogs(
 
       return {
         logs: rows.map((log) =>
-          mapAdminPartnerAuditLog(
-            log,
-            log.partner_name ?? "Unknown partner",
-          ),
+          mapAdminPartnerAuditLog(log, log.partner_name ?? "Unknown partner"),
         ),
         page,
         limit,
@@ -1216,7 +1326,10 @@ export async function getAdminPartnerAuditLogs(
         "ADMIN PARTNER AUDIT LIST LOOKUP SKIPPED: apply db/migrations/20260629_partner_admin_audit_logs.sql",
       );
     } else {
-      console.error("ADMIN PARTNER AUDIT LIST LOOKUP ERROR:", auditResult.error);
+      console.error(
+        "ADMIN PARTNER AUDIT LIST LOOKUP ERROR:",
+        auditResult.error,
+      );
     }
 
     return emptyAdminPartnerAuditList(page, limit);

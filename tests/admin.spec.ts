@@ -25,7 +25,10 @@ function requireAdminToken(): string {
     readLocalEnv("PITNOW_ADMIN_ACCESS_TOKEN");
 
   if (!token) {
-    test.skip(true, "PITNOW_ADMIN_ACCESS_TOKEN is required for admin smoke tests");
+    test.skip(
+      true,
+      "PITNOW_ADMIN_ACCESS_TOKEN is required for admin smoke tests",
+    );
     throw new Error("PITNOW_ADMIN_ACCESS_TOKEN is required");
   }
 
@@ -47,7 +50,10 @@ function requireAdminSupabaseForE2E() {
   const db = getAdminSupabaseForE2E();
 
   if (!db) {
-    test.skip(true, "Supabase service role env is required for admin operation tests");
+    test.skip(
+      true,
+      "Supabase service role env is required for admin operation tests",
+    );
     throw new Error("Supabase service role env is required");
   }
 
@@ -159,7 +165,9 @@ async function createConfirmedReservationForAdminE2E() {
       continue;
     }
 
-    throw reservationError ?? new Error("Failed to create admin E2E reservation");
+    throw (
+      reservationError ?? new Error("Failed to create admin E2E reservation")
+    );
   }
 
   throw new Error("Could not find an available E2E reservation window");
@@ -310,7 +318,9 @@ async function createPartnerAuditLogsForAdminE2E(params: {
     .returns<Array<{ id: string }>>();
 
   if (error || !data || data.length !== 2) {
-    throw error ?? new Error("Failed to create partner audit logs for admin E2E");
+    throw (
+      error ?? new Error("Failed to create partner audit logs for admin E2E")
+    );
   }
 
   return data;
@@ -323,23 +333,43 @@ test.describe("admin smoke", () => {
 
   test("protected admin pages render with admin cookie", async ({ page }) => {
     await page.goto("/admin");
-    await expect(page.getByRole("heading", { name: "Garage Loop Monitor" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Garage Loop Monitor" }),
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: "Payments" })).toBeVisible();
 
     await page.goto("/admin/reservations");
-    await expect(page.getByRole("heading", { name: "Reservation Monitor" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Reservation Monitor" }),
+    ).toBeVisible();
 
     await page.goto("/admin/settlement");
-    await expect(page.getByRole("heading", { name: "Checkout Settlement" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Checkout Settlement" }),
+    ).toBeVisible();
 
     await page.goto("/admin/partner-audit");
-    await expect(page.getByRole("heading", { name: "Partner Admin Audit" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Partner Admin Audit" }),
+    ).toBeVisible();
+
+    await page.goto("/admin/packages");
+    await expect(
+      page.getByRole("heading", { name: "Partner Package Pricing" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "업장 패키지 추가/갱신" }),
+    ).toBeVisible();
   });
 
   test("payment ledger filters and safety copy render", async ({ page }) => {
     await page.goto("/admin/payments");
-    await expect(page.getByRole("heading", { name: "Payment Ledger" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "만료 READY 정리" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Payment Ledger" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "만료 READY 정리" }),
+    ).toBeVisible();
     await expect(page.getByText("실제 환불을 확인한 뒤에만")).toBeVisible();
 
     const filterNames = [
@@ -354,7 +384,9 @@ test.describe("admin smoke", () => {
     for (const name of filterNames) {
       await page.getByRole("link", { name: new RegExp(`^${name}`) }).click();
       await expect(page).toHaveURL(new RegExp(`/admin/payments\\?filter=`));
-      await expect(page.getByRole("heading", { name: "Payment Ledger" })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Payment Ledger" }),
+      ).toBeVisible();
     }
   });
 
@@ -389,9 +421,7 @@ test.describe("admin smoke", () => {
       const cancelButton = page.getByRole("button", { name: "예약 취소 처리" });
       await expect(cancelButton).toBeDisabled();
 
-      await page
-        .getByLabel("취소 사유")
-        .fill("E2E 관리자 취소 안전장치 검증");
+      await page.getByLabel("취소 사유").fill("E2E 관리자 취소 안전장치 검증");
       await expect(cancelButton).toBeDisabled();
 
       await page.getByLabel(/취소 후 예약 상태/).check();
@@ -412,7 +442,9 @@ test.describe("admin smoke", () => {
         .single<{ status: string }>();
 
       if (reservationError || !reservation) {
-        throw reservationError ?? new Error("Cancelled reservation was not found");
+        throw (
+          reservationError ?? new Error("Cancelled reservation was not found")
+        );
       }
 
       expect(reservation.status).toBe("CANCELLED");
@@ -457,19 +489,21 @@ test.describe("admin smoke", () => {
         }>();
 
       if (statusLogError || !statusLog) {
-        throw statusLogError ?? new Error("Cancellation status log was not found");
+        throw (
+          statusLogError ?? new Error("Cancellation status log was not found")
+        );
       }
 
       expect(statusLog.from_status).toBe("CONFIRMED");
       expect(statusLog.to_status).toBe("CANCELLED");
       expect(statusLog.actor_type).toBe("ADMIN");
       expect(statusLog.reason).toBe("admin_cancelled");
-      expect(statusLog.metadata?.reason).toBe(
-        "E2E 관리자 취소 안전장치 검증",
-      );
+      expect(statusLog.metadata?.reason).toBe("E2E 관리자 취소 안전장치 검증");
 
       await page.goto("/admin/payments?filter=refunded");
-      await expect(page.getByRole("heading", { name: "Payment Ledger" })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Payment Ledger" }),
+      ).toBeVisible();
       const refundedPaymentRow = page.locator("tbody tr").filter({
         has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
       });
@@ -482,7 +516,9 @@ test.describe("admin smoke", () => {
         has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
       });
       await expect(cancelledReservationRow).toHaveCount(1);
-      await expect(cancelledReservationRow.getByText("CANCELLED")).toBeVisible();
+      await expect(
+        cancelledReservationRow.getByText("CANCELLED"),
+      ).toBeVisible();
       await expect(cancelledReservationRow.getByText("REFUNDED")).toBeVisible();
     } finally {
       if (reservationId) {
@@ -571,11 +607,9 @@ test.describe("admin smoke", () => {
         page.getByRole("heading", { name: "Partner Admin Audit" }),
       ).toBeVisible();
       await expect(page.getByRole("link", { name: /^Notes \(/ })).toBeVisible();
-      const currentReservationAuditRows = page
-        .locator("article")
-        .filter({
-          has: page.getByRole("link", { name: `Reservation ${reservationId}` }),
-        });
+      const currentReservationAuditRows = page.locator("article").filter({
+        has: page.getByRole("link", { name: `Reservation ${reservationId}` }),
+      });
       await expect(
         currentReservationAuditRows.filter({
           hasText: "Reservation Note Created",
@@ -593,11 +627,9 @@ test.describe("admin smoke", () => {
 
       await page.getByRole("link", { name: /^Notes \(/ }).click();
       await expect(page).toHaveURL(/\/admin\/partner-audit\?filter=notes/);
-      const filteredReservationAuditRows = page
-        .locator("article")
-        .filter({
-          has: page.getByRole("link", { name: `Reservation ${reservationId}` }),
-        });
+      const filteredReservationAuditRows = page.locator("article").filter({
+        has: page.getByRole("link", { name: `Reservation ${reservationId}` }),
+      });
       await expect(
         filteredReservationAuditRows.filter({
           hasText: "Reservation Note Created",
@@ -616,7 +648,9 @@ test.describe("admin smoke", () => {
         page.getByRole("heading", { name: "Partner Admin Audit" }),
       ).toBeVisible();
       await expect(
-        page.locator("article").filter({ hasText: "Reservation Note Resolved" }),
+        page
+          .locator("article")
+          .filter({ hasText: "Reservation Note Resolved" }),
       ).toBeVisible();
       await expect(
         page.locator("article").filter({ hasText: "Reservation Note Created" }),

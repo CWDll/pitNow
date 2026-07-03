@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-07-03
+
+Decision:
+`/admin/packages` is the MVP source of truth for Shop Service package operations. Admin can create/update global `service_packages`, connect packages to partners through `partner_package_prices`, update labor price, and soft-disable package prices from new bookings.
+
+Partner-admin can view operations, but direct package editing is deferred. A later phase may add partner package change requests that Admin approves or rejects.
+
+Safety rules:
+
+- Do not hard-delete package catalog or partner price rows from the MVP console.
+- Existing reservations keep their stored `package_id`, `duration_minutes`, and `total_price`.
+- Package changes affect only future package selection and reservation creation.
+- Package changes are best-effort logged to `admin_package_audit_logs` with migration `20260703_admin_package_audit_logs.sql`.
+
+Reason:
+Package edits directly affect booking duration, customer price, payment amount, and settlement expectations. Keeping write authority in Admin during MVP reduces operational drift while still allowing partner package onboarding and updates.
+
+---
+
 ## 2026-03-04
 
 Decision:
