@@ -3,6 +3,33 @@
 ## 2026-07-03
 
 Decision:
+Partner package change requests are included in the MVP release scope as a
+controlled alternative to direct partner-admin package editing.
+
+Rules:
+
+- Partner-admin can view its own package/price rows and submit desired price
+  changes with a reason.
+- Partner-admin cannot directly update `service_packages` or
+  `partner_package_prices`.
+- Internal Admin reviews pending requests in `/admin/packages`.
+- Approval updates the relevant `partner_package_prices.labor_price` row and
+  writes an `admin_package_audit_logs` record.
+- Rejection updates only the request status/review metadata.
+- Existing reservations keep their stored package snapshot, duration, and price.
+
+Reason:
+The Admin-only package management decision remains valid for writes that affect
+booking price and duration, but partner operators still need a lightweight
+operational path to request pricing changes. Requiring Admin approval preserves
+the MVP control boundary while making partner package operations testable during
+release QA.
+
+---
+
+## 2026-07-03
+
+Decision:
 `/admin/packages` is the MVP source of truth for Shop Service package operations. Admin can create/update global `service_packages`, connect packages to partners through `partner_package_prices`, update labor price, and soft-disable package prices from new bookings.
 
 Partner-admin can view operations, but direct package editing is deferred. A later phase may add partner package change requests that Admin approves or rejects.
