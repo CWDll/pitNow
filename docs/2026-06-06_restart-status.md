@@ -1941,6 +1941,7 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_search.sql
 - 삭제는 hard delete 대신 비활성화로 처리한다.
 - 기존 예약의 `package_id`, `duration_minutes`, `total_price`는 직접 수정하지 않으며 변경은 신규 예약에만 반영한다.
 - 패키지 변경 이력을 best-effort로 남기는 `admin_package_audit_logs` 마이그레이션을 추가했다.
+- `/admin/packages` 하단에서 최근 패키지 변경 이력 20건을 before/after JSON과 함께 확인할 수 있다.
 - Admin smoke E2E가 `/admin/packages` 운영 폼 렌더를 확인한다.
 
 검증:

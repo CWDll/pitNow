@@ -174,6 +174,19 @@ interface PartnerPackagePriceRow {
     | null;
 }
 
+interface AdminPackageAuditLogRow {
+  id: string;
+  partner_id: string | null;
+  package_id: string | null;
+  price_id: string | null;
+  action: string;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  created_at: string;
+  partners: { name: string } | Array<{ name: string }> | null;
+  service_packages: { name: string } | Array<{ name: string }> | null;
+}
+
 export interface AdminReservationItem {
   id: string;
   partnerName: string;
@@ -257,7 +270,21 @@ export interface AdminServicePackageOption {
   isActive: boolean;
 }
 
+export interface AdminPackageAuditItem {
+  id: string;
+  partnerId: string | null;
+  partnerName: string;
+  packageId: string | null;
+  packageName: string;
+  priceId: string | null;
+  action: string;
+  beforeState: Record<string, unknown>;
+  afterState: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface AdminPackageManagerData {
+  auditLogs: AdminPackageAuditItem[];
   packages: AdminPackageItem[];
   partners: AdminPackagePartnerOption[];
   servicePackages: AdminServicePackageOption[];
@@ -1120,34 +1147,44 @@ export async function getAdminPackages(): Promise<AdminPackageItem[]> {
 export async function getAdminPackageManagerData(): Promise<AdminPackageManagerData> {
   if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return {
+      auditLogs: [],
       packages: [],
       partners: [],
       servicePackages: [],
     };
   }
 
-  const [packages, partnersResult, servicePackagesResult] = await Promise.all([
-    getAdminPackages(),
-    supabaseAdmin
-      .from("partners")
-      .select("id, name")
-      .order("name", { ascending: true })
-      .returns<Array<{ id: string; name: string }>>(),
-    supabaseAdmin
-      .from("service_packages")
-      .select("id, code, name, description, duration_minutes, is_active")
-      .order("name", { ascending: true })
-      .returns<
-        Array<{
-          id: string;
-          code: string;
-          name: string;
-          description: string | null;
-          duration_minutes: number;
-          is_active: boolean;
-        }>
-      >(),
-  ]);
+  const [packages, partnersResult, servicePackagesResult, auditLogsResult] =
+    await Promise.all([
+      getAdminPackages(),
+      supabaseAdmin
+        .from("partners")
+        .select("id, name")
+        .order("name", { ascending: true })
+        .returns<Array<{ id: string; name: string }>>(),
+      supabaseAdmin
+        .from("service_packages")
+        .select("id, code, name, description, duration_minutes, is_active")
+        .order("name", { ascending: true })
+        .returns<
+          Array<{
+            id: string;
+            code: string;
+            name: string;
+            description: string | null;
+            duration_minutes: number;
+            is_active: boolean;
+          }>
+        >(),
+      supabaseAdmin
+        .from("admin_package_audit_logs")
+        .select(
+          "id, partner_id, package_id, price_id, action, before_state, after_state, created_at, partners(name), service_packages(name)",
+        )
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .returns<AdminPackageAuditLogRow[]>(),
+    ]);
 
   if (partnersResult.error) {
     console.error("ADMIN PACKAGE PARTNER LOOKUP ERROR:", partnersResult.error);
@@ -1160,7 +1197,28 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
     );
   }
 
+  if (auditLogsResult.error) {
+    console.error("ADMIN PACKAGE AUDIT LOOKUP ERROR:", auditLogsResult.error);
+  }
+
   return {
+    auditLogs: (auditLogsResult.data ?? []).map((log) => {
+      const partner = firstOrSelf(log.partners);
+      const servicePackage = firstOrSelf(log.service_packages);
+
+      return {
+        id: log.id,
+        partnerId: log.partner_id,
+        partnerName: partner?.name ?? "전체 카탈로그",
+        packageId: log.package_id,
+        packageName: servicePackage?.name ?? "Unknown package",
+        priceId: log.price_id,
+        action: log.action,
+        beforeState: log.before_state ?? {},
+        afterState: log.after_state ?? {},
+        createdAt: log.created_at,
+      };
+    }),
     packages,
     partners: (partnersResult.data ?? []).map((partner) => ({
       id: partner.id,
