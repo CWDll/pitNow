@@ -48,9 +48,7 @@ function formatFail(label, message) {
 }
 
 function summarizePostgrestError(error) {
-  return [error.code, error.message, error.details]
-    .filter(Boolean)
-    .join(" | ");
+  return [error.code, error.message, error.details].filter(Boolean).join(" | ");
 }
 
 async function checkColumns({ db, label, table, columns }) {
@@ -315,6 +313,39 @@ const checks = [
       "after_state",
       "metadata",
       "created_at",
+    ],
+  },
+  {
+    label: "20260703 admin package audit logs",
+    table: "admin_package_audit_logs",
+    columns: [
+      "id",
+      "partner_id",
+      "package_id",
+      "price_id",
+      "action",
+      "before_state",
+      "after_state",
+      "created_at",
+    ],
+  },
+  {
+    label: "20260703 partner package change requests",
+    table: "partner_package_change_requests",
+    columns: [
+      "id",
+      "partner_id",
+      "package_id",
+      "price_id",
+      "current_labor_price",
+      "requested_labor_price",
+      "reason",
+      "status",
+      "requested_by",
+      "reviewed_at",
+      "review_note",
+      "created_at",
+      "updated_at",
     ],
   },
 ];

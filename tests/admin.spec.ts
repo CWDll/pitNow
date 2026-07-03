@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -324,6 +325,77 @@ async function createPartnerAuditLogsForAdminE2E(params: {
   }
 
   return data;
+}
+
+async function hasPackageChangeRequestSchema(db: SupabaseClient) {
+  const { error } = await db
+    .from("partner_package_change_requests")
+    .select("id")
+    .limit(1);
+
+  return !error;
+}
+
+async function createPackageChangeRequestForAdminE2E(db: SupabaseClient) {
+  const { data: priceRows, error: priceError } = await db
+    .from("partner_package_prices")
+    .select(
+      "id, partner_id, package_id, labor_price, partners!inner(name), service_packages!inner(name)",
+    )
+    .eq("is_active", true)
+    .limit(20)
+    .returns<
+      Array<{
+        id: string;
+        partner_id: string;
+        package_id: string;
+        labor_price: number | string;
+        partners: { name: string } | Array<{ name: string }> | null;
+        service_packages: { name: string } | Array<{ name: string }> | null;
+      }>
+    >();
+
+  if (priceError) {
+    throw priceError;
+  }
+
+  const priceRow = (priceRows ?? []).find((row) => Number(row.labor_price) > 0);
+
+  if (!priceRow) {
+    throw new Error("No active partner package price row was found");
+  }
+
+  const currentLaborPrice = Number(priceRow.labor_price);
+  const requestedLaborPrice = currentLaborPrice + 1000;
+  const reason = `Admin package request E2E ${randomUUID()}`;
+
+  const { data: request, error: requestError } = await db
+    .from("partner_package_change_requests")
+    .insert({
+      current_labor_price: currentLaborPrice,
+      package_id: priceRow.package_id,
+      partner_id: priceRow.partner_id,
+      price_id: priceRow.id,
+      reason,
+      requested_labor_price: requestedLaborPrice,
+      status: "PENDING",
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (requestError || !request) {
+    throw requestError ?? new Error("Failed to create package change request");
+  }
+
+  return {
+    currentLaborPrice,
+    packageId: priceRow.package_id,
+    partnerId: priceRow.partner_id,
+    priceId: priceRow.id,
+    reason,
+    requestId: request.id,
+    requestedLaborPrice,
+  };
 }
 
 test.describe("admin smoke", () => {
@@ -686,6 +758,143 @@ test.describe("admin smoke", () => {
 
       if (reservationId) {
         await cleanupConfirmedReservationForE2E({ db, reservationId });
+      }
+    }
+  });
+
+  test("admin packages approves partner package change requests", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+
+    const db = requireAdminSupabaseForE2E();
+    const hasSchema = await hasPackageChangeRequestSchema(db);
+
+    test.skip(
+      !hasSchema,
+      "partner_package_change_requests schema is required for package request approval E2E",
+    );
+
+    const auditSince = new Date(Date.now() - 1000).toISOString();
+    let created: Awaited<
+      ReturnType<typeof createPackageChangeRequestForAdminE2E>
+    > | null = null;
+
+    try {
+      created = await createPackageChangeRequestForAdminE2E(db);
+
+      await page.goto("/admin/packages");
+      await expect(
+        page.getByRole("heading", { name: "패키지 변경 요청" }),
+      ).toBeVisible();
+
+      const requestCard = page.locator("article").filter({
+        hasText: created.reason,
+      });
+      await expect(requestCard).toHaveCount(1);
+      await expect(requestCard.getByText("PENDING")).toBeVisible();
+      await requestCard.getByPlaceholder("승인 메모").fill("E2E 승인");
+      await requestCard
+        .getByRole("button", { name: "승인하고 가격 반영" })
+        .click();
+
+      await expect(
+        page.getByText(
+          "파트너 패키지 변경 요청을 승인하고 가격을 반영했습니다.",
+        ),
+      ).toBeVisible();
+
+      const { data: priceRow, error: priceLookupError } = await db
+        .from("partner_package_prices")
+        .select("labor_price")
+        .eq("id", created.priceId)
+        .single<{ labor_price: number | string }>();
+
+      if (priceLookupError || !priceRow) {
+        throw priceLookupError ?? new Error("Updated package price not found");
+      }
+
+      expect(Number(priceRow.labor_price)).toBe(created.requestedLaborPrice);
+
+      const { data: requestRow, error: requestLookupError } = await db
+        .from("partner_package_change_requests")
+        .select("status, reviewed_at, review_note")
+        .eq("id", created.requestId)
+        .single<{
+          status: string;
+          reviewed_at: string | null;
+          review_note: string | null;
+        }>();
+
+      if (requestLookupError || !requestRow) {
+        throw (
+          requestLookupError ?? new Error("Approved package request not found")
+        );
+      }
+
+      expect(requestRow.status).toBe("APPROVED");
+      expect(requestRow.reviewed_at).toEqual(expect.any(String));
+      expect(requestRow.review_note).toBe("E2E 승인");
+
+      const { data: auditRows, error: auditError } = await db
+        .from("admin_package_audit_logs")
+        .select("id, action, before_state, after_state")
+        .eq("price_id", created.priceId)
+        .eq("action", "PARTNER_PACKAGE_PRICE_UPDATED")
+        .gte("created_at", auditSince)
+        .order("created_at", { ascending: false })
+        .limit(5)
+        .returns<
+          Array<{
+            id: string;
+            action: string;
+            before_state: { labor_price?: number | string } | null;
+            after_state: { labor_price?: number | string } | null;
+          }>
+        >();
+
+      if (auditError) {
+        throw auditError;
+      }
+
+      expect(
+        (auditRows ?? []).some(
+          (row) =>
+            Number(row.before_state?.labor_price) ===
+              created?.currentLaborPrice &&
+            Number(row.after_state?.labor_price) ===
+              created?.requestedLaborPrice,
+        ),
+      ).toBe(true);
+    } finally {
+      if (created) {
+        const { error: restoreError } = await db
+          .from("partner_package_prices")
+          .update({ labor_price: created.currentLaborPrice })
+          .eq("id", created.priceId);
+
+        if (restoreError) {
+          throw restoreError;
+        }
+
+        const { error: requestDeleteError } = await db
+          .from("partner_package_change_requests")
+          .delete()
+          .eq("id", created.requestId);
+
+        if (requestDeleteError) {
+          throw requestDeleteError;
+        }
+
+        const { error: auditDeleteError } = await db
+          .from("admin_package_audit_logs")
+          .delete()
+          .eq("price_id", created.priceId)
+          .gte("created_at", auditSince);
+
+        if (auditDeleteError) {
+          throw auditDeleteError;
+        }
       }
     }
   });

@@ -1981,13 +1981,16 @@ Partner-admin 직접 패키지 편집은 보류하고, 파트너가 가격 변�
 - `/admin/packages`에서 최근 변경 요청을 확인하고 `PENDING` 요청을 승인/거절할 수 있다.
 - 승인 시 `partner_package_prices.labor_price`를 갱신하고 기존 `admin_package_audit_logs`에도 가격 변경 이력을 남긴다.
 - Partner-admin API E2E는 SQL이 적용된 환경에서는 변경 요청 생성/403을 검증하고, SQL 미적용 환경에서는 schema 미적용으로 명시 skip한다.
+- Admin UI E2E는 pending 변경 요청을 생성한 뒤 `/admin/packages`에서 승인하고 가격 row/request 상태/audit log를 검증한다.
+- `scripts/check-supabase-schema.mjs`에 `admin_package_audit_logs`, `partner_package_change_requests` schema 검증을 추가했다.
 
 검증:
 
 - `npx tsc --noEmit` 성공.
 - `npm run lint` 성공.
 - `npm run build` 성공.
-- `npm run e2e:ui` 성공.
+- `npm run e2e:ui -- tests/admin.spec.ts` 성공.
+- `npm run e2e:ui` 성공. 9 passed.
 - `PITNOW_E2E_BASE_URL=http://localhost:3011 npm run e2e:partner-admin` 성공.
-  - 현재 DB에는 `partner_package_change_requests` SQL이 아직 적용되지 않아 변경 요청 생성 검증은 `schema 미적용`으로 skip됨.
-  - SQL 적용 후 같은 스크립트가 변경 요청 생성/403까지 자동 검증한다.
+- `node scripts/check-supabase-schema.mjs` 성공.
+- SQL 적용 후 partner-admin API E2E에서 `package change request 생성 API 확인`, `비권한 유저 package change request 403 확인` 통과.
