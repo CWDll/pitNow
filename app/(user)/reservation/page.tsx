@@ -6,9 +6,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { formatKstDateTimeRange } from "@/src/lib/timezone";
 
-import ReservationListClient, { type ReservationListItem } from "./reservation-list-client";
+import ReservationListClient, {
+  type ReservationListItem,
+} from "./reservation-list-client";
 
-type ReservationStatus = "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
+type ReservationStatus =
+  "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 
 interface ReservationRow {
@@ -81,6 +84,7 @@ interface ReservationPaymentRow {
   status: string;
   refunded_at: string | null;
   created_at: string;
+  reservation_snapshot: unknown;
 }
 
 interface SettlementSummary {
@@ -95,13 +99,32 @@ function toNumber(value: number | string): number {
 }
 
 function uniqueValues(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+  return [
+    ...new Set(values.filter((value): value is string => Boolean(value))),
+  ];
 }
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+function getPackageSnapshotTitle(snapshot: unknown): string {
+  if (!snapshot || typeof snapshot !== "object") {
+    return "";
+  }
+
+  const packageSnapshot = (snapshot as { packageSnapshot?: unknown })
+    .packageSnapshot;
+
+  if (!packageSnapshot || typeof packageSnapshot !== "object") {
+    return "";
+  }
+
+  const name = (packageSnapshot as { name?: unknown }).name;
+
+  return typeof name === "string" ? name : "";
 }
 
 function mapReservationItem(
@@ -116,21 +139,26 @@ function mapReservationItem(
   },
 ): ReservationListItem {
   const vehicle = Array.isArray(reservation.vehicles)
-    ? reservation.vehicles[0] ?? null
+    ? (reservation.vehicles[0] ?? null)
     : reservation.vehicles;
   const taskLabel = maps.taskLabels.get(reservation.id);
   const workTitle =
     reservation.reservation_type === "SELF_SERVICE"
-      ? taskLabel ?? "셀프 정비"
-      : maps.packageNames.get(reservation.package_id ?? "") ?? "전문가 맡기기";
+      ? (taskLabel ?? "셀프 정비")
+      : getPackageSnapshotTitle(
+          maps.reservationPayments.get(reservation.id)?.reservation_snapshot,
+        ) ||
+        maps.packageNames.get(reservation.package_id ?? "") ||
+        "전문가 맡기기";
   const bayLabel =
     reservation.reservation_type === "SELF_SERVICE"
-      ? maps.bayNames.get(reservation.bay_id) ?? undefined
+      ? (maps.bayNames.get(reservation.bay_id) ?? undefined)
       : undefined;
   const blockedMinutes = Math.max(
     30,
     Math.round(
-      (new Date(reservation.reserved_end_time).getTime() - new Date(reservation.start_time).getTime()) /
+      (new Date(reservation.reserved_end_time).getTime() -
+        new Date(reservation.start_time).getTime()) /
         (1000 * 60),
     ),
   );
@@ -141,7 +169,10 @@ function mapReservationItem(
     id: reservation.id,
     garageName: maps.partnerNames.get(reservation.partner_id) ?? "정비소",
     workTitle,
-    dateLabel: formatKstDateTimeRange(reservation.start_time, reservation.end_time),
+    dateLabel: formatKstDateTimeRange(
+      reservation.start_time,
+      reservation.end_time,
+    ),
     bayLabel,
     reservationType: reservation.reservation_type,
     status: reservation.status,
@@ -171,7 +202,10 @@ function getReservationOccupancyEndMs(item: ReservationListItem): number {
   return Number.isFinite(occupancyEndMs) ? occupancyEndMs : fallbackEndMs;
 }
 
-function isUpcomingReservation(item: ReservationListItem, nowMs: number): boolean {
+function isUpcomingReservation(
+  item: ReservationListItem,
+  nowMs: number,
+): boolean {
   if (item.status === "COMPLETED" || item.status === "CANCELLED") {
     return false;
   }
@@ -210,7 +244,9 @@ export default function ReservationListPage() {
 
       const { data, error: reservationError } = await supabase
         .from("reservations")
-        .select("id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, reserved_end_time, blocked_until, status, total_price, vehicles(plate_number, model, year)")
+        .select(
+          "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, reserved_end_time, blocked_until, status, total_price, vehicles(plate_number, model, year)",
+        )
         .eq("user_id", sessionData.session.user.id)
         .order("start_time", { ascending: false })
         .returns<ReservationRow[]>();
@@ -239,7 +275,9 @@ export default function ReservationListPage() {
       const packageIds = uniqueValues(
         reservationRows.map((reservation) => reservation.package_id),
       ).filter(isUuid);
-      const reservationIds = reservationRows.map((reservation) => reservation.id);
+      const reservationIds = reservationRows.map(
+        (reservation) => reservation.id,
+      );
 
       const [
         partnerResult,
@@ -297,7 +335,9 @@ export default function ReservationListPage() {
         reservationIds.length > 0
           ? supabase
               .from("payments")
-              .select("reservation_id,status,refunded_at,created_at")
+              .select(
+                "reservation_id,status,refunded_at,created_at,reservation_snapshot",
+              )
               .eq("payment_purpose", "RESERVATION")
               .in("reservation_id", reservationIds)
               .order("created_at", { ascending: false })
@@ -359,7 +399,9 @@ export default function ReservationListPage() {
       const partnerNames = new Map(
         (partnerResult.data ?? []).map((partner) => [partner.id, partner.name]),
       );
-      const bayNames = new Map((bayResult.data ?? []).map((bay) => [bay.id, bay.name]));
+      const bayNames = new Map(
+        (bayResult.data ?? []).map((bay) => [bay.id, bay.name]),
+      );
       const packageNames = new Map(
         (packageResult.data ?? []).map((servicePackage) => [
           servicePackage.id,
@@ -418,7 +460,10 @@ export default function ReservationListPage() {
           return;
         }
 
-        const amountDue = Math.max(0, totalSettlement - toNumber(reservation.total_price));
+        const amountDue = Math.max(
+          0,
+          totalSettlement - toNumber(reservation.total_price),
+        );
         const settlementPayment = latestSettlementPayments.get(reservation.id);
         const paidAmount =
           settlementPayment?.status === "SETTLEMENT_CONFIRMED"
@@ -486,7 +531,8 @@ export default function ReservationListPage() {
 
   const visibleReservations = reservations.map((item) => ({
     ...item,
-    canCancel: item.status === "CONFIRMED" && isUpcomingReservation(item, nowMs),
+    canCancel:
+      item.status === "CONFIRMED" && isUpcomingReservation(item, nowMs),
   }));
   const upcomingReservations = visibleReservations.filter((item) =>
     isUpcomingReservation(item, nowMs),

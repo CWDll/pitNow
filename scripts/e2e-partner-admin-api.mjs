@@ -128,7 +128,9 @@ async function signIn({ supabaseUrl, anonKey, email, password }) {
   });
 
   if (error || !data.session?.access_token) {
-    throw new Error(`테스트 유저 로그인 실패: ${error?.message ?? "no session"}`);
+    throw new Error(
+      `테스트 유저 로그인 실패: ${error?.message ?? "no session"}`,
+    );
   }
 
   return data.session.access_token;
@@ -186,7 +188,9 @@ async function getTestBay(admin) {
   }
 
   const candidates = (data ?? []).filter((row) => {
-    const partner = Array.isArray(row.partners) ? row.partners[0] : row.partners;
+    const partner = Array.isArray(row.partners)
+      ? row.partners[0]
+      : row.partners;
     const hourlyPrice = Number(partner?.hourly_price ?? 0);
     return row.is_active && Number.isFinite(hourlyPrice) && hourlyPrice > 0;
   });
@@ -202,7 +206,9 @@ async function getTestBay(admin) {
       .maybeSingle();
 
     if (reservationError) {
-      throw new Error(`테스트 베이 예약 상태 조회 실패: ${reservationError.message}`);
+      throw new Error(
+        `테스트 베이 예약 상태 조회 실패: ${reservationError.message}`,
+      );
     }
 
     if (!activeReservation) {
@@ -212,7 +218,9 @@ async function getTestBay(admin) {
   }
 
   if (!bay) {
-    throw new Error("시간당 요금이 설정되고 진행 중 예약이 없는 활성 테스트 베이가 없습니다.");
+    throw new Error(
+      "시간당 요금이 설정되고 진행 중 예약이 없는 활성 테스트 베이가 없습니다.",
+    );
   }
 
   const partner = Array.isArray(bay.partners) ? bay.partners[0] : bay.partners;
@@ -440,7 +448,9 @@ async function createLegacyPackageReservation({
     throw new Error(`legacy package 테스트 예약 생성 실패: ${message}`);
   }
 
-  throw new Error("legacy package 테스트 예약 가능한 시간대를 찾지 못했습니다.");
+  throw new Error(
+    "legacy package 테스트 예약 가능한 시간대를 찾지 못했습니다.",
+  );
 }
 
 async function assertReservationListRelatedLookups({ client, userId }) {
@@ -463,7 +473,9 @@ async function assertReservationListRelatedLookups({ client, userId }) {
   const partnerIds = uniqueValues(
     reservationRows.map((reservation) => reservation.partner_id),
   );
-  const bayIds = uniqueValues(reservationRows.map((reservation) => reservation.bay_id));
+  const bayIds = uniqueValues(
+    reservationRows.map((reservation) => reservation.bay_id),
+  );
   const packageIds = uniqueValues(
     reservationRows.map((reservation) => reservation.package_id),
   ).filter(isUuid);
@@ -580,6 +592,15 @@ async function findAvailabilityBlockWindow({ admin, bay, startAfter }) {
 async function cleanup(admin, records) {
   const tasks = [];
 
+  if (records.packageChangeRequestIds?.length) {
+    tasks.push(
+      admin
+        .from("partner_package_change_requests")
+        .delete()
+        .in("id", records.packageChangeRequestIds),
+    );
+  }
+
   if (records.partnerAdminUserId && records.auditSince) {
     tasks.push(
       admin
@@ -592,18 +613,26 @@ async function cleanup(admin, records) {
 
   if (records.noteIds?.length) {
     tasks.push(
-      admin.from("partner_reservation_notes").delete().in("id", records.noteIds),
+      admin
+        .from("partner_reservation_notes")
+        .delete()
+        .in("id", records.noteIds),
     );
   }
 
   if (records.blockId) {
     tasks.push(
-      admin.from("partner_availability_blocks").delete().eq("id", records.blockId),
+      admin
+        .from("partner_availability_blocks")
+        .delete()
+        .eq("id", records.blockId),
     );
   }
 
   if (records.reservationId) {
-    tasks.push(admin.from("reservations").delete().eq("id", records.reservationId));
+    tasks.push(
+      admin.from("reservations").delete().eq("id", records.reservationId),
+    );
   }
 
   if (records.staleReservationId) {
@@ -642,7 +671,12 @@ async function cleanup(admin, records) {
   }
 }
 
-async function getPartnerAdminAuditLogs({ admin, partnerId, actorUserId, since }) {
+async function getPartnerAdminAuditLogs({
+  admin,
+  partnerId,
+  actorUserId,
+  since,
+}) {
   const { data, error } = await admin
     .from("partner_admin_audit_logs")
     .select(
@@ -670,6 +704,15 @@ function assertAuditLog(logs, predicate, message) {
   }
 }
 
+async function hasPackageChangeRequestSchema(admin) {
+  const { error } = await admin
+    .from("partner_package_change_requests")
+    .select("id")
+    .limit(1);
+
+  return !error;
+}
+
 async function main() {
   loadEnvFile(resolve(process.cwd(), ".env.local"));
 
@@ -680,6 +723,7 @@ async function main() {
   const runId = String(Date.now()).slice(-8);
   const records = {
     noteIds: [],
+    packageChangeRequestIds: [],
   };
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -802,14 +846,93 @@ async function main() {
     }
     formatStep("bays API 과거 예약 제외 확인");
 
+    const packagesPayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/packages?partnerId=${bay.partnerId}`,
+    });
+    if (!Array.isArray(packagesPayload.packages)) {
+      throw new Error("packages API 응답의 packages가 배열이 아닙니다.");
+    }
+    for (const item of packagesPayload.packages) {
+      if (
+        typeof item.id !== "string" ||
+        typeof item.name !== "string" ||
+        typeof item.durationMinutes !== "number" ||
+        typeof item.laborPrice !== "number" ||
+        typeof item.isActive !== "boolean"
+      ) {
+        throw new Error("packages API 응답 shape가 올바르지 않습니다.");
+      }
+    }
+    formatStep("packages API 읽기 전용 조회 확인");
+
+    await apiRequest({
+      baseUrl,
+      token: outsiderToken,
+      path: `/api/partner-admin/packages?partnerId=${bay.partnerId}`,
+      expectedStatus: 403,
+      expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
+    });
+    formatStep("비권한 유저 packages API 403 확인");
+
+    const hasPackageRequestSchema = await hasPackageChangeRequestSchema(admin);
+    const firstPackage = packagesPayload.packages[0];
+
+    if (hasPackageRequestSchema && firstPackage) {
+      const packageRequestPayload = await apiRequest({
+        baseUrl,
+        token: adminToken,
+        path: "/api/partner-admin/package-change-requests",
+        method: "POST",
+        body: {
+          packageId: firstPackage.packageId,
+          partnerId: bay.partnerId,
+          reason: `partner admin api e2e price request ${runId}`,
+          requestedLaborPrice: firstPackage.laborPrice + 1000,
+        },
+      });
+
+      if (!packageRequestPayload.request?.id) {
+        throw new Error("package change request 응답에 request id가 없습니다.");
+      }
+
+      records.packageChangeRequestIds.push(packageRequestPayload.request.id);
+      formatStep("package change request 생성 API 확인");
+
+      await apiRequest({
+        baseUrl,
+        token: outsiderToken,
+        path: "/api/partner-admin/package-change-requests",
+        method: "POST",
+        body: {
+          packageId: firstPackage.packageId,
+          partnerId: bay.partnerId,
+          requestedLaborPrice: firstPackage.laborPrice + 2000,
+        },
+        expectedStatus: 403,
+        expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
+      });
+      formatStep("비권한 유저 package change request 403 확인");
+    } else {
+      formatStep(
+        "package change request API 건너뜀",
+        hasPackageRequestSchema ? "테스트 패키지 없음" : "schema 미적용",
+      );
+    }
+
     const reservationRows = await assertReservationListRelatedLookups({
       client: userClient,
       userId: partnerAdminUser.id,
     });
     if (
-      !reservationRows.some((reservation) => reservation.id === legacyReservation.id)
+      !reservationRows.some(
+        (reservation) => reservation.id === legacyReservation.id,
+      )
     ) {
-      throw new Error("예약 목록 테스트 응답에 legacy package 예약이 없습니다.");
+      throw new Error(
+        "예약 목록 테스트 응답에 legacy package 예약이 없습니다.",
+      );
     }
     formatStep("reservation list 사용자 필터/legacy package 조회 확인");
 
@@ -876,7 +999,9 @@ async function main() {
       reservedBayPayload.activeReservationCount < 1 ||
       reservedBayPayload.canDeactivate !== false
     ) {
-      throw new Error("예약 보유 베이의 비활성화 가능 상태가 올바르지 않습니다.");
+      throw new Error(
+        "예약 보유 베이의 비활성화 가능 상태가 올바르지 않습니다.",
+      );
     }
     formatStep("예약 보유 베이 상태 표시 API 확인");
 
@@ -911,7 +1036,9 @@ async function main() {
       path: `/api/partner-admin/reservations/${reservation.id}`,
     });
     if (detailPayload.reservation?.id !== reservation.id) {
-      throw new Error("reservation detail API 응답 예약 ID가 일치하지 않습니다.");
+      throw new Error(
+        "reservation detail API 응답 예약 ID가 일치하지 않습니다.",
+      );
     }
     formatStep("reservation detail API 확인");
 
@@ -957,7 +1084,9 @@ async function main() {
     if (
       !activeBlocksPayload.blocks?.some((block) => block.id === records.blockId)
     ) {
-      throw new Error("availability block 조회 응답에 활성 테스트 block이 없습니다.");
+      throw new Error(
+        "availability block 조회 응답에 활성 테스트 block이 없습니다.",
+      );
     }
     formatStep("availability block 조회 API 확인");
 
@@ -1049,7 +1178,9 @@ async function main() {
         (block) => block.id === records.blockId && block.isActive === false,
       )
     ) {
-      throw new Error("includeInactive 조회 응답에 해제된 테스트 block이 없습니다.");
+      throw new Error(
+        "includeInactive 조회 응답에 해제된 테스트 block이 없습니다.",
+      );
     }
     formatStep("availability block includeInactive 조회 확인");
 
@@ -1127,7 +1258,9 @@ async function main() {
     });
     for (const note of createdNotes) {
       if (!notesPayload.notes?.some((item) => item.id === note.id)) {
-        throw new Error(`notes API 응답에 ${note.noteType} 테스트 note가 없습니다.`);
+        throw new Error(
+          `notes API 응답에 ${note.noteType} 테스트 note가 없습니다.`,
+        );
       }
     }
     formatStep("reservation notes 조회 API 확인");

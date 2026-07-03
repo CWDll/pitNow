@@ -71,7 +71,11 @@ export async function POST(req: Request) {
 
   if (!method || !reservation) {
     return jsonError(
-      apiError(400, "INVALID_INPUT", "결제 준비 요청 형식이 올바르지 않습니다."),
+      apiError(
+        400,
+        "INVALID_INPUT",
+        "결제 준비 요청 형식이 올바르지 않습니다.",
+      ),
     );
   }
 
@@ -106,6 +110,7 @@ export async function POST(req: Request) {
   const reservationSnapshot = {
     ...reservation,
     amount,
+    packageSnapshot: quoteResult.value.packageSnapshot,
   };
 
   const { data, error } = await supabaseAdmin

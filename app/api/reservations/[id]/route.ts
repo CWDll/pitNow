@@ -9,11 +9,7 @@ import {
 } from "@/src/lib/supabase";
 
 type ReservationStatus =
-  | "CONFIRMED"
-  | "CHECKED_IN"
-  | "IN_USE"
-  | "COMPLETED"
-  | "CANCELLED";
+  "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
 
 interface Context {
   params: Promise<{ id: string }>;
@@ -67,6 +63,10 @@ interface ServicePackageRow {
   name: string;
 }
 
+interface ReservationPaymentSnapshotRow {
+  reservation_snapshot: unknown;
+}
+
 function jsonError(status: number, code: string, message: string) {
   return NextResponse.json(
     {
@@ -85,6 +85,23 @@ function toNumber(value: number | string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getPackageSnapshotTitle(snapshot: unknown): string {
+  if (!snapshot || typeof snapshot !== "object") {
+    return "";
+  }
+
+  const packageSnapshot = (snapshot as { packageSnapshot?: unknown })
+    .packageSnapshot;
+
+  if (!packageSnapshot || typeof packageSnapshot !== "object") {
+    return "";
+  }
+
+  const name = (packageSnapshot as { name?: unknown }).name;
+
+  return typeof name === "string" ? name : "";
+}
+
 export async function GET(req: Request, context: Context) {
   if (!hasSupabaseEnv) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
@@ -100,7 +117,11 @@ export async function GET(req: Request, context: Context) {
   const reservationId = id.trim();
 
   if (!reservationId) {
-    return jsonError(400, "INVALID_RESERVATION_ID", "reservation id가 필요합니다.");
+    return jsonError(
+      400,
+      "INVALID_RESERVATION_ID",
+      "reservation id가 필요합니다.",
+    );
   }
 
   const db = authResult.auth.client;
@@ -119,7 +140,11 @@ export async function GET(req: Request, context: Context) {
   }
 
   if (!reservation) {
-    return jsonError(404, "RESERVATION_NOT_FOUND", "예약 정보를 찾을 수 없습니다.");
+    return jsonError(
+      404,
+      "RESERVATION_NOT_FOUND",
+      "예약 정보를 찾을 수 없습니다.",
+    );
   }
 
   const [partnerResult, bayResult, vehicleResult] = await Promise.all([
@@ -150,7 +175,11 @@ export async function GET(req: Request, context: Context) {
       bayError: bayResult.error,
       vehicleError: vehicleResult.error,
     });
-    return jsonError(500, "DB_ERROR", "예약 연관 정보 조회 중 오류가 발생했습니다.");
+    return jsonError(
+      500,
+      "DB_ERROR",
+      "예약 연관 정보 조회 중 오류가 발생했습니다.",
+    );
   }
 
   let taskIds: string[] = [];
@@ -166,7 +195,11 @@ export async function GET(req: Request, context: Context) {
 
     if (taskError) {
       console.error("RESERVATION DETAIL TASK LOOKUP ERROR:", taskError);
-      return jsonError(500, "DB_ERROR", "예약 작업 조회 중 오류가 발생했습니다.");
+      return jsonError(
+        500,
+        "DB_ERROR",
+        "예약 작업 조회 중 오류가 발생했습니다.",
+      );
     }
 
     const taskUuidList = (taskRows ?? []).map((row) => row.task_id);
@@ -179,8 +212,15 @@ export async function GET(req: Request, context: Context) {
         .returns<SelfMaintenanceTaskRow[]>();
 
       if (taskCatalogError) {
-        console.error("RESERVATION DETAIL TASK CATALOG LOOKUP ERROR:", taskCatalogError);
-        return jsonError(500, "DB_ERROR", "작업 카탈로그 조회 중 오류가 발생했습니다.");
+        console.error(
+          "RESERVATION DETAIL TASK CATALOG LOOKUP ERROR:",
+          taskCatalogError,
+        );
+        return jsonError(
+          500,
+          "DB_ERROR",
+          "작업 카탈로그 조회 중 오류가 발생했습니다.",
+        );
       }
 
       const tasksById = new Map(
@@ -194,18 +234,34 @@ export async function GET(req: Request, context: Context) {
       taskLabels = orderedTasks.map((task) => task.name).join(", ");
     }
   } else if (reservation.package_id) {
-    const { data: packageRow, error: packageError } = await db
-      .from("service_packages")
-      .select("id,name")
-      .eq("id", reservation.package_id)
-      .maybeSingle<ServicePackageRow>();
+    const [paymentResult, packageResult] = await Promise.all([
+      db
+        .from("payments")
+        .select("reservation_snapshot")
+        .eq("reservation_id", reservation.id)
+        .eq("payment_purpose", "RESERVATION")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .returns<ReservationPaymentSnapshotRow[]>(),
+      db
+        .from("service_packages")
+        .select("id,name")
+        .eq("id", reservation.package_id)
+        .maybeSingle<ServicePackageRow>(),
+    ]);
 
-    if (packageError) {
-      console.error("RESERVATION DETAIL PACKAGE LOOKUP ERROR:", packageError);
+    if (paymentResult.error || packageResult.error) {
+      console.error("RESERVATION DETAIL PACKAGE LOOKUP ERROR:", {
+        paymentError: paymentResult.error,
+        packageError: packageResult.error,
+      });
       return jsonError(500, "DB_ERROR", "패키지 조회 중 오류가 발생했습니다.");
     }
 
-    packageTitle = packageRow?.name ?? "패키지";
+    packageTitle =
+      getPackageSnapshotTitle(paymentResult.data?.[0]?.reservation_snapshot) ||
+      packageResult.data?.name ||
+      "패키지";
   }
 
   const partner = partnerResult.data;

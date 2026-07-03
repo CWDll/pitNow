@@ -10,11 +10,7 @@ import { redirectToLogin } from "@/src/lib/client-auth";
 // type, interface, API는 나중에 분리해야 함. 한번에 옮길 것.
 
 type ReservationStatus =
-  | "CONFIRMED"
-  | "CHECKED_IN"
-  | "IN_USE"
-  | "COMPLETED"
-  | "CANCELLED";
+  "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 type PartnerNoteType = "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW";
 type NoteFilter = "ALL" | "OPEN" | "ISSUES";
@@ -56,6 +52,19 @@ interface PartnerBay {
   partnerId: string;
   name: string;
   isActive: boolean;
+}
+
+interface PartnerAdminPackage {
+  id: string;
+  packageId: string;
+  code: string;
+  name: string;
+  description: string;
+  durationMinutes: number;
+  laborPrice: number;
+  isActive: boolean;
+  priceActive: boolean;
+  catalogActive: boolean;
 }
 
 interface AvailabilityBlock {
@@ -353,6 +362,7 @@ export function PartnerAdminDashboard() {
     [],
   );
   const [bays, setBays] = useState<PartnerBay[]>([]);
+  const [packages, setPackages] = useState<PartnerAdminPackage[]>([]);
   const [availabilityBlocks, setAvailabilityBlocks] = useState<
     AvailabilityBlock[]
   >([]);
@@ -360,6 +370,13 @@ export function PartnerAdminDashboard() {
   const [blockStartsAt, setBlockStartsAt] = useState(defaultBlockStartsAt);
   const [blockEndsAt, setBlockEndsAt] = useState(defaultBlockEndsAt);
   const [blockReason, setBlockReason] = useState("");
+  const [packageRequestPrices, setPackageRequestPrices] = useState<
+    Record<string, string>
+  >({});
+  const [packageRequestReasons, setPackageRequestReasons] = useState<
+    Record<string, string>
+  >({});
+  const [packageRequestMessage, setPackageRequestMessage] = useState("");
   const [editingBlockId, setEditingBlockId] = useState("");
   const [editBlockStartsAt, setEditBlockStartsAt] = useState("");
   const [editBlockEndsAt, setEditBlockEndsAt] = useState("");
@@ -378,6 +395,8 @@ export function PartnerAdminDashboard() {
   const [isLoadingMe, setIsLoadingMe] = useState(true);
   const [isLoadingReservations, setIsLoadingReservations] = useState(false);
   const [isLoadingBays, setIsLoadingBays] = useState(false);
+  const [isLoadingPackages, setIsLoadingPackages] = useState(false);
+  const [requestingPackageId, setRequestingPackageId] = useState("");
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
   const [isCreatingBlock, setIsCreatingBlock] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -545,6 +564,57 @@ export function PartnerAdminDashboard() {
     }
 
     void loadBays();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedPartnerId]);
+
+  useEffect(() => {
+    if (!selectedPartnerId) {
+      return;
+    }
+
+    let mounted = true;
+
+    async function loadPackages() {
+      setIsLoadingPackages(true);
+      setError("");
+
+      const query = new URLSearchParams({
+        partnerId: selectedPartnerId,
+      });
+      const response = await authFetch(
+        `/api/partner-admin/packages?${query.toString()}`,
+      );
+      const payload = await readJson(response);
+
+      if (!response.ok) {
+        if (mounted) {
+          setError(
+            extractErrorMessage(payload) ??
+              "업장 패키지 목록을 불러오지 못했습니다.",
+          );
+          setPackages([]);
+          setIsLoadingPackages(false);
+        }
+        return;
+      }
+
+      const nextPackages =
+        payload &&
+        typeof payload === "object" &&
+        Array.isArray((payload as { packages?: unknown }).packages)
+          ? (payload as { packages: PartnerAdminPackage[] }).packages
+          : [];
+
+      if (mounted) {
+        setPackages(nextPackages);
+        setIsLoadingPackages(false);
+      }
+    }
+
+    void loadPackages();
 
     return () => {
       mounted = false;
@@ -1018,6 +1088,58 @@ export function PartnerAdminDashboard() {
     setUpdatingBlockId("");
   }
 
+  async function createPackageChangeRequest(item: PartnerAdminPackage) {
+    const requestedLaborPrice = Number(packageRequestPrices[item.packageId]);
+
+    setPackageRequestMessage("");
+
+    if (!Number.isInteger(requestedLaborPrice) || requestedLaborPrice < 0) {
+      setError("요청할 공임 가격을 0원 이상 정수로 입력해 주세요.");
+      return;
+    }
+
+    setRequestingPackageId(item.packageId);
+    setError("");
+
+    const response = await authFetch(
+      "/api/partner-admin/package-change-requests",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          partnerId: selectedPartnerId,
+          packageId: item.packageId,
+          requestedLaborPrice,
+          reason: packageRequestReasons[item.packageId] ?? "",
+        }),
+      },
+    );
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ?? "패키지 변경 요청 저장에 실패했습니다.",
+      );
+      setRequestingPackageId("");
+      return;
+    }
+
+    setPackageRequestMessage(
+      `${item.name} 변경 요청을 Admin 검토 대기 상태로 저장했습니다.`,
+    );
+    setPackageRequestPrices((current) => ({
+      ...current,
+      [item.packageId]: "",
+    }));
+    setPackageRequestReasons((current) => ({
+      ...current,
+      [item.packageId]: "",
+    }));
+    setRequestingPackageId("");
+  }
+
   const confirmedCount = reservations.filter(
     (reservation) => reservation.status === "CONFIRMED",
   ).length;
@@ -1032,6 +1154,7 @@ export function PartnerAdminDashboard() {
         (reservation.status === "COMPLETED" && !reservation.checkoutCompleted)),
   ).length;
   const activeBayCount = bays.filter((bay) => bay.isActive).length;
+  const activePackageCount = packages.filter((item) => item.isActive).length;
   const unresolvedNotes = notes.filter((note) => !note.isResolved);
   const unresolvedIssueNotes = unresolvedNotes.filter(
     (note) => note.noteType !== "NOTE",
@@ -1235,6 +1358,138 @@ export function PartnerAdminDashboard() {
                     </div>
                   );
                 })
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-zinc-200 bg-white">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold">패키지/가격 확인</h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  신규 예약에 노출되는 Shop Service 패키지와 가격입니다. 변경은
+                  PitNow Admin을 통해 처리합니다.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700">
+                  {activePackageCount}/{packages.length} 노출
+                </span>
+                {isLoadingPackages ? (
+                  <span className="text-xs font-medium text-zinc-500">
+                    불러오는 중
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-2 p-4 md:grid-cols-2 xl:grid-cols-3">
+              {packageRequestMessage ? (
+                <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 md:col-span-2 xl:col-span-3">
+                  {packageRequestMessage}
+                </p>
+              ) : null}
+              {packages.length === 0 ? (
+                <p className="text-sm text-zinc-500">
+                  등록된 Shop Service 패키지가 없습니다.
+                </p>
+              ) : (
+                packages.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-lg border border-zinc-200 bg-zinc-50 p-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold">{item.name}</p>
+                        <p className="mt-1 font-mono text-[11px] text-zinc-500">
+                          {item.code}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          item.isActive
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-zinc-200 text-zinc-600"
+                        }`}
+                      >
+                        {item.isActive ? "노출 중" : "숨김"}
+                      </span>
+                    </div>
+                    {item.description ? (
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
+                        {item.description}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                      <div className="rounded-lg bg-white p-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                          Duration
+                        </p>
+                        <p className="mt-1 font-semibold">
+                          {item.durationMinutes}분
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                          Labor
+                        </p>
+                        <p className="mt-1 font-semibold">
+                          {formatPrice(item.laborPrice)}
+                        </p>
+                      </div>
+                    </div>
+                    {!item.priceActive || !item.catalogActive ? (
+                      <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                        {item.catalogActive
+                          ? "업장 가격이 비활성화되어 신규 예약에 보이지 않습니다."
+                          : "전역 패키지가 비활성화되어 신규 예약에 보이지 않습니다."}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 border-t border-zinc-200 pt-3">
+                      <p className="text-xs font-semibold text-zinc-700">
+                        가격 변경 요청
+                      </p>
+                      <div className="mt-2 grid gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1000"
+                          value={packageRequestPrices[item.packageId] ?? ""}
+                          onChange={(event) =>
+                            setPackageRequestPrices((current) => ({
+                              ...current,
+                              [item.packageId]: event.target.value,
+                            }))
+                          }
+                          className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                          placeholder={`${formatPrice(item.laborPrice)}에서 변경`}
+                        />
+                        <input
+                          value={packageRequestReasons[item.packageId] ?? ""}
+                          onChange={(event) =>
+                            setPackageRequestReasons((current) => ({
+                              ...current,
+                              [item.packageId]: event.target.value,
+                            }))
+                          }
+                          className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+                          placeholder="사유, 적용 희망일 등"
+                        />
+                        <button
+                          type="button"
+                          disabled={requestingPackageId === item.packageId}
+                          onClick={() => void createPackageChangeRequest(item)}
+                          className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:bg-zinc-100 disabled:text-zinc-400"
+                        >
+                          {requestingPackageId === item.packageId
+                            ? "요청 중"
+                            : "Admin에 변경 요청"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </section>
@@ -1513,8 +1768,9 @@ export function PartnerAdminDashboard() {
                         {statusLabel(reservation.status)}
                       </span>
                       <p className="mt-1 text-xs text-zinc-500">
-                        체크인 {reservation.checkinCompleted ? "완료" : "대기"} ·
-                        체크아웃 {reservation.checkoutCompleted ? "완료" : "대기"}
+                        체크인 {reservation.checkinCompleted ? "완료" : "대기"}{" "}
+                        · 체크아웃{" "}
+                        {reservation.checkoutCompleted ? "완료" : "대기"}
                       </p>
                     </div>
                     <div className="xl:text-right">
@@ -1563,393 +1819,398 @@ export function PartnerAdminDashboard() {
                     닫기
                   </button>
                 </div>
-              {isLoadingDetail ? (
-                <p className="mt-4 text-sm text-zinc-500">
-                  상세 정보를 불러오는 중입니다.
-                </p>
-              ) : !detail ? (
-                <p className="mt-4 text-sm leading-6 text-zinc-500">
-                  예약 row를 선택하면 체크인/체크아웃 증적과 상태 로그를 볼 수
-                  있습니다.
-                </p>
-              ) : (
-                <div className="mt-4 space-y-5">
-                  <dl className="space-y-2 text-sm">
-                    {[
-                      ["예약 ID", detail.reservation.id],
-                      ["차량", detail.reservation.vehicleLabel],
-                      ["베이", detail.reservation.bayLabel],
-                      [
-                        "시간",
-                        `${formatTime(detail.reservation.startTime)} - ${formatTime(
-                          detail.reservation.endTime,
-                        )}`,
-                      ],
-                      ["상태", statusLabel(detail.reservation.status)],
-                      ["금액", formatPrice(detail.reservation.totalPrice)],
-                    ].map(([label, value]) => (
-                      <div key={label} className="flex justify-between gap-4">
-                        <dt className="text-zinc-500">{label}</dt>
-                        <dd className="max-w-[220px] truncate text-right font-medium">
-                          {value}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-
-                  <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
-                          detail.reservation.status,
-                        )}`}
-                      >
-                        {statusLabel(detail.reservation.status)}
-                      </span>
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          detail.checkin
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        체크인 {detail.checkin ? "증적 완료" : "증적 대기"}
-                      </span>
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          detail.checkout
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-zinc-200 text-zinc-700"
-                        }`}
-                      >
-                        체크아웃 {detail.checkout ? "검수 완료" : "검수 전"}
-                      </span>
-                      {unresolvedIssueNotes.length > 0 ? (
-                        <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
-                          미해결 이슈 {unresolvedIssueNotes.length}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                {isLoadingDetail ? (
+                  <p className="mt-4 text-sm text-zinc-500">
+                    상세 정보를 불러오는 중입니다.
+                  </p>
+                ) : !detail ? (
+                  <p className="mt-4 text-sm leading-6 text-zinc-500">
+                    예약 row를 선택하면 체크인/체크아웃 증적과 상태 로그를 볼 수
+                    있습니다.
+                  </p>
+                ) : (
+                  <div className="mt-4 space-y-5">
+                    <dl className="space-y-2 text-sm">
                       {[
-                        ["예약일", formatDate(detail.reservation.startTime)],
+                        ["예약 ID", detail.reservation.id],
+                        ["차량", detail.reservation.vehicleLabel],
+                        ["베이", detail.reservation.bayLabel],
                         [
-                          "예약 시간",
+                          "시간",
                           `${formatTime(detail.reservation.startTime)} - ${formatTime(
                             detail.reservation.endTime,
                           )}`,
                         ],
-                        [
-                          "버퍼 종료",
-                          formatDateTime(detail.reservation.blockedUntil),
-                        ],
-                        [
-                          "메모",
-                          unresolvedNotes.length > 0
-                            ? `미해결 ${unresolvedNotes.length}건`
-                            : `${notes.length}건`,
-                        ],
+                        ["상태", statusLabel(detail.reservation.status)],
+                        ["금액", formatPrice(detail.reservation.totalPrice)],
                       ].map(([label, value]) => (
-                        <div
-                          key={label}
-                          className="rounded-md border border-zinc-200 bg-white px-2 py-2"
-                        >
-                          <dt className="font-semibold text-zinc-500">
-                            {label}
-                          </dt>
-                          <dd className="mt-1 font-semibold text-zinc-900">
+                        <div key={label} className="flex justify-between gap-4">
+                          <dt className="text-zinc-500">{label}</dt>
+                          <dd className="max-w-[220px] truncate text-right font-medium">
                             {value}
                           </dd>
                         </div>
                       ))}
                     </dl>
-                  </section>
 
-                  <section>
-                    <h3 className="text-sm font-semibold">체크인 사진</h3>
-                    {detail.checkin ? (
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        {[
-                          ["전면", detail.checkin.frontImg],
-                          ["후면", detail.checkin.rearImg],
-                          ["좌측", detail.checkin.leftImg],
-                          ["우측", detail.checkin.rightImg],
-                        ].map(([label, src]) => (
-                          <a
-                            key={label}
-                            href={src}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-700"
-                          >
-                            {label} 보기
-                          </a>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-sm text-zinc-500">
-                        체크인 증적이 아직 없습니다.
-                      </p>
-                    )}
-                  </section>
-
-                  <section>
-                    <h3 className="text-sm font-semibold">체크아웃 검수</h3>
-                    {detail.checkout ? (
-                      <dl className="mt-2 space-y-2 text-sm">
-                        {[
-                          [
-                            "공구 확인",
-                            checklistValue(detail.checkout.toolCheckCompleted),
-                          ],
-                          [
-                            "청소 확인",
-                            checklistValue(detail.checkout.cleaningCompleted),
-                          ],
-                          [
-                            "폐기물 확인",
-                            checklistValue(
-                              detail.checkout.wasteDisposalCompleted,
-                            ),
-                          ],
-                          [
-                            "체크리스트",
-                            `${checkoutChecklistCompletedCount}/${checkoutChecklistItems.length}`,
-                          ],
-                          ["추가 요금", formatPrice(detail.checkout.extraFee)],
-                          [
-                            "검수 요금",
-                            formatPrice(detail.checkout.helperVerifyFee),
-                          ],
-                          [
-                            "총 정산",
-                            formatPrice(detail.checkout.totalSettlement),
-                          ],
-                        ].map(([label, value]) => (
-                          <div
-                            key={label}
-                            className="flex justify-between gap-4"
-                          >
-                            <dt className="text-zinc-500">{label}</dt>
-                            <dd className="font-medium">{value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : (
-                      <p className="mt-2 text-sm text-zinc-500">
-                        체크아웃 정보가 아직 없습니다.
-                      </p>
-                    )}
-                  </section>
-
-                  <section>
-                    <h3 className="text-sm font-semibold">현장 운영 액션</h3>
-                    <div className="mt-2 grid gap-2">
-                      {OPERATIONAL_ACTIONS.map((action) => {
-                        const isAllowed = action.allowedStatuses.includes(
-                          detail.reservation.status,
-                        );
-
-                        return (
-                          <button
-                            key={action.type}
-                            type="button"
-                            disabled={!isAllowed || isCreatingOperationalNote}
-                            onClick={() => openOperationalActionModal(action)}
-                            className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400 ${action.className}`}
-                          >
-                            {action.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-zinc-500">
-                      액션 기록은 현장 메모로 저장되고, 처리 후 해결 상태로
-                      변경합니다.
-                    </p>
-                  </section>
-
-                  <section>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-sm font-semibold">현장 메모</h3>
-                        {isLoadingNotes ? (
-                          <span className="text-xs text-zinc-500">
-                            불러오는 중
+                    <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
+                            detail.reservation.status,
+                          )}`}
+                        >
+                          {statusLabel(detail.reservation.status)}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            detail.checkin
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          체크인 {detail.checkin ? "증적 완료" : "증적 대기"}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            detail.checkout
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-zinc-200 text-zinc-700"
+                          }`}
+                        >
+                          체크아웃 {detail.checkout ? "검수 완료" : "검수 전"}
+                        </span>
+                        {unresolvedIssueNotes.length > 0 ? (
+                          <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                            미해결 이슈 {unresolvedIssueNotes.length}
                           </span>
                         ) : null}
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
+
+                      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                         {[
-                          ["전체", notes.length],
-                          ["미해결", unresolvedNotes.length],
-                          ["이슈", issueNotes.length],
+                          ["예약일", formatDate(detail.reservation.startTime)],
+                          [
+                            "예약 시간",
+                            `${formatTime(detail.reservation.startTime)} - ${formatTime(
+                              detail.reservation.endTime,
+                            )}`,
+                          ],
+                          [
+                            "버퍼 종료",
+                            formatDateTime(detail.reservation.blockedUntil),
+                          ],
+                          [
+                            "메모",
+                            unresolvedNotes.length > 0
+                              ? `미해결 ${unresolvedNotes.length}건`
+                              : `${notes.length}건`,
+                          ],
                         ].map(([label, value]) => (
                           <div
                             key={label}
-                            className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2"
+                            className="rounded-md border border-zinc-200 bg-white px-2 py-2"
                           >
-                            <p className="font-semibold text-zinc-500">
+                            <dt className="font-semibold text-zinc-500">
                               {label}
-                            </p>
-                            <p className="mt-1 text-base font-bold text-zinc-950">
+                            </dt>
+                            <dd className="mt-1 font-semibold text-zinc-900">
                               {value}
-                            </p>
+                            </dd>
                           </div>
                         ))}
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(
-                          [
-                            ["ALL", "전체"],
-                            ["OPEN", "미해결"],
-                            ["ISSUES", "이슈만"],
-                          ] as const
-                        ).map(([value, label]) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => setNoteFilter(value)}
-                            className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${
-                              noteFilter === value
-                                ? "border-zinc-950 bg-zinc-950 text-white"
-                                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                      </dl>
+                    </section>
 
-                    <form
-                      onSubmit={createReservationNote}
-                      className="mt-2 space-y-2"
-                    >
-                      <div className="grid grid-cols-[92px_1fr] gap-2">
-                        <select
-                          value={noteType}
-                          onChange={(event) =>
-                            setNoteType(event.target.value as PartnerNoteType)
-                          }
-                          className="h-10 rounded-lg border border-zinc-300 bg-white px-2 text-xs font-semibold outline-none ring-blue-200 focus:ring-4"
-                        >
-                          <option value="NOTE">메모</option>
-                          <option value="ISSUE">이슈</option>
-                          <option value="DELAY">지연</option>
-                          <option value="NO_SHOW">노쇼</option>
-                        </select>
-                        <button
-                          type="submit"
-                          disabled={isCreatingNote || !noteBody.trim()}
-                          className="rounded-lg bg-zinc-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:bg-zinc-300"
-                        >
-                          {isCreatingNote ? "저장 중" : "메모 추가"}
-                        </button>
-                      </div>
-                      <textarea
-                        value={noteBody}
-                        onChange={(event) => setNoteBody(event.target.value)}
-                        className="min-h-20 w-full resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none ring-blue-200 focus:ring-4"
-                        placeholder="고객 지연, 현장 특이사항, 작업 이슈 등을 기록"
-                      />
-                    </form>
-
-                    <div className="mt-3 space-y-2">
-                      {notes.length === 0 ? (
-                        <p className="text-sm text-zinc-500">
-                          등록된 현장 메모가 없습니다.
-                        </p>
-                      ) : visibleNotes.length === 0 ? (
-                        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
-                          현재 필터에 해당하는 현장 메모가 없습니다.
-                        </p>
+                    <section>
+                      <h3 className="text-sm font-semibold">체크인 사진</h3>
+                      {detail.checkin ? (
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          {[
+                            ["전면", detail.checkin.frontImg],
+                            ["후면", detail.checkin.rearImg],
+                            ["좌측", detail.checkin.leftImg],
+                            ["우측", detail.checkin.rightImg],
+                          ].map(([label, src]) => (
+                            <a
+                              key={label}
+                              href={src}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-700"
+                            >
+                              {label} 보기
+                            </a>
+                          ))}
+                        </div>
                       ) : (
-                        visibleNotes.map((note) => (
-                          <div
-                            key={note.id}
-                            className={`rounded-lg border px-3 py-2 text-xs ${
-                              note.isResolved
-                                ? "border-zinc-200 bg-zinc-50 text-zinc-500"
-                                : "border-zinc-200 bg-white"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <span
-                                  className={`rounded-full px-2 py-0.5 font-semibold ${noteTypeClass(
-                                    note.noteType,
-                                  )}`}
-                                >
-                                  {noteTypeLabel(note.noteType)}
-                                </span>
-                                {note.isResolved ? (
-                                  <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
-                                    해결
-                                  </span>
-                                ) : null}
-                              </div>
-                              <button
-                                type="button"
-                                disabled={updatingNoteId === note.id}
-                                onClick={() =>
-                                  void updateReservationNoteResolved(
-                                    note,
-                                    !note.isResolved,
-                                  )
-                                }
-                                className="font-semibold text-zinc-600 underline-offset-2 hover:underline disabled:opacity-50"
-                              >
-                                {updatingNoteId === note.id
-                                  ? "변경 중"
-                                  : note.isResolved
-                                    ? "다시 열기"
-                                    : "해결"}
-                              </button>
+                        <p className="mt-2 text-sm text-zinc-500">
+                          체크인 증적이 아직 없습니다.
+                        </p>
+                      )}
+                    </section>
+
+                    <section>
+                      <h3 className="text-sm font-semibold">체크아웃 검수</h3>
+                      {detail.checkout ? (
+                        <dl className="mt-2 space-y-2 text-sm">
+                          {[
+                            [
+                              "공구 확인",
+                              checklistValue(
+                                detail.checkout.toolCheckCompleted,
+                              ),
+                            ],
+                            [
+                              "청소 확인",
+                              checklistValue(detail.checkout.cleaningCompleted),
+                            ],
+                            [
+                              "폐기물 확인",
+                              checklistValue(
+                                detail.checkout.wasteDisposalCompleted,
+                              ),
+                            ],
+                            [
+                              "체크리스트",
+                              `${checkoutChecklistCompletedCount}/${checkoutChecklistItems.length}`,
+                            ],
+                            [
+                              "추가 요금",
+                              formatPrice(detail.checkout.extraFee),
+                            ],
+                            [
+                              "검수 요금",
+                              formatPrice(detail.checkout.helperVerifyFee),
+                            ],
+                            [
+                              "총 정산",
+                              formatPrice(detail.checkout.totalSettlement),
+                            ],
+                          ].map(([label, value]) => (
+                            <div
+                              key={label}
+                              className="flex justify-between gap-4"
+                            >
+                              <dt className="text-zinc-500">{label}</dt>
+                              <dd className="font-medium">{value}</dd>
                             </div>
-                            <p className="mt-2 whitespace-pre-wrap leading-5">
-                              {note.body}
-                            </p>
-                            <p className="mt-2 text-zinc-400">
-                              {formatDateTime(note.createdAt)}
-                              {note.resolvedAt
-                                ? ` · 해결 ${formatDateTime(note.resolvedAt)}`
-                                : ""}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </section>
-
-                  <section>
-                    <h3 className="text-sm font-semibold">상태 로그</h3>
-                    <div className="mt-2 space-y-2">
-                      {detail.statusLogs.length === 0 ? (
-                        <p className="text-sm text-zinc-500">
-                          로그가 없습니다.
-                        </p>
+                          ))}
+                        </dl>
                       ) : (
-                        detail.statusLogs.map((log) => (
-                          <div
-                            key={log.id}
-                            className="rounded-lg bg-zinc-50 px-3 py-2 text-xs"
-                          >
-                            <p className="font-semibold">
-                              {log.fromStatus ?? "START"} → {log.toStatus}
-                            </p>
-                            <p className="mt-1 text-zinc-500">
-                              {formatDateTime(log.createdAt)} ·{" "}
-                              {log.reason ?? "-"}
-                            </p>
-                          </div>
-                        ))
+                        <p className="mt-2 text-sm text-zinc-500">
+                          체크아웃 정보가 아직 없습니다.
+                        </p>
                       )}
-                    </div>
-                  </section>
-                </div>
-              )}
+                    </section>
+
+                    <section>
+                      <h3 className="text-sm font-semibold">현장 운영 액션</h3>
+                      <div className="mt-2 grid gap-2">
+                        {OPERATIONAL_ACTIONS.map((action) => {
+                          const isAllowed = action.allowedStatuses.includes(
+                            detail.reservation.status,
+                          );
+
+                          return (
+                            <button
+                              key={action.type}
+                              type="button"
+                              disabled={!isAllowed || isCreatingOperationalNote}
+                              onClick={() => openOperationalActionModal(action)}
+                              className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400 ${action.className}`}
+                            >
+                              {action.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-zinc-500">
+                        액션 기록은 현장 메모로 저장되고, 처리 후 해결 상태로
+                        변경합니다.
+                      </p>
+                    </section>
+
+                    <section>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-sm font-semibold">현장 메모</h3>
+                          {isLoadingNotes ? (
+                            <span className="text-xs text-zinc-500">
+                              불러오는 중
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          {[
+                            ["전체", notes.length],
+                            ["미해결", unresolvedNotes.length],
+                            ["이슈", issueNotes.length],
+                          ].map(([label, value]) => (
+                            <div
+                              key={label}
+                              className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2"
+                            >
+                              <p className="font-semibold text-zinc-500">
+                                {label}
+                              </p>
+                              <p className="mt-1 text-base font-bold text-zinc-950">
+                                {value}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(
+                            [
+                              ["ALL", "전체"],
+                              ["OPEN", "미해결"],
+                              ["ISSUES", "이슈만"],
+                            ] as const
+                          ).map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setNoteFilter(value)}
+                              className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+                                noteFilter === value
+                                  ? "border-zinc-950 bg-zinc-950 text-white"
+                                  : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <form
+                        onSubmit={createReservationNote}
+                        className="mt-2 space-y-2"
+                      >
+                        <div className="grid grid-cols-[92px_1fr] gap-2">
+                          <select
+                            value={noteType}
+                            onChange={(event) =>
+                              setNoteType(event.target.value as PartnerNoteType)
+                            }
+                            className="h-10 rounded-lg border border-zinc-300 bg-white px-2 text-xs font-semibold outline-none ring-blue-200 focus:ring-4"
+                          >
+                            <option value="NOTE">메모</option>
+                            <option value="ISSUE">이슈</option>
+                            <option value="DELAY">지연</option>
+                            <option value="NO_SHOW">노쇼</option>
+                          </select>
+                          <button
+                            type="submit"
+                            disabled={isCreatingNote || !noteBody.trim()}
+                            className="rounded-lg bg-zinc-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:bg-zinc-300"
+                          >
+                            {isCreatingNote ? "저장 중" : "메모 추가"}
+                          </button>
+                        </div>
+                        <textarea
+                          value={noteBody}
+                          onChange={(event) => setNoteBody(event.target.value)}
+                          className="min-h-20 w-full resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none ring-blue-200 focus:ring-4"
+                          placeholder="고객 지연, 현장 특이사항, 작업 이슈 등을 기록"
+                        />
+                      </form>
+
+                      <div className="mt-3 space-y-2">
+                        {notes.length === 0 ? (
+                          <p className="text-sm text-zinc-500">
+                            등록된 현장 메모가 없습니다.
+                          </p>
+                        ) : visibleNotes.length === 0 ? (
+                          <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
+                            현재 필터에 해당하는 현장 메모가 없습니다.
+                          </p>
+                        ) : (
+                          visibleNotes.map((note) => (
+                            <div
+                              key={note.id}
+                              className={`rounded-lg border px-3 py-2 text-xs ${
+                                note.isResolved
+                                  ? "border-zinc-200 bg-zinc-50 text-zinc-500"
+                                  : "border-zinc-200 bg-white"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 font-semibold ${noteTypeClass(
+                                      note.noteType,
+                                    )}`}
+                                  >
+                                    {noteTypeLabel(note.noteType)}
+                                  </span>
+                                  {note.isResolved ? (
+                                    <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                                      해결
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={updatingNoteId === note.id}
+                                  onClick={() =>
+                                    void updateReservationNoteResolved(
+                                      note,
+                                      !note.isResolved,
+                                    )
+                                  }
+                                  className="font-semibold text-zinc-600 underline-offset-2 hover:underline disabled:opacity-50"
+                                >
+                                  {updatingNoteId === note.id
+                                    ? "변경 중"
+                                    : note.isResolved
+                                      ? "다시 열기"
+                                      : "해결"}
+                                </button>
+                              </div>
+                              <p className="mt-2 whitespace-pre-wrap leading-5">
+                                {note.body}
+                              </p>
+                              <p className="mt-2 text-zinc-400">
+                                {formatDateTime(note.createdAt)}
+                                {note.resolvedAt
+                                  ? ` · 해결 ${formatDateTime(note.resolvedAt)}`
+                                  : ""}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="text-sm font-semibold">상태 로그</h3>
+                      <div className="mt-2 space-y-2">
+                        {detail.statusLogs.length === 0 ? (
+                          <p className="text-sm text-zinc-500">
+                            로그가 없습니다.
+                          </p>
+                        ) : (
+                          detail.statusLogs.map((log) => (
+                            <div
+                              key={log.id}
+                              className="rounded-lg bg-zinc-50 px-3 py-2 text-xs"
+                            >
+                              <p className="font-semibold">
+                                {log.fromStatus ?? "START"} → {log.toStatus}
+                              </p>
+                              <p className="mt-1 text-zinc-500">
+                                {formatDateTime(log.createdAt)} ·{" "}
+                                {log.reason ?? "-"}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                )}
               </aside>
             </div>
           ) : null}

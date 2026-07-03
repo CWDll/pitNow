@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { hasAdminAccess } from "@/src/lib/admin-auth";
 import { hasSupabaseServiceRoleEnv, supabaseAdmin } from "@/src/lib/supabase";
 import {
+  formatAdminCurrency,
   formatAdminDateTime,
   getAdminPackageManagerData,
   type AdminPackageAuditItem,
+  type AdminPackageChangeRequestItem,
   type AdminPackageItem,
   type AdminServicePackageOption,
 } from "../_lib/admin-data";
@@ -321,6 +323,157 @@ async function updatePartnerPackagePriceAction(formData: FormData) {
   packagesRedirect({ status: "partner-package-updated" });
 }
 
+async function approvePackageChangeRequestAction(formData: FormData) {
+  "use server";
+
+  const db = await requireAdminDb();
+
+  if (!db) {
+    packagesRedirect({ error: "admin-auth" });
+  }
+
+  const requestId = parseTrimmedString(formData, "requestId");
+  const reviewNote = parseTrimmedString(formData, "reviewNote");
+
+  if (!requestId) {
+    packagesRedirect({ error: "invalid-package-request" });
+  }
+
+  const { data: request, error: requestError } = await db
+    .from("partner_package_change_requests")
+    .select(
+      "id, partner_id, package_id, price_id, requested_labor_price, status",
+    )
+    .eq("id", requestId)
+    .single<{
+      id: string;
+      partner_id: string;
+      package_id: string;
+      price_id: string | null;
+      requested_labor_price: number | string;
+      status: string;
+    }>();
+
+  if (requestError || !request) {
+    console.error("ADMIN PACKAGE REQUEST LOOKUP ERROR:", requestError);
+    packagesRedirect({ error: "package-request-not-found" });
+  }
+
+  if (request.status !== "PENDING" || !request.price_id) {
+    packagesRedirect({ error: "package-request-not-pending" });
+  }
+
+  const requestedLaborPrice = Number(request.requested_labor_price);
+
+  if (!Number.isInteger(requestedLaborPrice) || requestedLaborPrice < 0) {
+    packagesRedirect({ error: "invalid-package-request" });
+  }
+
+  const { data: beforeState, error: beforeError } = await db
+    .from("partner_package_prices")
+    .select("id, partner_id, package_id, labor_price, is_active")
+    .eq("id", request.price_id)
+    .single();
+
+  if (beforeError || !beforeState) {
+    console.error("ADMIN PACKAGE REQUEST PRICE LOOKUP ERROR:", beforeError);
+    packagesRedirect({ error: "partner-package-not-found" });
+  }
+
+  const { data: afterState, error: updateError } = await db
+    .from("partner_package_prices")
+    .update({
+      labor_price: requestedLaborPrice,
+    })
+    .eq("id", request.price_id)
+    .select("id, partner_id, package_id, labor_price, is_active")
+    .single();
+
+  if (updateError || !afterState) {
+    console.error("ADMIN PACKAGE REQUEST PRICE UPDATE ERROR:", updateError);
+    packagesRedirect({ error: "package-request-approve-failed" });
+  }
+
+  const { error: requestUpdateError } = await db
+    .from("partner_package_change_requests")
+    .update({
+      review_note: reviewNote || null,
+      reviewed_at: new Date().toISOString(),
+      status: "APPROVED",
+    })
+    .eq("id", request.id);
+
+  if (requestUpdateError) {
+    console.error(
+      "ADMIN PACKAGE REQUEST APPROVE STATUS ERROR:",
+      requestUpdateError,
+    );
+    packagesRedirect({ error: "package-request-approve-failed" });
+  }
+
+  await logPackageAudit({
+    action: "PARTNER_PACKAGE_PRICE_UPDATED",
+    afterState,
+    beforeState,
+    packageId: request.package_id,
+    partnerId: request.partner_id,
+    priceId: request.price_id,
+  });
+
+  revalidatePath("/admin/packages");
+  revalidatePath("/");
+  packagesRedirect({ status: "package-request-approved" });
+}
+
+async function rejectPackageChangeRequestAction(formData: FormData) {
+  "use server";
+
+  const db = await requireAdminDb();
+
+  if (!db) {
+    packagesRedirect({ error: "admin-auth" });
+  }
+
+  const requestId = parseTrimmedString(formData, "requestId");
+  const reviewNote = parseTrimmedString(formData, "reviewNote");
+
+  if (!requestId) {
+    packagesRedirect({ error: "invalid-package-request" });
+  }
+
+  const { data: request, error: requestError } = await db
+    .from("partner_package_change_requests")
+    .select("id, status")
+    .eq("id", requestId)
+    .single<{ id: string; status: string }>();
+
+  if (requestError || !request) {
+    console.error("ADMIN PACKAGE REQUEST REJECT LOOKUP ERROR:", requestError);
+    packagesRedirect({ error: "package-request-not-found" });
+  }
+
+  if (request.status !== "PENDING") {
+    packagesRedirect({ error: "package-request-not-pending" });
+  }
+
+  const { error } = await db
+    .from("partner_package_change_requests")
+    .update({
+      review_note: reviewNote || null,
+      reviewed_at: new Date().toISOString(),
+      status: "REJECTED",
+    })
+    .eq("id", request.id);
+
+  if (error) {
+    console.error("ADMIN PACKAGE REQUEST REJECT ERROR:", error);
+    packagesRedirect({ error: "package-request-reject-failed" });
+  }
+
+  revalidatePath("/admin/packages");
+  packagesRedirect({ status: "package-request-rejected" });
+}
+
 function statusMessage(status?: string) {
   switch (status) {
     case "service-package-created":
@@ -331,6 +484,10 @@ function statusMessage(status?: string) {
       return "업장 패키지 가격을 추가하거나 갱신했습니다.";
     case "partner-package-updated":
       return "업장 패키지 가격과 활성 상태를 수정했습니다.";
+    case "package-request-approved":
+      return "파트너 패키지 변경 요청을 승인하고 가격을 반영했습니다.";
+    case "package-request-rejected":
+      return "파트너 패키지 변경 요청을 거절했습니다.";
     default:
       return "";
   }
@@ -348,6 +505,16 @@ function errorMessage(error?: string) {
       return "수정할 전역 패키지를 찾지 못했습니다.";
     case "partner-package-not-found":
       return "수정할 업장 패키지 가격 row를 찾지 못했습니다.";
+    case "invalid-package-request":
+      return "패키지 변경 요청 정보를 올바르게 입력해 주세요.";
+    case "package-request-not-found":
+      return "패키지 변경 요청 row를 찾지 못했습니다.";
+    case "package-request-not-pending":
+      return "이미 처리된 패키지 변경 요청입니다.";
+    case "package-request-approve-failed":
+      return "패키지 변경 요청 승인 처리에 실패했습니다.";
+    case "package-request-reject-failed":
+      return "패키지 변경 요청 거절 처리에 실패했습니다.";
     default:
       return error ? "패키지 변경 처리에 실패했습니다." : "";
   }
@@ -545,14 +712,144 @@ function PackageAuditCard({ item }: { item: AdminPackageAuditItem }) {
   );
 }
 
+function requestStatusClass(status: AdminPackageChangeRequestItem["status"]) {
+  if (status === "APPROVED") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  }
+
+  if (status === "REJECTED") {
+    return "bg-rose-50 text-rose-700 ring-rose-200";
+  }
+
+  return "bg-amber-50 text-amber-700 ring-amber-200";
+}
+
+function PackageChangeRequestCard({
+  item,
+}: {
+  item: AdminPackageChangeRequestItem;
+}) {
+  const isPending = item.status === "PENDING";
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${requestStatusClass(
+                item.status,
+              )}`}
+            >
+              {item.status}
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+              Package request
+            </span>
+          </div>
+          <p className="mt-3 text-lg font-semibold text-slate-950">
+            {item.partnerName}
+          </p>
+          <p className="mt-1 text-sm text-slate-600">{item.packageName}</p>
+        </div>
+        <p className="text-xs text-slate-500">
+          {formatAdminDateTime(item.createdAt)}
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="rounded-2xl bg-slate-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Current
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">
+            {formatAdminCurrency(item.currentLaborPrice)}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-cyan-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700">
+            Requested
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-cyan-900">
+            {formatAdminCurrency(item.requestedLaborPrice)}
+          </p>
+        </div>
+      </div>
+
+      {item.reason ? (
+        <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+          {item.reason}
+        </p>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
+        <span className="break-all">Request {item.id}</span>
+        <span className="break-all">Price {item.priceId ?? "-"}</span>
+        {item.requestedBy ? (
+          <span className="break-all">Actor {item.requestedBy}</span>
+        ) : null}
+      </div>
+
+      {item.reviewedAt ? (
+        <p className="mt-3 text-sm text-slate-600">
+          처리: {formatAdminDateTime(item.reviewedAt)}
+          {item.reviewNote ? ` · ${item.reviewNote}` : ""}
+        </p>
+      ) : null}
+
+      {isPending ? (
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          <form
+            action={approvePackageChangeRequestAction}
+            className="grid gap-2"
+          >
+            <input type="hidden" name="requestId" value={item.id} />
+            <input
+              name="reviewNote"
+              placeholder="승인 메모"
+              className={inputClassName()}
+            />
+            <button
+              type="submit"
+              className="h-10 rounded-2xl bg-cyan-600 px-4 text-sm font-semibold text-white transition hover:bg-cyan-500"
+            >
+              승인하고 가격 반영
+            </button>
+          </form>
+          <form
+            action={rejectPackageChangeRequestAction}
+            className="grid gap-2"
+          >
+            <input type="hidden" name="requestId" value={item.id} />
+            <input
+              name="reviewNote"
+              placeholder="거절 사유"
+              className={inputClassName()}
+            />
+            <button
+              type="submit"
+              className="h-10 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+            >
+              거절
+            </button>
+          </form>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 export default async function AdminPackagesPage({
   searchParams,
 }: AdminPackagesPageProps) {
   const resolvedSearchParams = await searchParams;
-  const { auditLogs, packages, partners, servicePackages } =
+  const { auditLogs, changeRequests, packages, partners, servicePackages } =
     await getAdminPackageManagerData();
   const activePartnerPrices = packages.filter((item) => item.isActive);
   const inactivePartnerPrices = packages.filter((item) => !item.isActive);
+  const pendingChangeRequests = changeRequests.filter(
+    (item) => item.status === "PENDING",
+  );
   const status = statusMessage(firstParam(resolvedSearchParams?.status));
   const error = errorMessage(firstParam(resolvedSearchParams?.error));
 
@@ -874,6 +1171,35 @@ export default async function AdminPackagesPage({
                   </button>
                 </div>
               </form>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-semibold text-slate-950">
+              패키지 변경 요청
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Partner-admin이 남긴 가격 변경 요청을 검토한 뒤 승인 시 업장
+              패키지 가격에 반영합니다.
+            </p>
+          </div>
+          <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-200">
+            {pendingChangeRequests.length} pending
+          </span>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {changeRequests.length === 0 ? (
+            <p className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
+              아직 패키지 변경 요청이 없습니다.
+            </p>
+          ) : (
+            changeRequests.map((item) => (
+              <PackageChangeRequestCard key={item.id} item={item} />
             ))
           )}
         </div>

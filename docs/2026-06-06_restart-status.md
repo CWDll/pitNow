@@ -1950,3 +1950,44 @@ Supabase SQL Editor에서 `db/migrations/20260629_partner_admin_audit_search.sql
 - `npx tsc --noEmit` 성공.
 - `npm run build` 성공.
 - `npm run e2e:ui` 성공.
+
+## 53. 2026-07-03 Partner-admin 패키지 조회와 예약 패키지 snapshot 보강
+
+Admin이 패키지 가격/카탈로그를 수정할 수 있게 되면서 partner-admin과 사용자 예약 이력의 표시 안정성을 보강했다.
+
+- `GET /api/partner-admin/packages`를 추가해 partner-admin이 본인 업장의 Shop Service 패키지/가격/노출 상태를 읽기 전용으로 조회할 수 있게 했다.
+- `/partner-admin`에 `패키지/가격 확인` 섹션을 추가했다.
+- partner-admin은 패키지를 직접 수정하지 않고, 변경은 PitNow Admin을 통해 처리한다는 안내를 표시한다.
+- `npm run e2e:partner-admin` 스크립트에 packages API 성공/403 회귀 테스트를 추가했다.
+- 결제 준비 시 서버 quote 기준 `packageSnapshot`을 `payments.reservation_snapshot`에 저장한다.
+- `/reservation` 목록과 `/api/reservations/:id` 상세는 Shop Service 표시명으로 payment snapshot의 패키지명을 우선 사용하고, 없으면 live `service_packages`를 fallback으로 사용한다.
+
+검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+- `npm run e2e:ui` 성공.
+- `PITNOW_E2E_BASE_URL=http://localhost:3011 npm run e2e:partner-admin` 성공.
+
+## 54. 2026-07-03 Partner package 변경 요청 workflow 추가
+
+Partner-admin 직접 패키지 편집은 보류하고, 파트너가 가격 변경 요청을 남기면 Admin이 검토 후 반영하는 흐름을 추가했다.
+
+- `db/migrations/20260703_partner_package_change_requests.sql`을 추가했다.
+- 새 테이블 `partner_package_change_requests`는 RLS enabled 상태이며 partner-admin은 본인 업장의 요청만 조회/생성할 수 있다.
+- `POST /api/partner-admin/package-change-requests`를 추가했다.
+- `/partner-admin`의 `패키지/가격 확인` 섹션에서 변경 희망 가격과 사유를 입력해 Admin에 요청할 수 있다.
+- `/admin/packages`에서 최근 변경 요청을 확인하고 `PENDING` 요청을 승인/거절할 수 있다.
+- 승인 시 `partner_package_prices.labor_price`를 갱신하고 기존 `admin_package_audit_logs`에도 가격 변경 이력을 남긴다.
+- Partner-admin API E2E는 SQL이 적용된 환경에서는 변경 요청 생성/403을 검증하고, SQL 미적용 환경에서는 schema 미적용으로 명시 skip한다.
+
+검증:
+
+- `npx tsc --noEmit` 성공.
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- `npm run e2e:ui` 성공.
+- `PITNOW_E2E_BASE_URL=http://localhost:3011 npm run e2e:partner-admin` 성공.
+  - 현재 DB에는 `partner_package_change_requests` SQL이 아직 적용되지 않아 변경 요청 생성 검증은 `schema 미적용`으로 skip됨.
+  - SQL 적용 후 같은 스크립트가 변경 요청 생성/403까지 자동 검증한다.

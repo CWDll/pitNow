@@ -187,6 +187,23 @@ interface AdminPackageAuditLogRow {
   service_packages: { name: string } | Array<{ name: string }> | null;
 }
 
+interface AdminPackageChangeRequestRow {
+  id: string;
+  partner_id: string;
+  package_id: string;
+  price_id: string | null;
+  current_labor_price: number | string;
+  requested_labor_price: number | string;
+  reason: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requested_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  partners: { name: string } | Array<{ name: string }> | null;
+  service_packages: { name: string } | Array<{ name: string }> | null;
+}
+
 export interface AdminReservationItem {
   id: string;
   partnerName: string;
@@ -283,8 +300,26 @@ export interface AdminPackageAuditItem {
   createdAt: string;
 }
 
+export interface AdminPackageChangeRequestItem {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  packageId: string;
+  packageName: string;
+  priceId: string | null;
+  currentLaborPrice: number;
+  requestedLaborPrice: number;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requestedBy: string | null;
+  reviewedAt: string | null;
+  reviewNote: string;
+  createdAt: string;
+}
+
 export interface AdminPackageManagerData {
   auditLogs: AdminPackageAuditItem[];
+  changeRequests: AdminPackageChangeRequestItem[];
   packages: AdminPackageItem[];
   partners: AdminPackagePartnerOption[];
   servicePackages: AdminServicePackageOption[];
@@ -1148,43 +1183,57 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
   if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return {
       auditLogs: [],
+      changeRequests: [],
       packages: [],
       partners: [],
       servicePackages: [],
     };
   }
 
-  const [packages, partnersResult, servicePackagesResult, auditLogsResult] =
-    await Promise.all([
-      getAdminPackages(),
-      supabaseAdmin
-        .from("partners")
-        .select("id, name")
-        .order("name", { ascending: true })
-        .returns<Array<{ id: string; name: string }>>(),
-      supabaseAdmin
-        .from("service_packages")
-        .select("id, code, name, description, duration_minutes, is_active")
-        .order("name", { ascending: true })
-        .returns<
-          Array<{
-            id: string;
-            code: string;
-            name: string;
-            description: string | null;
-            duration_minutes: number;
-            is_active: boolean;
-          }>
-        >(),
-      supabaseAdmin
-        .from("admin_package_audit_logs")
-        .select(
-          "id, partner_id, package_id, price_id, action, before_state, after_state, created_at, partners(name), service_packages(name)",
-        )
-        .order("created_at", { ascending: false })
-        .limit(20)
-        .returns<AdminPackageAuditLogRow[]>(),
-    ]);
+  const [
+    packages,
+    partnersResult,
+    servicePackagesResult,
+    auditLogsResult,
+    changeRequestsResult,
+  ] = await Promise.all([
+    getAdminPackages(),
+    supabaseAdmin
+      .from("partners")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .returns<Array<{ id: string; name: string }>>(),
+    supabaseAdmin
+      .from("service_packages")
+      .select("id, code, name, description, duration_minutes, is_active")
+      .order("name", { ascending: true })
+      .returns<
+        Array<{
+          id: string;
+          code: string;
+          name: string;
+          description: string | null;
+          duration_minutes: number;
+          is_active: boolean;
+        }>
+      >(),
+    supabaseAdmin
+      .from("admin_package_audit_logs")
+      .select(
+        "id, partner_id, package_id, price_id, action, before_state, after_state, created_at, partners(name), service_packages(name)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .returns<AdminPackageAuditLogRow[]>(),
+    supabaseAdmin
+      .from("partner_package_change_requests")
+      .select(
+        "id, partner_id, package_id, price_id, current_labor_price, requested_labor_price, reason, status, requested_by, reviewed_at, review_note, created_at, partners(name), service_packages(name)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .returns<AdminPackageChangeRequestRow[]>(),
+  ]);
 
   if (partnersResult.error) {
     console.error("ADMIN PACKAGE PARTNER LOOKUP ERROR:", partnersResult.error);
@@ -1199,6 +1248,13 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
 
   if (auditLogsResult.error) {
     console.error("ADMIN PACKAGE AUDIT LOOKUP ERROR:", auditLogsResult.error);
+  }
+
+  if (changeRequestsResult.error) {
+    console.error(
+      "ADMIN PACKAGE CHANGE REQUEST LOOKUP ERROR:",
+      changeRequestsResult.error,
+    );
   }
 
   return {
@@ -1217,6 +1273,27 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
         beforeState: log.before_state ?? {},
         afterState: log.after_state ?? {},
         createdAt: log.created_at,
+      };
+    }),
+    changeRequests: (changeRequestsResult.data ?? []).map((request) => {
+      const partner = firstOrSelf(request.partners);
+      const servicePackage = firstOrSelf(request.service_packages);
+
+      return {
+        id: request.id,
+        partnerId: request.partner_id,
+        partnerName: partner?.name ?? "Unknown partner",
+        packageId: request.package_id,
+        packageName: servicePackage?.name ?? "Unknown package",
+        priceId: request.price_id,
+        currentLaborPrice: toNumber(request.current_labor_price),
+        requestedLaborPrice: toNumber(request.requested_labor_price),
+        reason: request.reason ?? "",
+        status: request.status,
+        requestedBy: request.requested_by,
+        reviewedAt: request.reviewed_at,
+        reviewNote: request.review_note ?? "",
+        createdAt: request.created_at,
       };
     }),
     packages,

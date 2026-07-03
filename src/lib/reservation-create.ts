@@ -56,11 +56,15 @@ interface PartnerPackagePriceRow {
   service_packages:
     | {
         id: string;
+        name: string;
+        description: string | null;
         duration_minutes: number;
         is_active: boolean;
       }
     | Array<{
         id: string;
+        name: string;
+        description: string | null;
         duration_minutes: number;
         is_active: boolean;
       }>;
@@ -103,6 +107,13 @@ export interface ReservationQuote {
   helperVerifyFee: number;
   legalTaskRows: SelfMaintenanceTaskRow[];
   packageId: string | null;
+  packageSnapshot: {
+    id: string;
+    name: string;
+    description: string;
+    durationMinutes: number;
+    laborPrice: number;
+  } | null;
 }
 
 export interface ConfirmedReservationResult {
@@ -116,8 +127,7 @@ export interface ConfirmedReservationResult {
 }
 
 export type ReservationServiceResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: ApiErrorSpec };
+  { ok: true; value: T } | { ok: false; error: ApiErrorSpec };
 
 export function apiError(
   status: number,
@@ -139,7 +149,13 @@ function parseNumber(value: number | string | null): number | null {
 
 function normalizeServicePackage(
   value: PartnerPackagePriceRow["service_packages"],
-): { id: string; duration_minutes: number; is_active: boolean } | null {
+): {
+  id: string;
+  name: string;
+  description: string | null;
+  duration_minutes: number;
+  is_active: boolean;
+} | null {
   if (Array.isArray(value)) {
     return value[0] ?? null;
   }
@@ -181,7 +197,12 @@ export function parseReservationRequestPayload(
     return null;
   }
 
-  if (!bayId.trim() || !vehicleId.trim() || !startTime.trim() || !endTime.trim()) {
+  if (
+    !bayId.trim() ||
+    !vehicleId.trim() ||
+    !startTime.trim() ||
+    !endTime.trim()
+  ) {
     return null;
   }
 
@@ -236,16 +257,16 @@ export function parseReservationRequestPayload(
     vehicleId: vehicleId.trim(),
     packageId: normalizedPackageId,
     taskIds:
-      reservationType === "SELF_SERVICE"
-        ? [...new Set(normalizedTaskIds)]
-        : [],
+      reservationType === "SELF_SERVICE" ? [...new Set(normalizedTaskIds)] : [],
     agreeOnlySelectedTasks:
       reservationType === "SELF_SERVICE"
         ? Boolean(agreeOnlySelectedTasks)
         : false,
     consentMethod: normalizedConsentMethod,
     helperVerifyRequested:
-      reservationType === "SELF_SERVICE" ? Boolean(helperVerifyRequested) : false,
+      reservationType === "SELF_SERVICE"
+        ? Boolean(helperVerifyRequested)
+        : false,
     signatureImageUrl:
       typeof signatureImageUrl === "string" && signatureImageUrl.trim()
         ? signatureImageUrl.trim()
@@ -423,11 +444,7 @@ async function getLegalSelfTasks(
   if (error) {
     console.error("LEGAL TASK LOOKUP ERROR:", error);
     return {
-      error: apiError(
-        500,
-        "DB_ERROR",
-        "법적 허용 작업 조회에 실패했습니다.",
-      ),
+      error: apiError(500, "DB_ERROR", "법적 허용 작업 조회에 실패했습니다."),
     };
   }
 
@@ -457,12 +474,18 @@ async function getPartnerPackage(params: {
   db: SupabaseClient;
   partnerId: string;
   packageId: string;
-}): Promise<LookupResult<{ laborPrice: number; durationMinutes: number }>> {
+}): Promise<
+  LookupResult<{
+    laborPrice: number;
+    durationMinutes: number;
+    packageSnapshot: NonNullable<ReservationQuote["packageSnapshot"]>;
+  }>
+> {
   const { db, partnerId, packageId } = params;
   const { data, error } = await db
     .from("partner_package_prices")
     .select(
-      "labor_price, service_packages!inner(id, duration_minutes, is_active)",
+      "labor_price, service_packages!inner(id, name, description, duration_minutes, is_active)",
     )
     .eq("partner_id", partnerId)
     .eq("package_id", packageId)
@@ -494,6 +517,13 @@ async function getPartnerPackage(params: {
   return {
     laborPrice,
     durationMinutes: servicePackage.duration_minutes,
+    packageSnapshot: {
+      id: servicePackage.id,
+      name: servicePackage.name,
+      description: servicePackage.description ?? "",
+      durationMinutes: servicePackage.duration_minutes,
+      laborPrice,
+    },
   };
 }
 
@@ -555,7 +585,9 @@ async function assertAvailabilityWindow(params: {
   return {};
 }
 
-export function reservationDbErrorToApiError(error: PostgrestError): ApiErrorSpec {
+export function reservationDbErrorToApiError(
+  error: PostgrestError,
+): ApiErrorSpec {
   if (error.code === "23P01") {
     return apiError(400, "RESERVATION_OVERLAP", "이미 예약된 시간입니다.");
   }
@@ -684,6 +716,7 @@ export async function quoteReservation(params: {
   let helperVerifyFee = 0;
   let legalTaskRows: SelfMaintenanceTaskRow[] = [];
   let packageId: string | null = null;
+  let packageSnapshot: ReservationQuote["packageSnapshot"] = null;
 
   if (body.reservationType === "SELF_SERVICE") {
     const taskResult = await getLegalSelfTasks(db, body.taskIds);
@@ -700,7 +733,8 @@ export async function quoteReservation(params: {
           return sum + Math.max(0, unitFee ?? 0);
         }, 0)
       : 0;
-    totalPrice = windowResult.durationHours * bayResult.hourlyPrice + helperVerifyFee;
+    totalPrice =
+      windowResult.durationHours * bayResult.hourlyPrice + helperVerifyFee;
   } else {
     const partnerPackageResult = await getPartnerPackage({
       db,
@@ -727,6 +761,7 @@ export async function quoteReservation(params: {
     }
 
     packageId = body.packageId ?? null;
+    packageSnapshot = partnerPackageResult.packageSnapshot;
     totalPrice = partnerPackageResult.laborPrice;
   }
 
@@ -740,6 +775,7 @@ export async function quoteReservation(params: {
       helperVerifyFee,
       legalTaskRows,
       packageId,
+      packageSnapshot,
     },
   };
 }
@@ -837,10 +873,7 @@ export async function createConfirmedReservation(params: {
 
     if (agreementInsertError) {
       console.error("AGREEMENT INSERT ERROR:", agreementInsertError);
-      await db
-        .from("reservation_tasks")
-        .delete()
-        .eq("reservation_id", data.id);
+      await db.from("reservation_tasks").delete().eq("reservation_id", data.id);
       await db.from("reservations").delete().eq("id", data.id);
       return {
         ok: false,
