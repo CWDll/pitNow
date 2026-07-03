@@ -9,10 +9,14 @@ import {
 import Link from "next/link";
 
 type ReservationFilter = "all" | "open-issues" | "clean";
+type ReservationSort = "created-desc" | "start-asc" | "start-desc";
 
 interface AdminReservationsPageProps {
   searchParams?: Promise<{
+    date?: string | string[];
     filter?: string | string[];
+    partner?: string | string[];
+    sort?: string | string[];
   }>;
 }
 
@@ -26,28 +30,106 @@ function normalizeFilter(value: string | string[] | undefined): ReservationFilte
   return "all";
 }
 
+function normalizeSort(value: string | string[] | undefined): ReservationSort {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (rawValue === "start-asc" || rawValue === "start-desc") {
+    return rawValue;
+  }
+
+  return "created-desc";
+}
+
+function normalizeStringParam(value: string | string[] | undefined): string {
+  return (Array.isArray(value) ? value[0] : value)?.trim() ?? "";
+}
+
+function formatKstDateValue(value: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
 function filterReservations(
   reservations: AdminReservationItem[],
   filter: ReservationFilter,
+  partnerQuery: string,
+  dateQuery: string,
 ): AdminReservationItem[] {
+  const normalizedPartnerQuery = partnerQuery.toLowerCase();
+  const baseReservations = reservations.filter((reservation) => {
+    if (
+      normalizedPartnerQuery &&
+      !reservation.partnerName.toLowerCase().includes(normalizedPartnerQuery)
+    ) {
+      return false;
+    }
+
+    if (dateQuery && formatKstDateValue(reservation.startTime) !== dateQuery) {
+      return false;
+    }
+
+    return true;
+  });
+
   switch (filter) {
     case "open-issues":
-      return reservations.filter(
+      return baseReservations.filter(
         (reservation) => reservation.openPartnerNoteCount > 0,
       );
     case "clean":
-      return reservations.filter(
+      return baseReservations.filter(
         (reservation) => reservation.openPartnerNoteCount === 0,
       );
     default:
-      return reservations;
+      return baseReservations;
   }
 }
 
-function filterHref(filter: ReservationFilter): string {
-  return filter === "all"
-    ? "/admin/reservations"
-    : `/admin/reservations?filter=${filter}`;
+function sortReservations(
+  reservations: AdminReservationItem[],
+  sort: ReservationSort,
+): AdminReservationItem[] {
+  return [...reservations].sort((a, b) => {
+    if (sort === "start-asc") {
+      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+    }
+
+    if (sort === "start-desc") {
+      return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+    }
+
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
+function filterHref(
+  filter: ReservationFilter,
+  params: { date: string; partner: string; sort: ReservationSort },
+): string {
+  const query = new URLSearchParams();
+
+  if (filter !== "all") {
+    query.set("filter", filter);
+  }
+
+  if (params.partner) {
+    query.set("partner", params.partner);
+  }
+
+  if (params.date) {
+    query.set("date", params.date);
+  }
+
+  if (params.sort !== "created-desc") {
+    query.set("sort", params.sort);
+  }
+
+  const queryString = query.toString();
+  return queryString ? `/admin/reservations?${queryString}` : "/admin/reservations";
 }
 
 function filterLabel(filter: ReservationFilter): string {
@@ -106,6 +188,9 @@ export default async function AdminReservationsPage({
 }: AdminReservationsPageProps) {
   const resolvedSearchParams = await searchParams;
   const activeFilter = normalizeFilter(resolvedSearchParams?.filter);
+  const activeSort = normalizeSort(resolvedSearchParams?.sort);
+  const partnerQuery = normalizeStringParam(resolvedSearchParams?.partner);
+  const dateQuery = normalizeStringParam(resolvedSearchParams?.date);
   const reservations = await getAdminReservations();
   const openIssueReservations = reservations.filter(
     (reservation) => reservation.openPartnerNoteCount > 0,
@@ -113,7 +198,15 @@ export default async function AdminReservationsPage({
   const cleanReservations = reservations.filter(
     (reservation) => reservation.openPartnerNoteCount === 0,
   );
-  const visibleReservations = filterReservations(reservations, activeFilter);
+  const visibleReservations = sortReservations(
+    filterReservations(reservations, activeFilter, partnerQuery, dateQuery),
+    activeSort,
+  );
+  const filterParams = {
+    date: dateQuery,
+    partner: partnerQuery,
+    sort: activeSort,
+  };
   const filters: Array<{ id: ReservationFilter; count: number }> = [
     { id: "all", count: reservations.length },
     { id: "open-issues", count: openIssueReservations.length },
@@ -175,7 +268,7 @@ export default async function AdminReservationsPage({
           return (
             <Link
               key={filter.id}
-              href={filterHref(filter.id)}
+              href={filterHref(filter.id, filterParams)}
               className={`rounded-full px-4 py-2 text-sm font-semibold ring-1 transition ${
                 isActive
                   ? "bg-cyan-600 text-white ring-cyan-600"
@@ -187,6 +280,65 @@ export default async function AdminReservationsPage({
           );
         })}
       </div>
+
+      <form
+        action="/admin/reservations"
+        className="grid gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:grid-cols-[1fr_200px_220px_auto]"
+      >
+        {activeFilter !== "all" ? (
+          <input type="hidden" name="filter" value={activeFilter} />
+        ) : null}
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Partner
+          </span>
+          <input
+            name="partner"
+            defaultValue={partnerQuery}
+            placeholder="정비소 이름"
+            className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-900 outline-none ring-cyan-100 focus:ring-4"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Date
+          </span>
+          <input
+            type="date"
+            name="date"
+            defaultValue={dateQuery}
+            className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-900 outline-none ring-cyan-100 focus:ring-4"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Sort
+          </span>
+          <select
+            name="sort"
+            defaultValue={activeSort}
+            className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-900 outline-none ring-cyan-100 focus:ring-4"
+          >
+            <option value="created-desc">최근 생성순</option>
+            <option value="start-asc">예약 시간 빠른순</option>
+            <option value="start-desc">예약 시간 늦은순</option>
+          </select>
+        </label>
+        <div className="flex items-end gap-2">
+          <button
+            type="submit"
+            className="h-11 rounded-2xl bg-cyan-600 px-5 text-sm font-semibold text-white transition hover:bg-cyan-500"
+          >
+            Filter
+          </button>
+          <Link
+            href="/admin/reservations"
+            className="flex h-11 items-center rounded-2xl border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+          >
+            Reset
+          </Link>
+        </div>
+      </form>
 
       <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-[1320px] border-collapse text-left text-sm">

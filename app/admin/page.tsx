@@ -9,10 +9,10 @@ import {
 
 function metricCard(label: string, value: string, helper: string) {
   return (
-    <article className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-black/20">
-      <p className="text-sm uppercase tracking-[0.2em] text-slate-400">{label}</p>
-      <p className="mt-3 text-4xl font-semibold text-white">{value}</p>
-      <p className="mt-2 text-sm text-slate-400">{helper}</p>
+    <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="mt-3 text-4xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-2 text-sm text-slate-600">{helper}</p>
     </article>
   );
 }
@@ -39,19 +39,19 @@ export default async function AdminHomePage() {
     <section className="space-y-8">
       <header className="flex items-end justify-between gap-6">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-300">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
             Operations
           </p>
-          <h2 className="mt-3 text-5xl font-semibold tracking-tight text-white">
+          <h2 className="mt-3 text-5xl font-semibold tracking-tight text-slate-950">
             Garage Loop Monitor
           </h2>
-          <p className="mt-3 max-w-2xl text-base text-slate-400">
+          <p className="mt-3 max-w-2xl text-base text-slate-600">
             MVP 운영 콘솔은 예약 상태, 체크아웃 정산, 패키지 가격을 분리해서 확인하는 데 집중합니다.
           </p>
         </div>
         <Link
           href="/"
-          className="rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-white/10"
+          className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           User app
         </Link>
@@ -90,10 +90,10 @@ export default async function AdminHomePage() {
           <Link
             key={item.href}
             href={item.href}
-            className="rounded-3xl border border-white/10 bg-slate-900 p-5 transition hover:border-cyan-300/50 hover:bg-slate-900/70"
+            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-cyan-300 hover:bg-cyan-50"
           >
-            <h3 className="text-2xl font-semibold text-white">{item.title}</h3>
-            <p className="mt-3 text-sm leading-6 text-slate-400">{item.text}</p>
+            <h3 className="text-2xl font-semibold text-slate-950">{item.title}</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-600">{item.text}</p>
           </Link>
         ))}
       </div>

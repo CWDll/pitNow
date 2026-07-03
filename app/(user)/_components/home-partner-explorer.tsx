@@ -13,6 +13,7 @@ export interface HomePartnerExplorerItem extends PartnerMapItem {
   averageRating: number | null;
   reviewCount: number;
   cheapestPackagePrice: number | null;
+  hourlyPrice: number | null;
 }
 
 interface GeoPoint {
@@ -267,7 +268,9 @@ export function HomePartnerExplorer({
                   </p>
                   <p className="mt-2 text-sm text-zinc-600">시간대 예약</p>
                   <p className="mt-1 text-xl font-semibold text-zinc-900">
-                    요금 정책 확인
+                    {partner.hourlyPrice
+                      ? `${formatPrice(partner.hourlyPrice)}/시간`
+                      : "요금 준비중"}
                   </p>
                 </div>
                 <div className="rounded-2xl bg-amber-50 p-3">

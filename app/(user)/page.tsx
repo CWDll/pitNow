@@ -9,6 +9,7 @@ interface PartnerRow {
   id: string;
   name: string;
   address: string;
+  hourly_price: number | null;
   lat: number | null;
   lng: number | null;
 }
@@ -41,12 +42,13 @@ interface HomePartnerCard {
   averageRating: number | null;
   reviewCount: number;
   cheapestPackagePrice: number | null;
+  hourlyPrice: number | null;
 }
 
 async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
   const { data: partners, error: partnerError } = await supabase
     .from("partners")
-    .select("id,name,address,lat,lng")
+    .select("id,name,address,hourly_price,lat,lng")
     .returns<PartnerRow[]>();
 
   if (partnerError || !partners) {
@@ -129,6 +131,9 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
       id: partner.id,
       name: partner.name,
       address: partner.address,
+      hourlyPrice: Number.isFinite(Number(partner.hourly_price))
+        ? Number(partner.hourly_price)
+        : null,
       lat: partner.lat,
       lng: partner.lng,
       bayCount: bayCountByPartner.get(partner.id) ?? 0,

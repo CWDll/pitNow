@@ -9,7 +9,7 @@ import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 import { kstWallTimeToUtcIso } from "@/src/lib/timezone";
 
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
-const timeBoundaries = [
+const fallbackTimeBoundaries = [
   "09:00",
   "10:00",
   "11:00",
@@ -25,7 +25,6 @@ const timeBoundaries = [
   "21:00",
 ] as const;
 
-const blockCount = timeBoundaries.length - 1;
 const MIN_BLOCKS = 1;
 
 interface BayRow {
@@ -123,6 +122,64 @@ function monthValueToDate(monthValue: string, prevDate: Date): Date | null {
   return new Date(year, month - 1, nextDay);
 }
 
+function parseTimeToMinutes(value: string): number | null {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function formatMinutesToTime(totalMinutes: number): string {
+  const normalized = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function buildTimeBoundaries(hours: string): string[] {
+  const [openRaw, closeRaw] = hours.split(/\s*-\s*/);
+  const openMinutes = openRaw ? parseTimeToMinutes(openRaw) : null;
+  const closeMinutes = closeRaw ? parseTimeToMinutes(closeRaw) : null;
+
+  if (
+    openMinutes === null ||
+    closeMinutes === null ||
+    closeMinutes - openMinutes < 60
+  ) {
+    return [...fallbackTimeBoundaries];
+  }
+
+  const boundaries: string[] = [];
+
+  for (
+    let current = openMinutes;
+    current <= closeMinutes + 60;
+    current += 60
+  ) {
+    boundaries.push(formatMinutesToTime(current));
+  }
+
+  return boundaries.length >= 3 ? boundaries : [...fallbackTimeBoundaries];
+}
+
 function PartnerSchedulePageContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -194,6 +251,11 @@ function PartnerSchedulePageContent() {
   }, [params.id]);
 
   const safeGarage = useMemo(() => garage, [garage]);
+  const timeBoundaries = useMemo(
+    () => buildTimeBoundaries(safeGarage?.hours ?? ""),
+    [safeGarage?.hours],
+  );
+  const blockCount = Math.max(0, timeBoundaries.length - 2);
   const resolvedBayIds = useMemo(
     () => (bayIds.length > 0 ? bayIds : (safeGarage?.bayIds ?? [])),
     [bayIds, safeGarage?.bayIds],
@@ -302,7 +364,7 @@ function PartnerSchedulePageContent() {
     return () => {
       isCancelled = true;
     };
-  }, [safeGarage?.id, selectedDate]);
+  }, [safeGarage?.id, selectedDate, timeBoundaries]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -361,7 +423,7 @@ function PartnerSchedulePageContent() {
     return () => {
       isCancelled = true;
     };
-  }, [safeGarage?.id, selectedDate]);
+  }, [safeGarage?.id, selectedDate, timeBoundaries]);
 
   function isReservedBlock(blockIdx: number, bayNumber: number): boolean {
     const bayId = resolvedBayIds[bayNumber - 1];
@@ -540,7 +602,7 @@ function PartnerSchedulePageContent() {
     }
 
     const blockedUntilIdx = endExclusiveIdx + 1;
-    if (blockedUntilIdx > blockCount) {
+    if (blockedUntilIdx >= timeBoundaries.length) {
       return false;
     }
 
