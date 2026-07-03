@@ -13,10 +13,7 @@ import {
   getAdminPayments,
   type AdminPaymentItem,
 } from "../_lib/admin-data";
-import {
-  hasSupabaseServiceRoleEnv,
-  supabaseAdmin,
-} from "@/src/lib/supabase";
+import { hasSupabaseServiceRoleEnv, supabaseAdmin } from "@/src/lib/supabase";
 
 type PaymentFilter =
   | "all"
@@ -110,37 +107,39 @@ function filterLabel(filter: PaymentFilter): string {
 }
 
 function filterHref(filter: PaymentFilter): string {
-  return filter === "all" ? "/admin/payments" : `/admin/payments?filter=${filter}`;
+  return filter === "all"
+    ? "/admin/payments"
+    : `/admin/payments?filter=${filter}`;
 }
 
 function statusClass(status: string): string {
   if (status === "RESERVATION_CONFIRMED" || status === "SETTLEMENT_CONFIRMED") {
-    return "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30";
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
   if (status === "READY" || status === "APPROVED") {
-    return "bg-blue-400/15 text-blue-100 ring-blue-300/30";
+    return "bg-blue-50 text-blue-700 ring-blue-200";
   }
 
   if (status === "REFUNDED") {
-    return "bg-slate-400/15 text-slate-200 ring-slate-300/30";
+    return "bg-slate-100 text-slate-700 ring-slate-200";
   }
 
   if (status === "REFUND_PENDING") {
-    return "bg-amber-400/15 text-amber-100 ring-amber-300/30";
+    return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 
-  return "bg-rose-400/15 text-rose-100 ring-rose-300/30";
+  return "bg-rose-50 text-rose-700 ring-rose-200";
 }
 
 function metricCard(label: string, value: string, description: string) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900 p-5">
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
         {label}
       </p>
-      <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
-      <p className="mt-1 text-sm text-slate-400">{description}</p>
+      <p className="mt-3 text-3xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 text-sm text-slate-600">{description}</p>
     </div>
   );
 }
@@ -184,7 +183,11 @@ export default async function AdminPaymentsPage({
   const staleReadyPayments = payments.filter((payment) =>
     isStaleReady(payment, staleReadyCutoff),
   );
-  const visiblePayments = filterPayments(payments, activeFilter, staleReadyCutoff);
+  const visiblePayments = filterPayments(
+    payments,
+    activeFilter,
+    staleReadyCutoff,
+  );
   const filters: Array<{ id: PaymentFilter; count: number }> = [
     { id: "all", count: payments.length },
     {
@@ -198,7 +201,8 @@ export default async function AdminPaymentsPage({
     },
     {
       id: "cancelled",
-      count: payments.filter((payment) => payment.status === "CANCELLED").length,
+      count: payments.filter((payment) => payment.status === "CANCELLED")
+        .length,
     },
     {
       id: "refunded",
@@ -215,21 +219,21 @@ export default async function AdminPaymentsPage({
     <section className="space-y-6">
       <header className="flex items-start justify-between gap-6">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-300">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
             Payments
           </p>
-          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-white">
+          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
             Payment Ledger
           </h2>
-          <p className="mt-2 max-w-3xl text-sm text-slate-400">
-            최근 200개 payment row를 기준으로 결제 대기, 실패, 취소, 환불
-            확인 필요 상태를 추적합니다.
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            최근 200개 payment row를 기준으로 결제 대기, 실패, 취소, 환불 확인
+            필요 상태를 추적합니다.
           </p>
         </div>
         <form action={cleanupStaleReadyPaymentsAction}>
           <button
             type="submit"
-            className="rounded-full bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+            className="rounded-full bg-cyan-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-cyan-500"
           >
             만료 READY 정리
           </button>
@@ -249,13 +253,16 @@ export default async function AdminPaymentsPage({
         )}
         {metricCard(
           "Cancelled",
-          String(filters.find((filter) => filter.id === "cancelled")?.count ?? 0),
+          String(
+            filters.find((filter) => filter.id === "cancelled")?.count ?? 0,
+          ),
           "사용자/운영 취소",
         )}
         {metricCard(
           "Refund pending",
           String(
-            filters.find((filter) => filter.id === "refund-pending")?.count ?? 0,
+            filters.find((filter) => filter.id === "refund-pending")?.count ??
+              0,
           ),
           "수동 환불 확인 필요",
         )}
@@ -271,8 +278,8 @@ export default async function AdminPaymentsPage({
               href={filterHref(filter.id)}
               className={`rounded-full px-4 py-2 text-sm font-semibold ring-1 transition ${
                 isActive
-                  ? "bg-cyan-300 text-slate-950 ring-cyan-200"
-                  : "bg-white/[0.04] text-slate-300 ring-white/10 hover:bg-white/[0.08]"
+                  ? "bg-cyan-600 text-white ring-cyan-600"
+                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100"
               }`}
             >
               {filterLabel(filter.id)} ({filter.count})
@@ -281,18 +288,19 @@ export default async function AdminPaymentsPage({
         })}
       </nav>
 
-      <div className="rounded-3xl border border-cyan-300/15 bg-cyan-300/[0.06] p-4 text-sm leading-6 text-slate-300">
+      <div className="rounded-3xl border border-cyan-200 bg-cyan-50 p-4 text-sm leading-6 text-slate-700">
         <p>
-          <span className="font-semibold text-cyan-200">만료 READY 정리</span>
-          는 결제창 진입 후 30분 이상 승인되지 않은 대기 결제를 운영 취소로
-          바꿉니다. <span className="font-semibold text-amber-100">환불 완료 처리</span>
-          는 결제사 대시보드에서 실제 환불을 확인한 뒤에만 눌러야 합니다.
+          <span className="font-semibold text-cyan-600">만료 READY 정리</span>는
+          결제창 진입 후 30분 이상 승인되지 않은 대기 결제를 운영 취소로
+          바꿉니다.{" "}
+          <span className="font-semibold text-amber-700">환불 완료 처리</span>는
+          결제사 대시보드에서 실제 환불을 확인한 뒤에만 눌러야 합니다.
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900">
+      <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-[1120px] w-full border-collapse text-left text-sm">
-          <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-slate-400">
+          <thead className="bg-slate-100 text-xs uppercase tracking-[0.18em] text-slate-500">
             <tr>
               <th className="px-4 py-4">Purpose</th>
               <th className="px-4 py-4">Provider</th>
@@ -304,10 +312,13 @@ export default async function AdminPaymentsPage({
               <th className="px-4 py-4">Issue</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/10">
+          <tbody className="divide-y divide-slate-200">
             {visiblePayments.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                <td
+                  colSpan={8}
+                  className="px-4 py-10 text-center text-slate-600"
+                >
                   현재 필터에 해당하는 payment row가 없습니다.
                 </td>
               </tr>
@@ -318,9 +329,9 @@ export default async function AdminPaymentsPage({
                 return (
                   <tr
                     key={payment.id}
-                    className={`text-slate-200 ${
+                    className={`text-slate-800 ${
                       stale || payment.status === "REFUND_PENDING"
-                        ? "bg-amber-500/[0.06] ring-1 ring-inset ring-amber-300/10"
+                        ? "bg-amber-50 ring-1 ring-inset ring-amber-200"
                         : ""
                     }`}
                   >
@@ -342,7 +353,7 @@ export default async function AdminPaymentsPage({
                         {stale ? "STALE_READY" : payment.status}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right font-semibold text-white">
+                    <td className="px-4 py-4 text-right font-semibold text-slate-950">
                       {formatAdminCurrency(payment.amount)}
                     </td>
                     <td className="px-4 py-4">
@@ -355,7 +366,7 @@ export default async function AdminPaymentsPage({
                       {payment.reservationId ? (
                         <Link
                           href={`/admin/reservations/${payment.reservationId}`}
-                          className="text-cyan-300 hover:text-cyan-200"
+                          className="text-cyan-700 hover:text-cyan-600"
                         >
                           {payment.reservationId}
                         </Link>
@@ -363,10 +374,10 @@ export default async function AdminPaymentsPage({
                         <span className="text-slate-500">-</span>
                       )}
                     </td>
-                    <td className="max-w-64 px-4 py-4 text-xs text-slate-400">
+                    <td className="max-w-64 px-4 py-4 text-xs text-slate-600">
                       {payment.failureCode ? (
                         <>
-                          <p className="font-semibold text-slate-300">
+                          <p className="font-semibold text-slate-700">
                             {payment.failureCode}
                           </p>
                           <p className="mt-1 line-clamp-2">
@@ -378,7 +389,7 @@ export default async function AdminPaymentsPage({
                       ) : payment.status === "REFUNDED" ? (
                         payment.refundedAt ? (
                           <>
-                            <p className="font-semibold text-emerald-200">
+                            <p className="font-semibold text-emerald-700">
                               환불 완료
                             </p>
                             <p className="mt-1">
@@ -396,7 +407,7 @@ export default async function AdminPaymentsPage({
                           action={confirmManualRefundAction}
                           className="mt-3"
                         >
-                          <p className="mb-2 text-[11px] leading-4 text-amber-100">
+                          <p className="mb-2 text-[11px] leading-4 text-amber-700">
                             Toss/결제사 환불 확인 후 처리
                           </p>
                           <input
@@ -406,7 +417,7 @@ export default async function AdminPaymentsPage({
                           />
                           <button
                             type="submit"
-                            className="rounded-full bg-amber-300 px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-amber-200"
+                            className="rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-400"
                           >
                             환불 완료 처리
                           </button>

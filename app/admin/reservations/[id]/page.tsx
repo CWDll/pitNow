@@ -16,18 +16,18 @@ interface PageProps {
 
 function statusClass(status: AdminReservationStatus): string {
   if (status === "CONFIRMED") {
-    return "bg-blue-400/15 text-blue-200 ring-blue-300/30";
+    return "bg-blue-50 text-blue-700 ring-blue-200";
   }
 
   if (status === "CHECKED_IN" || status === "IN_USE") {
-    return "bg-cyan-400/15 text-cyan-200 ring-cyan-300/30";
+    return "bg-cyan-50 text-cyan-700 ring-cyan-200";
   }
 
   if (status === "COMPLETED") {
-    return "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30";
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
-  return "bg-slate-400/15 text-slate-200 ring-slate-300/30";
+  return "bg-slate-100 text-slate-700 ring-slate-200";
 }
 
 function typeLabel(type: AdminReservationType): string {
@@ -38,8 +38,8 @@ function EvidenceImage(props: { label: string; url: string | null }) {
   const { label, url } = props;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
         {label}
       </p>
       {url ? (
@@ -48,11 +48,11 @@ function EvidenceImage(props: { label: string; url: string | null }) {
           <img
             src={url}
             alt={label}
-            className="h-36 w-full rounded-xl object-cover ring-1 ring-white/10"
+            className="h-36 w-full rounded-xl object-cover ring-1 ring-slate-200"
           />
         </a>
       ) : (
-        <div className="flex h-36 items-center justify-center rounded-xl bg-slate-950 text-sm text-slate-500 ring-1 ring-white/10">
+        <div className="flex h-36 items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-500 ring-1 ring-slate-200">
           No evidence
         </div>
       )}
@@ -62,8 +62,8 @@ function EvidenceImage(props: { label: string; url: string | null }) {
 
 function ChecklistItem(props: { label: string; checked: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-white/[0.04] px-4 py-3">
-      <span className="text-slate-300">{props.label}</span>
+    <div className="flex items-center justify-between rounded-2xl bg-slate-100 px-4 py-3">
+      <span className="text-slate-700">{props.label}</span>
       <span
         className={
           props.checked
@@ -104,15 +104,15 @@ function partnerNoteLabel(type: "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW") {
 function partnerNoteClass(type: "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW") {
   switch (type) {
     case "ISSUE":
-      return "bg-rose-400/15 text-rose-200 ring-rose-300/30";
+      return "bg-rose-50 text-rose-700 ring-rose-200";
     case "DELAY":
-      return "bg-amber-400/15 text-amber-100 ring-amber-300/30";
+      return "bg-amber-50 text-amber-700 ring-amber-200";
     case "NO_SHOW":
-      return "bg-slate-400/15 text-slate-200 ring-slate-300/30";
+      return "bg-slate-100 text-slate-700 ring-slate-200";
     case "NOTE":
-      return "bg-cyan-400/15 text-cyan-200 ring-cyan-300/30";
+      return "bg-cyan-50 text-cyan-700 ring-cyan-200";
     default:
-      return "bg-slate-400/15 text-slate-200 ring-slate-300/30";
+      return "bg-slate-100 text-slate-700 ring-slate-200";
   }
 }
 
@@ -125,14 +125,14 @@ function auditActionLabel(action: string) {
 
 function auditActionClass(action: string) {
   if (action.includes("RESOLVED") || action.includes("CREATED")) {
-    return "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30";
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
   if (action.includes("DEACTIVATED") || action.includes("REOPENED")) {
-    return "bg-amber-400/15 text-amber-100 ring-amber-300/30";
+    return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 
-  return "bg-cyan-400/15 text-cyan-200 ring-cyan-300/30";
+  return "bg-cyan-50 text-cyan-700 ring-cyan-200";
 }
 
 function hasObjectValues(value: Record<string, unknown>) {
@@ -158,7 +158,9 @@ export default async function AdminReservationDetailPage(props: PageProps) {
     review,
     evidenceIssues,
   } = detail;
-  const unresolvedPartnerNotes = partnerNotes.filter((note) => !note.isResolved);
+  const unresolvedPartnerNotes = partnerNotes.filter(
+    (note) => !note.isResolved,
+  );
 
   return (
     <section className="space-y-6">
@@ -166,14 +168,14 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         <div>
           <Link
             href="/admin/reservations"
-            className="text-sm font-semibold text-cyan-300 hover:text-cyan-200"
+            className="text-sm font-semibold text-cyan-700 hover:text-cyan-600"
           >
             ← Reservations
           </Link>
-          <p className="mt-5 text-sm font-semibold uppercase tracking-[0.28em] text-cyan-300">
+          <p className="mt-5 text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
             Reservation Detail
           </p>
-          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-white">
+          <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
             Evidence Drill-down
           </h2>
           <p className="mt-2 max-w-3xl break-all font-mono text-xs text-slate-500">
@@ -194,16 +196,21 @@ export default async function AdminReservationDetailPage(props: PageProps) {
           ["Partner", reservation.partnerName],
           ["Type", typeLabel(reservation.reservationType)],
           ["Vehicle", reservation.vehicleLabel],
-          ["Total", formatAdminCurrency(checkout?.totalSettlement ?? reservation.totalPrice)],
+          [
+            "Total",
+            formatAdminCurrency(
+              checkout?.totalSettlement ?? reservation.totalPrice,
+            ),
+          ],
         ].map(([label, value]) => (
           <div
             key={label}
-            className="rounded-3xl border border-white/10 bg-slate-900 p-5"
+            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               {label}
             </p>
-            <p className="mt-3 text-xl font-semibold text-white">{value}</p>
+            <p className="mt-3 text-xl font-semibold text-slate-950">{value}</p>
           </div>
         ))}
       </div>
@@ -211,16 +218,17 @@ export default async function AdminReservationDetailPage(props: PageProps) {
       {reservation.status === "CONFIRMED" ? (
         <CancelReservationForm reservationId={reservation.id} />
       ) : reservation.status === "CANCELLED" ? (
-        <div className="rounded-3xl border border-slate-400/20 bg-slate-400/10 p-5 text-sm text-slate-300">
-          이 예약은 이미 취소되었습니다. 상태 전환 로그에서 취소 사유를 확인할 수 있습니다.
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-700 shadow-sm">
+          이 예약은 이미 취소되었습니다. 상태 전환 로그에서 취소 사유를 확인할
+          수 있습니다.
         </div>
       ) : null}
 
       <section
         className={`rounded-3xl border p-5 ${
           evidenceIssues.length === 0
-            ? "border-emerald-300/20 bg-emerald-300/10"
-            : "border-amber-300/20 bg-amber-300/10"
+            ? "border-emerald-200 bg-emerald-50"
+            : "border-amber-200 bg-amber-50"
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -228,13 +236,13 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             <p
               className={`text-sm font-semibold uppercase tracking-[0.2em] ${
                 evidenceIssues.length === 0
-                  ? "text-emerald-200"
-                  : "text-amber-200"
+                  ? "text-emerald-700"
+                  : "text-amber-700"
               }`}
             >
               Evidence status
             </p>
-            <h3 className="mt-2 text-2xl font-semibold text-white">
+            <h3 className="mt-2 text-2xl font-semibold text-slate-950">
               {evidenceIssues.length === 0
                 ? "증적 완료"
                 : `검토 필요 ${evidenceIssues.length}건`}
@@ -255,7 +263,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             {evidenceIssues.map((issue) => (
               <span
                 key={issue}
-                className="rounded-full bg-slate-950/60 px-3 py-1 text-xs font-semibold text-amber-100 ring-1 ring-amber-200/20"
+                className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200"
               >
                 {issue}
               </span>
@@ -265,72 +273,72 @@ export default async function AdminReservationDetailPage(props: PageProps) {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-          <h3 className="text-2xl font-semibold text-white">Reservation</h3>
-          <dl className="mt-5 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-2xl font-semibold text-slate-950">Reservation</h3>
+          <dl className="mt-5 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
             <div>
               <dt className="text-slate-500">Bay</dt>
-              <dd className="mt-1 text-white">{reservation.bayName}</dd>
+              <dd className="mt-1 text-slate-950">{reservation.bayName}</dd>
             </div>
             <div>
               <dt className="text-slate-500">Created</dt>
-              <dd className="mt-1 text-white">
+              <dd className="mt-1 text-slate-950">
                 {formatAdminDateTime(reservation.createdAt)}
               </dd>
             </div>
             <div>
               <dt className="text-slate-500">Start</dt>
-              <dd className="mt-1 text-white">
+              <dd className="mt-1 text-slate-950">
                 {formatAdminDateTime(reservation.startTime)}
               </dd>
             </div>
             <div>
               <dt className="text-slate-500">End</dt>
-              <dd className="mt-1 text-white">
+              <dd className="mt-1 text-slate-950">
                 {formatAdminDateTime(reservation.endTime)}
               </dd>
             </div>
             <div>
               <dt className="text-slate-500">Blocked Until</dt>
-              <dd className="mt-1 text-white">
+              <dd className="mt-1 text-slate-950">
                 {formatAdminDateTime(reservation.blockedUntil)}
               </dd>
             </div>
             <div>
               <dt className="text-slate-500">Base Reservation Price</dt>
-              <dd className="mt-1 text-white">
+              <dd className="mt-1 text-slate-950">
                 {formatAdminCurrency(reservation.totalPrice)}
               </dd>
             </div>
           </dl>
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-          <h3 className="text-2xl font-semibold text-white">Settlement</h3>
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-2xl font-semibold text-slate-950">Settlement</h3>
           {checkout ? (
-            <dl className="mt-5 space-y-3 text-sm text-slate-300">
+            <dl className="mt-5 space-y-3 text-sm text-slate-700">
               <div className="flex justify-between">
                 <dt>Base</dt>
-                <dd className="text-white">
+                <dd className="text-slate-950">
                   {formatAdminCurrency(checkout.basePrice)}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt>Extra</dt>
-                <dd className="text-white">
+                <dd className="text-slate-950">
                   {formatAdminCurrency(checkout.extraFee)}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt>Helper verify</dt>
-                <dd className="text-white">
+                <dd className="text-slate-950">
                   {formatAdminCurrency(checkout.helperVerifyFee)}
                 </dd>
               </div>
-              <div className="border-t border-white/10 pt-3">
+              <div className="border-t border-slate-200 pt-3">
                 <div className="flex justify-between text-xl font-semibold">
-                  <dt className="text-white">Total</dt>
-                  <dd className="text-cyan-200">
+                  <dt className="text-slate-950">Total</dt>
+                  <dd className="text-cyan-700">
                     {formatAdminCurrency(checkout.totalSettlement)}
                   </dd>
                 </div>
@@ -338,16 +346,16 @@ export default async function AdminReservationDetailPage(props: PageProps) {
               <div className="pt-2 text-xs text-slate-500">
                 Completed {formatAdminDateTime(checkout.completedAt)}
               </div>
-              <div className="border-t border-white/10 pt-3">
+              <div className="border-t border-slate-200 pt-3">
                 <div className="flex justify-between">
                   <dt>Reservation paid</dt>
-                  <dd className="text-white">
+                  <dd className="text-slate-950">
                     {formatAdminCurrency(reservation.totalPrice)}
                   </dd>
                 </div>
                 <div className="mt-2 flex justify-between">
                   <dt>Settlement due</dt>
-                  <dd className="text-rose-200">
+                  <dd className="text-rose-700">
                     {formatAdminCurrency(
                       Math.max(
                         0,
@@ -359,26 +367,28 @@ export default async function AdminReservationDetailPage(props: PageProps) {
               </div>
             </dl>
           ) : (
-            <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+            <p className="mt-5 rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
               체크아웃 정산 row가 아직 없습니다.
             </p>
           )}
         </section>
       </div>
 
-      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-        <h3 className="text-2xl font-semibold text-white">Payment Ledger</h3>
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-2xl font-semibold text-slate-950">
+          Payment Ledger
+        </h3>
         <p className="mt-1 text-sm text-slate-500">
           예약 선결제와 체크아웃 사후정산 결제 상태를 함께 확인합니다.
         </p>
         {payments.length === 0 ? (
-          <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+          <p className="mt-5 rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
             결제 row가 없습니다.
           </p>
         ) : (
-          <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
+          <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
             <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-slate-400">
+              <thead className="bg-slate-100 text-xs uppercase tracking-[0.18em] text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Purpose</th>
                   <th className="px-4 py-3">Provider</th>
@@ -388,11 +398,11 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                   <th className="px-4 py-3">Approved</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/10">
+              <tbody className="divide-y divide-slate-200">
                 {payments.map((payment) => (
-                  <tr key={payment.id} className="text-slate-200">
+                  <tr key={payment.id} className="text-slate-800">
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-white">
+                      <p className="font-semibold text-slate-950">
                         {payment.purpose}
                       </p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
@@ -406,17 +416,17 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                         className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
                           payment.status === "RESERVATION_CONFIRMED" ||
                           payment.status === "SETTLEMENT_CONFIRMED"
-                            ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30"
+                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                             : payment.status === "READY" ||
                                 payment.status === "APPROVED"
-                              ? "bg-amber-400/15 text-amber-100 ring-amber-300/30"
-                              : "bg-slate-400/15 text-slate-200 ring-slate-300/30"
+                              ? "bg-amber-50 text-amber-700 ring-amber-200"
+                              : "bg-slate-100 text-slate-700 ring-slate-200"
                         }`}
                       >
                         {payment.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-white">
+                    <td className="px-4 py-3 text-right font-semibold text-slate-950">
                       {formatAdminCurrency(payment.amount)}
                     </td>
                     <td className="px-4 py-3 text-slate-400">
@@ -435,13 +445,13 @@ export default async function AdminReservationDetailPage(props: PageProps) {
       <section
         className={`rounded-3xl border p-6 ${
           unresolvedPartnerNotes.length > 0
-            ? "border-rose-300/20 bg-rose-300/10"
-            : "border-white/10 bg-slate-900"
+            ? "border-rose-200 bg-rose-50"
+            : "border-slate-200 bg-white shadow-sm"
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-2xl font-semibold text-white">
+            <h3 className="text-2xl font-semibold text-slate-950">
               Partner Field Notes
             </h3>
             <p className="mt-1 text-sm text-slate-500">
@@ -452,7 +462,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
               unresolvedPartnerNotes.length > 0
                 ? "bg-rose-300 text-slate-950"
-                : "bg-slate-700 text-slate-200"
+                : "bg-slate-100 text-slate-700"
             }`}
           >
             {unresolvedPartnerNotes.length > 0
@@ -462,7 +472,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         </div>
 
         {partnerNotes.length === 0 ? (
-          <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+          <p className="mt-5 rounded-2xl bg-white p-4 text-sm text-slate-600 ring-1 ring-slate-200">
             정비소 측 현장 기록이 없습니다.
           </p>
         ) : (
@@ -472,8 +482,8 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                 key={note.id}
                 className={`rounded-2xl border p-4 ${
                   note.isResolved
-                    ? "border-white/10 bg-white/[0.03]"
-                    : "border-white/15 bg-slate-950/40"
+                    ? "border-slate-200 bg-white"
+                    : "border-rose-200 bg-white"
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -488,8 +498,8 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${
                         note.isResolved
-                          ? "bg-emerald-400/15 text-emerald-200"
-                          : "bg-rose-400/15 text-rose-200"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-rose-50 text-rose-700"
                       }`}
                     >
                       {note.isResolved ? "Resolved" : "Open"}
@@ -499,12 +509,14 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                     {formatAdminDateTime(note.createdAt)}
                   </p>
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                   {note.body}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
                   {note.authorUserId ? (
-                    <span className="break-all">Author {note.authorUserId}</span>
+                    <span className="break-all">
+                      Author {note.authorUserId}
+                    </span>
                   ) : null}
                   {note.resolvedAt ? (
                     <span>
@@ -519,23 +531,23 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         )}
       </section>
 
-      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-2xl font-semibold text-white">
+            <h3 className="text-2xl font-semibold text-slate-950">
               Partner Admin Audit
             </h3>
             <p className="mt-1 text-sm text-slate-500">
               정비소 운영자가 이 예약과 연결해 수행한 운영 변경 이력입니다.
             </p>
           </div>
-          <span className="rounded-full bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-300 ring-1 ring-white/10">
+          <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
             {partnerAuditLogs.length} logs
           </span>
         </div>
 
         {partnerAuditLogs.length === 0 ? (
-          <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+          <p className="mt-5 rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
             이 예약에 연결된 partner-admin audit 로그가 없습니다.
           </p>
         ) : (
@@ -543,7 +555,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             {partnerAuditLogs.map((log) => (
               <article
                 key={log.id}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                className="rounded-2xl border border-slate-200 bg-white p-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -555,7 +567,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                       >
                         {auditActionLabel(log.action)}
                       </span>
-                      <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold text-slate-300 ring-1 ring-white/10">
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
                         {log.targetType}
                       </span>
                     </div>
@@ -573,14 +585,15 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                   ) : null}
                   <span className="break-all">Audit {log.id}</span>
                 </div>
-                {hasObjectValues(log.beforeState) || hasObjectValues(log.afterState) ? (
+                {hasObjectValues(log.beforeState) ||
+                hasObjectValues(log.afterState) ? (
                   <div className="mt-3 grid gap-3 lg:grid-cols-2">
                     {hasObjectValues(log.beforeState) ? (
                       <div>
                         <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                           Before
                         </p>
-                        <pre className="overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                        <pre className="overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
                           {JSON.stringify(log.beforeState, null, 2)}
                         </pre>
                       </div>
@@ -590,7 +603,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                         <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                           After
                         </p>
-                        <pre className="overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                        <pre className="overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
                           {JSON.stringify(log.afterState, null, 2)}
                         </pre>
                       </div>
@@ -598,7 +611,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                   </div>
                 ) : null}
                 {hasObjectValues(log.metadata) ? (
-                  <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                  <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
                     {JSON.stringify(log.metadata, null, 2)}
                   </pre>
                 ) : null}
@@ -608,8 +621,10 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         )}
       </section>
 
-      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-        <h3 className="text-2xl font-semibold text-white">Check-in Evidence</h3>
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-2xl font-semibold text-slate-950">
+          Check-in Evidence
+        </h3>
         <p className="mt-1 text-sm text-slate-500">
           {checkin
             ? `Checked in ${formatAdminDateTime(checkin.checkedInAt)}`
@@ -623,8 +638,10 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-        <h3 className="text-2xl font-semibold text-white">Checkout Evidence</h3>
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-2xl font-semibold text-slate-950">
+          Checkout Evidence
+        </h3>
         <div className="mt-5 grid gap-4 lg:grid-cols-[0.75fr_1fr]">
           <div className="space-y-3">
             <ChecklistItem
@@ -653,14 +670,16 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-        <h3 className="text-2xl font-semibold text-white">Customer Review</h3>
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-2xl font-semibold text-slate-950">
+          Customer Review
+        </h3>
         {review ? (
-          <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xl font-semibold text-white">
+              <p className="text-xl font-semibold text-slate-950">
                 <RatingStars rating={review.rating} />{" "}
-                <span className="ml-2 text-base text-slate-300">
+                <span className="ml-2 text-base text-slate-700">
                   {review.rating}/5
                 </span>
               </p>
@@ -668,45 +687,47 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                 {formatAdminDateTime(review.createdAt)}
               </p>
             </div>
-            <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-300">
+            <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">
               {review.comment || "코멘트 없이 별점만 남긴 리뷰입니다."}
             </p>
           </div>
         ) : (
-          <p className="mt-5 rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+          <p className="mt-5 rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
             아직 작성된 리뷰가 없습니다.
           </p>
         )}
       </section>
 
-      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-        <h3 className="text-2xl font-semibold text-white">Status Timeline</h3>
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-2xl font-semibold text-slate-950">
+          Status Timeline
+        </h3>
         <div className="mt-5 space-y-3">
           {statusLogs.length === 0 ? (
-            <p className="rounded-2xl bg-white/[0.04] p-4 text-sm text-slate-400">
+            <p className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
               상태 전환 로그가 없습니다.
             </p>
           ) : (
             statusLogs.map((log) => (
               <article
                 key={log.id}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                className="rounded-2xl border border-slate-200 bg-white p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-mono text-sm text-white">
+                  <p className="font-mono text-sm text-slate-950">
                     {log.fromStatus ?? "NULL"} → {log.toStatus}
                   </p>
                   <p className="text-xs text-slate-500">
                     {formatAdminDateTime(log.createdAt)}
                   </p>
                 </div>
-                <p className="mt-2 text-sm text-slate-400">
+                <p className="mt-2 text-sm text-slate-600">
                   {log.actorType}
                   {log.actorUserId ? ` · ${log.actorUserId}` : ""}
                   {log.reason ? ` · ${log.reason}` : ""}
                 </p>
                 {Object.keys(log.metadata).length > 0 ? (
-                  <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                  <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
                     {JSON.stringify(log.metadata, null, 2)}
                   </pre>
                 ) : null}

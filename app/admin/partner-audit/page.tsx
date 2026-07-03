@@ -49,7 +49,11 @@ interface AuditSearchState {
 function normalizeFilter(value: string | string[] | undefined): AuditFilter {
   const rawValue = Array.isArray(value) ? value[0] : value;
 
-  if (rawValue === "bay" || rawValue === "availability" || rawValue === "notes") {
+  if (
+    rawValue === "bay" ||
+    rawValue === "availability" ||
+    rawValue === "notes"
+  ) {
     return rawValue;
   }
 
@@ -122,7 +126,9 @@ function rangeToCreatedAfter(range: AuditRange): string | undefined {
     "30d": 24 * 30,
   } satisfies Record<Exclude<AuditRange, "all">, number>;
 
-  return new Date(Date.now() - hoursByRange[range] * 60 * 60 * 1000).toISOString();
+  return new Date(
+    Date.now() - hoursByRange[range] * 60 * 60 * 1000,
+  ).toISOString();
 }
 
 function searchableLogText(log: AdminPartnerAuditItem) {
@@ -263,14 +269,14 @@ function targetTypeLabel(targetType: AdminPartnerAuditTargetType) {
 
 function auditActionClass(action: string) {
   if (action.includes("RESOLVED") || action.includes("CREATED")) {
-    return "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30";
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
   if (action.includes("DEACTIVATED") || action.includes("REOPENED")) {
-    return "bg-amber-400/15 text-amber-100 ring-amber-300/30";
+    return "bg-amber-50 text-amber-700 ring-amber-200";
   }
 
-  return "bg-cyan-400/15 text-cyan-200 ring-cyan-300/30";
+  return "bg-cyan-50 text-cyan-700 ring-cyan-200";
 }
 
 function hasObjectValues(value: Record<string, unknown>) {
@@ -279,12 +285,12 @@ function hasObjectValues(value: Record<string, unknown>) {
 
 function metricCard(label: string, value: string, description: string) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900 p-5">
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
         {label}
       </p>
-      <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
-      <p className="mt-1 text-sm text-slate-400">{description}</p>
+      <p className="mt-3 text-3xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 text-sm text-slate-600">{description}</p>
     </div>
   );
 }
@@ -319,21 +325,25 @@ export default async function AdminPartnerAuditPage({
   const filters: Array<{ id: AuditFilter; count: number }> = [
     { id: "all", count: logs.length },
     { id: "bay", count: targetFilterLogs(logs, "bay").length },
-    { id: "availability", count: targetFilterLogs(logs, "availability").length },
+    {
+      id: "availability",
+      count: targetFilterLogs(logs, "availability").length,
+    },
     { id: "notes", count: targetFilterLogs(logs, "notes").length },
   ];
 
   return (
     <section className="space-y-6">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-300">
+        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
           Partner Audit
         </p>
-        <h2 className="mt-3 text-4xl font-semibold tracking-tight text-white">
+        <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
           Partner Admin Audit
         </h2>
-        <p className="mt-2 text-sm text-slate-400">
-          정비소 운영자가 수행한 베이, 예약 차단, 현장 메모 변경 이력을 서버 검색과 페이지 단위로 조회합니다.
+        <p className="mt-2 text-sm text-slate-600">
+          정비소 운영자가 수행한 베이, 예약 차단, 현장 메모 변경 이력을 서버
+          검색과 페이지 단위로 조회합니다.
         </p>
       </header>
 
@@ -348,11 +358,7 @@ export default async function AdminPartnerAuditPage({
           `${auditResult.page} / ${auditResult.totalPages}`,
           `${auditResult.limit}건씩 조회`,
         )}
-        {metricCard(
-          "Loaded",
-          String(logs.length),
-          "현재 페이지 로드 건수",
-        )}
+        {metricCard("Loaded", String(logs.length), "현재 페이지 로드 건수")}
         {metricCard(
           "Visible",
           String(visibleLogs.length),
@@ -364,27 +370,27 @@ export default async function AdminPartnerAuditPage({
 
       <form
         action="/admin/partner-audit"
-        className="grid gap-4 rounded-3xl border border-white/10 bg-slate-900 p-5 xl:grid-cols-[1.1fr_1fr_1fr_1fr_0.8fr_auto]"
+        className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:grid-cols-[1.1fr_1fr_1fr_1fr_0.8fr_auto]"
       >
         {searchState.targetFilter !== "all" ? (
           <input type="hidden" name="filter" value={searchState.targetFilter} />
         ) : null}
         <input type="hidden" name="page" value="1" />
-        <label className="space-y-2 text-sm font-medium text-slate-300">
+        <label className="space-y-2 text-sm font-medium text-slate-700">
           <span>Search</span>
           <input
             name="q"
             defaultValue={searchState.query}
             placeholder="예약 ID, target ID, metadata"
-            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-cyan-500"
           />
         </label>
-        <label className="space-y-2 text-sm font-medium text-slate-300">
+        <label className="space-y-2 text-sm font-medium text-slate-700">
           <span>Partner</span>
           <select
             name="partner"
             defaultValue={searchState.partnerId}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-500"
           >
             <option value="">All partners</option>
             {partnerOptions.map((partner) => (
@@ -394,12 +400,12 @@ export default async function AdminPartnerAuditPage({
             ))}
           </select>
         </label>
-        <label className="space-y-2 text-sm font-medium text-slate-300">
+        <label className="space-y-2 text-sm font-medium text-slate-700">
           <span>Action</span>
           <select
             name="action"
             defaultValue={searchState.action}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-500"
           >
             <option value="all">All actions</option>
             {auditActions.map((action) => (
@@ -409,12 +415,12 @@ export default async function AdminPartnerAuditPage({
             ))}
           </select>
         </label>
-        <label className="space-y-2 text-sm font-medium text-slate-300">
+        <label className="space-y-2 text-sm font-medium text-slate-700">
           <span>Range</span>
           <select
             name="range"
             defaultValue={searchState.range}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-500"
           >
             <option value="all">All time</option>
             <option value="24h">Last 24 hours</option>
@@ -422,12 +428,12 @@ export default async function AdminPartnerAuditPage({
             <option value="30d">Last 30 days</option>
           </select>
         </label>
-        <label className="space-y-2 text-sm font-medium text-slate-300">
+        <label className="space-y-2 text-sm font-medium text-slate-700">
           <span>Limit</span>
           <select
             name="limit"
             defaultValue={searchState.limit}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-500"
           >
             <option value="25">25 rows</option>
             <option value="50">50 rows</option>
@@ -437,13 +443,13 @@ export default async function AdminPartnerAuditPage({
         <div className="flex items-end gap-2">
           <button
             type="submit"
-            className="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+            className="rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-cyan-500"
           >
             Filter
           </button>
           <Link
             href="/admin/partner-audit"
-            className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+            className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
           >
             Reset
           </Link>
@@ -463,8 +469,8 @@ export default async function AdminPartnerAuditPage({
               })}
               className={`rounded-full px-4 py-2 text-sm font-semibold ring-1 transition ${
                 isActive
-                  ? "bg-cyan-300 text-slate-950 ring-cyan-200"
-                  : "bg-white/[0.04] text-slate-300 ring-white/10 hover:bg-white/10 hover:text-white"
+                  ? "bg-cyan-600 text-white ring-cyan-600"
+                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100"
               }`}
             >
               {filterLabel(filter.id)} ({filter.count})
@@ -473,7 +479,7 @@ export default async function AdminPartnerAuditPage({
         })}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-white/10 bg-slate-900 p-4 text-sm text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200 bg-white shadow-sm p-4 text-sm text-slate-600">
         <p>
           Showing {visibleLogs.length} of {logs.length} loaded rows. Database
           match {auditResult.totalCount} rows.
@@ -486,8 +492,8 @@ export default async function AdminPartnerAuditPage({
             aria-disabled={auditResult.page <= 1}
             className={`rounded-2xl px-4 py-2 font-semibold ring-1 transition ${
               auditResult.page <= 1
-                ? "pointer-events-none bg-white/[0.02] text-slate-600 ring-white/5"
-                : "bg-white/[0.04] text-slate-300 ring-white/10 hover:bg-white/10 hover:text-white"
+                ? "pointer-events-none bg-slate-50 text-slate-400 ring-slate-100"
+                : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100"
             }`}
           >
             Previous
@@ -499,8 +505,8 @@ export default async function AdminPartnerAuditPage({
             aria-disabled={auditResult.page >= auditResult.totalPages}
             className={`rounded-2xl px-4 py-2 font-semibold ring-1 transition ${
               auditResult.page >= auditResult.totalPages
-                ? "pointer-events-none bg-white/[0.02] text-slate-600 ring-white/5"
-                : "bg-white/[0.04] text-slate-300 ring-white/10 hover:bg-white/10 hover:text-white"
+                ? "pointer-events-none bg-slate-50 text-slate-400 ring-slate-100"
+                : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100"
             }`}
           >
             Next
@@ -510,14 +516,14 @@ export default async function AdminPartnerAuditPage({
 
       <div className="space-y-3">
         {visibleLogs.length === 0 ? (
-          <p className="rounded-3xl border border-white/10 bg-slate-900 p-6 text-sm text-slate-400">
+          <p className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6 text-sm text-slate-600">
             조건에 맞는 partner-admin audit 로그가 없습니다.
           </p>
         ) : (
           visibleLogs.map((log) => (
             <article
               key={log.id}
-              className="rounded-3xl border border-white/10 bg-slate-900 p-5"
+              className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -529,11 +535,11 @@ export default async function AdminPartnerAuditPage({
                     >
                       {auditActionLabel(log.action)}
                     </span>
-                    <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold text-slate-300 ring-1 ring-white/10">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
                       {targetTypeLabel(log.targetType)}
                     </span>
                   </div>
-                  <p className="mt-3 text-lg font-semibold text-white">
+                  <p className="mt-3 text-lg font-semibold text-slate-950">
                     {log.partnerName}
                   </p>
                   <p className="mt-1 break-all font-mono text-xs text-slate-500">
@@ -552,7 +558,7 @@ export default async function AdminPartnerAuditPage({
                 {log.reservationId ? (
                   <Link
                     href={`/admin/reservations/${log.reservationId}`}
-                    className="break-all text-cyan-300 hover:text-cyan-200"
+                    className="break-all text-cyan-700 hover:text-cyan-600"
                   >
                     Reservation {log.reservationId}
                   </Link>
@@ -560,14 +566,15 @@ export default async function AdminPartnerAuditPage({
                 <span className="break-all">Audit {log.id}</span>
               </div>
 
-              {hasObjectValues(log.beforeState) || hasObjectValues(log.afterState) ? (
+              {hasObjectValues(log.beforeState) ||
+              hasObjectValues(log.afterState) ? (
                 <div className="mt-4 grid gap-3 xl:grid-cols-2">
                   {hasObjectValues(log.beforeState) ? (
                     <div>
                       <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                         Before
                       </p>
-                      <pre className="max-h-56 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                      <pre className="max-h-56 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
                         {JSON.stringify(log.beforeState, null, 2)}
                       </pre>
                     </div>
@@ -577,7 +584,7 @@ export default async function AdminPartnerAuditPage({
                       <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                         After
                       </p>
-                      <pre className="max-h-56 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                      <pre className="max-h-56 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
                         {JSON.stringify(log.afterState, null, 2)}
                       </pre>
                     </div>
@@ -586,7 +593,7 @@ export default async function AdminPartnerAuditPage({
               ) : null}
 
               {hasObjectValues(log.metadata) ? (
-                <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-400">
+                <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
                   {JSON.stringify(log.metadata, null, 2)}
                 </pre>
               ) : null}

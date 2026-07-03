@@ -14,10 +14,16 @@ interface AdminSettlementPageProps {
   }>;
 }
 
-function normalizeFilter(value: string | string[] | undefined): SettlementFilter {
+function normalizeFilter(
+  value: string | string[] | undefined,
+): SettlementFilter {
   const rawValue = Array.isArray(value) ? value[0] : value;
 
-  if (rawValue === "due" || rawValue === "attention" || rawValue === "evidence") {
+  if (
+    rawValue === "due" ||
+    rawValue === "attention" ||
+    rawValue === "evidence"
+  ) {
     return rawValue;
   }
 
@@ -41,7 +47,9 @@ function needsPaymentAttention(settlement: AdminSettlementItem): boolean {
   return settlement.settlementPaymentStatus !== "SETTLEMENT_CONFIRMED";
 }
 
-function isFailedOrCancelledSettlement(settlement: AdminSettlementItem): boolean {
+function isFailedOrCancelledSettlement(
+  settlement: AdminSettlementItem,
+): boolean {
   return ["FAILED", "CANCELLED"].includes(
     settlement.settlementPaymentStatus ?? "",
   );
@@ -53,7 +61,9 @@ function filterSettlements(
 ): AdminSettlementItem[] {
   switch (filter) {
     case "due":
-      return settlements.filter((settlement) => getUnpaidAmount(settlement) > 0);
+      return settlements.filter(
+        (settlement) => getUnpaidAmount(settlement) > 0,
+      );
     case "attention":
       return settlements.filter((settlement) =>
         needsPaymentAttention(settlement),
@@ -66,7 +76,9 @@ function filterSettlements(
 }
 
 function filterHref(filter: SettlementFilter): string {
-  return filter === "all" ? "/admin/settlement" : `/admin/settlement?filter=${filter}`;
+  return filter === "all"
+    ? "/admin/settlement"
+    : `/admin/settlement?filter=${filter}`;
 }
 
 function filterLabel(filter: SettlementFilter): string {
@@ -84,12 +96,12 @@ function filterLabel(filter: SettlementFilter): string {
 
 function metricCard(label: string, value: string, description: string) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900 p-5">
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
         {label}
       </p>
-      <p className="mt-3 text-3xl font-semibold text-white">{value}</p>
-      <p className="mt-1 text-sm text-slate-400">{description}</p>
+      <p className="mt-3 text-3xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 text-sm text-slate-600">{description}</p>
     </div>
   );
 }
@@ -127,14 +139,15 @@ export default async function AdminSettlementPage({
   return (
     <section className="space-y-6">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-300">
+        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
           Settlement
         </p>
-        <h2 className="mt-3 text-4xl font-semibold tracking-tight text-white">
+        <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
           Checkout Settlement
         </h2>
-        <p className="mt-2 text-sm text-slate-400">
-          최근 100개 체크아웃의 기본요금, 초과요금, 검수비와 증적 완료 여부를 확인합니다.
+        <p className="mt-2 text-sm text-slate-600">
+          최근 100개 체크아웃의 기본요금, 초과요금, 검수비와 증적 완료 여부를
+          확인합니다.
         </p>
       </header>
 
@@ -171,8 +184,8 @@ export default async function AdminSettlementPage({
               href={filterHref(filter.id)}
               className={`rounded-full px-4 py-2 text-sm font-semibold ring-1 transition ${
                 isActive
-                  ? "bg-cyan-300 text-slate-950 ring-cyan-200"
-                  : "bg-white/[0.04] text-slate-300 ring-white/10 hover:bg-white/[0.08]"
+                  ? "bg-cyan-600 text-white ring-cyan-600"
+                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100"
               }`}
             >
               {filterLabel(filter.id)} ({filter.count})
@@ -181,9 +194,9 @@ export default async function AdminSettlementPage({
         })}
       </nav>
 
-      <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-slate-400">
+      <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-[1120px] w-full border-collapse text-left text-sm">
+          <thead className="bg-slate-100 text-xs uppercase tracking-[0.18em] text-slate-500">
             <tr>
               <th className="px-4 py-4">Completed</th>
               <th className="px-4 py-4">Partner</th>
@@ -198,10 +211,13 @@ export default async function AdminSettlementPage({
               <th className="px-4 py-4">Evidence</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/10">
+          <tbody className="divide-y divide-slate-200">
             {visibleSettlements.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-slate-400">
+                <td
+                  colSpan={11}
+                  className="px-4 py-10 text-center text-slate-600"
+                >
                   {settlements.length === 0
                     ? "정산 데이터가 없습니다."
                     : "현재 필터에 해당하는 정산 데이터가 없습니다."}
@@ -217,9 +233,9 @@ export default async function AdminSettlementPage({
                 return (
                   <tr
                     key={settlement.reservationId}
-                    className={`text-slate-200 ${
+                    className={`text-slate-800 ${
                       needsAttention
-                        ? "bg-rose-500/[0.06] ring-1 ring-inset ring-rose-300/10"
+                        ? "bg-rose-50 ring-1 ring-inset ring-rose-200"
                         : ""
                     }`}
                   >
@@ -241,7 +257,7 @@ export default async function AdminSettlementPage({
                     <td className="px-4 py-4 text-right">
                       {formatAdminCurrency(settlement.helperVerifyFee)}
                     </td>
-                    <td className="px-4 py-4 text-right font-semibold text-white">
+                    <td className="px-4 py-4 text-right font-semibold text-slate-950">
                       {formatAdminCurrency(settlement.totalSettlement)}
                     </td>
                     <td className="px-4 py-4 text-right">
@@ -254,8 +270,8 @@ export default async function AdminSettlementPage({
                       <span
                         className={
                           unpaidAmount > 0
-                            ? "text-rose-200"
-                            : "text-emerald-200"
+                            ? "text-rose-700"
+                            : "text-emerald-700"
                         }
                       >
                         {formatAdminCurrency(unpaidAmount)}
@@ -267,16 +283,16 @@ export default async function AdminSettlementPage({
                           unpaidAmount <= 0 ||
                           settlement.settlementPaymentStatus ===
                             "SETTLEMENT_CONFIRMED"
-                            ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30"
+                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                             : failedOrCancelled
-                              ? "bg-red-500/20 text-red-100 ring-red-300/40"
-                              : "bg-rose-400/15 text-rose-100 ring-rose-300/30"
+                              ? "bg-rose-50 text-rose-700 ring-rose-200"
+                              : "bg-rose-50 text-rose-700 ring-rose-200"
                         }`}
                       >
                         {unpaidAmount <= 0
                           ? "No due"
-                          : settlement.settlementPaymentStatus ??
-                            "Settlement due"}
+                          : (settlement.settlementPaymentStatus ??
+                            "Settlement due")}
                       </span>
                     </td>
                     <td className="px-4 py-4">
@@ -284,8 +300,8 @@ export default async function AdminSettlementPage({
                         href={`/admin/reservations/${settlement.reservationId}`}
                         className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
                           settlement.evidenceComplete
-                            ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30"
-                            : "bg-amber-400/15 text-amber-100 ring-amber-300/30"
+                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                            : "bg-amber-50 text-amber-700 ring-amber-200"
                         }`}
                       >
                         {settlement.evidenceComplete ? "Complete" : "Review"}
