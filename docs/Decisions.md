@@ -798,3 +798,21 @@ Rules:
 
 Reason:
 store-admin의 bay 활성 상태가 사용자 목록/상세/예약 단계에서 다르게 보이면 사용자가 예약 불가능한 bay를 선택할 수 있다. 최종 예약 API는 이미 inactive bay를 거부하지만, 사용자는 결제 직전에야 실패를 알게 된다. 따라서 표시와 선택 가능성을 active 상태에 맞추고, 동시에 운영자가 진행 중인 예약이 있는 bay를 꺼서 예약과 운영 상태가 충돌하는 상황을 API에서 막는다.
+
+---
+
+## 2026-07-03
+
+Decision:
+Preview/Production 전환 전 검증은 `docs/Release_QA_Checklist.md`를 release gate로 사용한다.
+
+Rules:
+
+- 릴리즈 후보는 Supabase schema check, lint, TypeScript, build, UI E2E, partner-admin API E2E를 통과해야 한다.
+- Vercel Preview/Production 환경변수는 별도로 확인한다.
+- Kakao 지도, Toss sandbox 결제, 사용자 예약 루프, partner-admin 운영 액션, Admin 패키지/감사 화면은 배포 URL에서 수동 QA한다.
+- Supabase SQL migration 적용 여부는 `node scripts/check-supabase-schema.mjs`로 확인한다.
+- Production 승격 전 테스트 예약/메모/패키지 요청/audit row cleanup 상태를 확인한다.
+
+Reason:
+MVP 기능이 사용자 예약, 결제, 지도, partner-admin 운영 콘솔, Admin 콘솔로 넓어지면서 검증 항목이 대화와 문서 여러 곳에 흩어졌다. 명시적인 release gate를 두면 배포 직전 누락을 줄이고, 자동 검증과 사람이 직접 봐야 하는 QA를 분리할 수 있다.

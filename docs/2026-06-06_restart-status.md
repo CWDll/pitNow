@@ -1994,3 +1994,15 @@ Partner-admin 직접 패키지 편집은 보류하고, 파트너가 가격 변�
 - `PITNOW_E2E_BASE_URL=http://localhost:3011 npm run e2e:partner-admin` 성공.
 - `node scripts/check-supabase-schema.mjs` 성공.
 - SQL 적용 후 partner-admin API E2E에서 `package change request 생성 API 확인`, `비권한 유저 package change request 403 확인` 통과.
+
+## 55. 2026-07-03 Release QA 체크리스트 정리
+
+기능 구현과 자동 검증이 늘어나면서 Preview/Production 전환 전 확인 항목을 한 곳으로 모았다.
+
+- `docs/Release_QA_Checklist.md`를 추가했다.
+- 자동 검증, Vercel 환경변수, 사용자 수동 QA, partner-admin 수동 QA, Admin 수동 QA, release gate를 구분했다.
+- Kakao 지도, Toss sandbox, Supabase schema, package change request, partner-admin audit 등 최근 구현 항목을 체크리스트에 포함했다.
+
+검증:
+
+- 문서 작업. 별도 코드 검증 없음.
