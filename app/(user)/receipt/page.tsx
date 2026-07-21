@@ -286,7 +286,11 @@ function ReceiptPageContent() {
           내 예약
         </Link>
         <Link
-          href="/"
+          href={
+            reservation?.partnerId
+              ? `/partner/${encodeURIComponent(reservation.partnerId)}`
+              : "/"
+          }
           className="rounded-2xl bg-blue-600 py-3 text-center text-lg font-semibold text-white"
         >
           다시 예약

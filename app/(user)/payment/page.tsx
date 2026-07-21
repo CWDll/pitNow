@@ -11,6 +11,7 @@ import type {
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
+import { FlowHeader } from "../_components/mobile-ui";
 
 const defaultPaymentMethod: PaymentMethod = "CARD";
 
@@ -418,17 +419,7 @@ function PaymentPageContent() {
 
   return (
     <section className="pb-24">
-      <header className="mb-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-2xl text-zinc-700"
-          aria-label="뒤로가기"
-        >
-          ←
-        </button>
-        <h1 className="text-3xl font-semibold text-zinc-900">결제</h1>
-      </header>
+      <FlowHeader title="결제" onBack={() => router.back()} />
 
       <div className="rounded-3xl bg-zinc-100 p-4">
         <h2 className="mb-3 text-xl font-semibold">주문 요약</h2>

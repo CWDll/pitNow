@@ -178,14 +178,17 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 10 | Self 예약 결제 | Self 작업 선택 → 일정 → Toss sandbox 결제 | 결제 성공 후 예약 확정 | 대기 |  |
 | 11 | Self 예약 목록 | `/reservation` | 방금 만든 예약이 예정 예약에 표시됨 | 대기 |  |
 | 12 | Self 취소 가능 경로 | 취소 가능한 예약에서 cancel 실행 | 예약 취소/환불 상태가 일관됨 | 대기 |  |
-| 13 | Self 체크인 | QR 확인 + 4 photos | 사진 4장 없으면 진행 불가, 완료 시 CHECKED_IN | 대기 |  |
-| 14 | Self 이용 시작 | 체크인 후 in-use 진입 | 서버 시간 기준 타이머 표시, IN_USE 전환 | 대기 |  |
-| 15 | Self 체크아웃 | checklist + 2 photos | 정산 계산 후 완료 또는 사후정산으로 이동 | 대기 |  |
-| 16 | 사후정산 결제 | 추가 결제 발생 케이스 | Toss sandbox 결제 후 complete 진입 | 대기 |  |
-| 17 | 리뷰 작성 | complete/review 작성 | 완료 예약에 리뷰 저장/표시 | 대기 |  |
-| 18 | 영수증 | receipt 진입 | 예약/결제/정산 정보 표시 | 대기 |  |
-| 19 | Shop 예약 결제 | Shop package 선택 → 일정 → Toss sandbox 결제 | 결제 성공 후 예약 확정 | 대기 |  |
-| 20 | Shop 예약 snapshot | 예약 후 package 가격/이름 변경 | 예약 목록/상세 title이 예약 당시 snapshot 기준으로 안정 표시 | 대기 |  |
+| 13 | Self 체크인 시간 제한 | 예약 시작 15분보다 일찍 `/checkin` 진입/제출 | 입장 가능 시각 안내, API `CHECKIN_NOT_OPEN`, 사진 제출 불가 | 대기 |  |
+| 14 | Self 체크인 | 예약 시작 15분 전 이후 QR 확인 + 4 photos | 사진 4장 없으면 진행 불가, 완료 시 CHECKED_IN | 대기 |  |
+| 15 | Self 이용 시작 | 체크인 후 in-use 진입 | 서버 시간 기준 타이머, IN_USE 전환, 연장/SOS/매장 연락 버튼 없음 | 대기 |  |
+| 16 | 이용 중 재진입 | 이용 중 다른 탭으로 이동 | 최상단 `이용 중인 예약으로 가기` 배너로 타이머 복귀 | 대기 |  |
+| 17 | Self 체크아웃 | checklist + 2 photos | 검수 재선택 없이 예약 기본요금/검수비/추가요금/추가 결제비용 표시 | 대기 |  |
+| 18 | 사후정산 결제 | 실제 초과 이용으로 추가 결제 발생 | 초과요금 근거가 표시되고 Toss sandbox 결제 후 complete 진입 | 대기 |  |
+| 19 | 리뷰 작성 | complete/review 작성 | 완료 예약에 리뷰 저장/표시 | 대기 |  |
+| 20 | 영수증 재예약 | receipt의 `다시 예약` 선택 | 이용한 정비소 상세로 이동 | 대기 |  |
+| 21 | 예약 완료 연락 기능 | 주소 복사 / 전화하기 | 실제 정비소 주소가 클립보드에 복사되고 등록 번호로 전화 연결 | 대기 |  |
+| 22 | Shop 예약 결제 | Shop package 선택 → 일정 → Toss sandbox 결제 | 결제 성공 후 예약 확정 | 대기 |  |
+| 23 | Shop 예약 snapshot | 예약 후 package 가격/이름 변경 | 예약 목록/상세 title이 예약 당시 snapshot 기준으로 안정 표시 | 대기 |  |
 
 ### 7.5 Partner-admin QA
 

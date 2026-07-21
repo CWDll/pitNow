@@ -144,7 +144,10 @@ rightImg: string
 • 이미지 4장 필수
 • reservation 존재
 • status = CONFIRMED
-•이미 체크인된 경우 불가
+• 이미 체크인된 경우 불가
+• 예약 시작 15분 전부터 예약 종료 시각 전까지만 가능
+• 이른 체크인은 409 CHECKIN_NOT_OPEN
+• 종료 시각 이후 체크인은 409 CHECKIN_WINDOW_CLOSED
 
 로직:
 • checkins insert
@@ -169,6 +172,7 @@ status: “CHECKED_IN”
 • SHOP_SERVICE는 CONFIRMED 상태만 시작 가능
 • 이미 IN_USE이면 idempotent 성공 응답
 • COMPLETED/CANCELLED 상태는 시작 불가
+• 예약 시작 15분 전부터 예약 종료 시각 전까지만 가능
 
 로직:
 • reservations.status → IN_USE
@@ -226,7 +230,6 @@ status: “CANCELLED”
 입력:
 {
 reservationId: string,
-helperVerifyRequested?: boolean,
 toolCheckCompleted?: boolean,
 cleaningCompleted?: boolean,
 wasteDisposalCompleted?: boolean,
@@ -241,8 +244,8 @@ checkoutPhoto2?: string
 • 1시간 단위 올림
 • extra_fee 계산
 • SELF_SERVICE는 tool/cleaning/waste 체크와 체크아웃 사진 2장 필수
-• helperVerifyRequested=true 이고 예약 시 미선택이면
-helperVerifyFee 재계산 후 정산 반영
+• 카 마스터 검수 여부와 비용은 예약 시 확정된 reservation 값을 사용
+• 체크아웃 요청으로 카 마스터 검수를 새로 추가할 수 없음
 • basePrice / extraFee / helperVerifyFee / totalSettlement를 서버에서 확정
 • checkouts insert
 • reservations.status → COMPLETED

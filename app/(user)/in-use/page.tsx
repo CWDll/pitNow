@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CircleAlert, Clock3, ShieldCheck } from "lucide-react";
 
 import {
   calculateOverduePreviewAt,
@@ -158,7 +159,9 @@ function InUsePageContent() {
 
         if (!response.ok || isCancelled) {
           if (!isCancelled) {
-            setStartError("이용 시작 처리에 실패했습니다.");
+            setStartError(
+              extractApiErrorMessage(data, "이용 시작 처리에 실패했습니다."),
+            );
           }
           return;
         }
@@ -358,22 +361,7 @@ function InUsePageContent() {
         {detail.garageName} · {detail.bayLabel}
       </p>
 
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          className="rounded-2xl bg-blue-50 py-6 text-2xl font-semibold text-blue-600"
-        >
-          1시간 연장
-        </button>
-        <button
-          type="button"
-          className="rounded-2xl bg-rose-50 py-6 text-2xl font-semibold text-rose-500"
-        >
-          SOS
-        </button>
-      </div>
-
-      <div className="mt-6 rounded-2xl bg-zinc-100 p-4 text-left">
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm">
         <p className="text-xl font-semibold text-zinc-900">{detail.workTitle}</p>
         <p className="mt-1 text-sm text-zinc-500">
           {detail.carLabel} · {detail.status}
@@ -389,19 +377,25 @@ function InUsePageContent() {
         </p>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700"
-        >
-          매장 연락
-        </button>
-        <button
-          type="button"
-          className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700"
-        >
-          안내/규정
-        </button>
+      <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left">
+        <div className="flex items-center gap-2 text-blue-900">
+          <ShieldCheck className="size-5" />
+          <h2 className="text-base font-black">이용 안내 및 규정</h2>
+        </div>
+        <ul className="mt-3 space-y-2 text-sm font-semibold leading-6 text-blue-900/80">
+          <li className="flex gap-2">
+            <Clock3 className="mt-1 size-4 shrink-0 text-blue-600" />
+            예약 연장은 지원하지 않습니다. 예약 종료 시각까지 작업과 정리를 마쳐 주세요.
+          </li>
+          <li className="flex gap-2">
+            <CircleAlert className="mt-1 size-4 shrink-0 text-blue-600" />
+            종료 후 체크리스트와 사진 2장을 제출해야 체크아웃할 수 있습니다.
+          </li>
+          <li className="flex gap-2">
+            <CircleAlert className="mt-1 size-4 shrink-0 text-blue-600" />
+            종료 시각 이후에는 1시간 단위 추가요금이 발생합니다. 베이 운영 버퍼는 연장 시간이 아닙니다.
+          </li>
+        </ul>
       </div>
 
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">

@@ -8,6 +8,7 @@ import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
 import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
+import { FlowHeader } from "../_components/mobile-ui";
 
 interface CheckoutApiError {
   error?: string | { message?: string };
@@ -49,6 +50,8 @@ interface ReservationDetail {
   dateLabel: string;
   status: ReservationStatus;
   totalPrice: number;
+  helperVerifyRequested: boolean;
+  helperVerifyFee: number;
   workTitle: string;
   taskIds: string;
   taskLabels: string;
@@ -87,6 +90,8 @@ function CheckoutPageContent() {
     dateLabel: searchParams.get("dateLabel") ?? "",
     status: "IN_USE",
     totalPrice: Number(searchParams.get("totalPrice") ?? "15000"),
+    helperVerifyRequested: searchParams.get("helperVerifyRequested") === "true",
+    helperVerifyFee: Number(searchParams.get("helperVerifyFee") ?? "0"),
     workTitle: fallbackWorkTitle,
     taskIds: searchParams.get("taskIds") ?? "",
     taskLabels: searchParams.get("taskLabels") ?? fallbackWorkTitle,
@@ -96,9 +101,6 @@ function CheckoutPageContent() {
   const [checks, setChecks] = useState<boolean[]>([false, false, false]);
   const [photo1, setPhoto1] = useState<File | null>(null);
   const [photo2, setPhoto2] = useState<File | null>(null);
-  const [helperVerifyRequested, setHelperVerifyRequested] =
-    useState<boolean>(false);
-
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isDetailLoading, setIsDetailLoading] = useState<boolean>(
     Boolean(reservationId),
@@ -164,6 +166,11 @@ function CheckoutPageContent() {
   }, [previewFee]);
 
   const totalPrice = Number.isFinite(detail.totalPrice) ? detail.totalPrice : 0;
+  const helperVerifyFee = Number.isFinite(detail.helperVerifyFee)
+    ? Math.max(0, detail.helperVerifyFee)
+    : 0;
+  const reservationBasePrice = Math.max(0, totalPrice - helperVerifyFee);
+  const additionalPaymentPreview = Math.max(0, additionalFee);
   const canCheckoutStatus =
     detail.status === "CHECKED_IN" || detail.status === "IN_USE";
   const canSubmitBase =
@@ -216,7 +223,6 @@ function CheckoutPageContent() {
           toolCheckCompleted: checks[0],
           cleaningCompleted: checks[1],
           wasteDisposalCompleted: checks[2],
-          helperVerifyRequested,
           checkoutPhoto1,
           checkoutPhoto2,
         }),
@@ -321,17 +327,7 @@ function CheckoutPageContent() {
 
   return (
     <section className="pb-24">
-      <header className="mb-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-2xl text-zinc-700"
-          aria-label="뒤로가기"
-        >
-          ←
-        </button>
-        <h1 className="text-3xl font-semibold text-zinc-900">체크아웃</h1>
-      </header>
+      <FlowHeader title="체크아웃" onBack={() => router.back()} />
 
       <div className="mb-5 rounded-3xl bg-zinc-100 p-4 text-base text-zinc-700">
         <h2 className="mb-3 text-xl font-semibold text-zinc-900">예약 정보</h2>
@@ -423,43 +419,33 @@ function CheckoutPageContent() {
         </div>
       </div>
 
-      <div className="mt-5 rounded-2xl bg-zinc-100 p-4 text-base text-zinc-700">
-        <h3 className="mb-2 text-xl font-semibold text-zinc-900">
-          추가요금 / 패널티
-        </h3>
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-base text-slate-700 shadow-sm">
+        <h3 className="mb-3 text-xl font-black text-slate-950">정산 내역</h3>
         <p className="flex justify-between">
+          <span>예약 기본요금</span>
+          <span>{reservationBasePrice.toLocaleString("ko-KR")}원</span>
+        </p>
+        <p className="mt-2 flex justify-between">
+          <span>카 마스터 검수비</span>
+          <span>{helperVerifyFee.toLocaleString("ko-KR")}원</span>
+        </p>
+        <p className="mt-2 flex justify-between">
           <span>초과 이용 시간</span>
           <span>{overdueMinutes}분</span>
         </p>
-        <p className="mt-2 flex justify-between text-red-500">
-          <span>추가 요금</span>
+        <p className="mt-2 flex justify-between text-red-600">
+          <span>추가요금</span>
           <span>{additionalFee.toLocaleString("ko-KR")}원</span>
         </p>
-        <label className="mt-3 flex items-start gap-3 rounded-xl bg-white px-3 py-3 text-zinc-800">
-          <input
-            type="checkbox"
-            className="mt-1 h-5 w-5"
-            checked={helperVerifyRequested}
-            onChange={() => setHelperVerifyRequested((prev) => !prev)}
-          />
-          <span>
-            카 마스터 검수 요청
-            <br />
-            <span className="text-sm text-zinc-500">
-              서버에서 선택 작업 기준으로 검수비를 확정합니다.
-            </span>
-          </span>
-        </label>
-        <div className="my-3 border-t border-zinc-300" />
-        <p className="flex justify-between text-xl font-semibold text-zinc-900">
-          <span>총 정산 예상</span>
-          <span className="text-red-500">
-            {(totalPrice + additionalFee).toLocaleString("ko-KR")}원
+        <div className="my-3 border-t border-slate-200" />
+        <p className="flex justify-between text-xl font-black text-slate-950">
+          <span>추가 결제비용</span>
+          <span className="text-red-600">
+            {additionalPaymentPreview.toLocaleString("ko-KR")}원
           </span>
         </p>
-        <p className="mt-2 text-sm text-zinc-500">
-          추가 정산이 있으면 사진 제출 후 결제를 먼저 완료해야 이용 완료로
-          이동합니다.
+        <p className="mt-3 text-sm font-medium leading-6 text-slate-500">
+          예약 기본요금과 검수비는 예약할 때 결제되었습니다. 예약 종료 이후 초과 이용분만 추가 결제됩니다.
         </p>
       </div>
 

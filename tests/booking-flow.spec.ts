@@ -297,6 +297,56 @@ test.describe("booking flow smoke", () => {
       expect(payment.status).toBe("RESERVATION_CONFIRMED");
       expect(Number(payment.amount)).toBe(Number(reservation.total_price));
 
+      const earlyCheckinResult = await page.evaluate(async (reservationId) => {
+        const authStorageKey = Object.keys(localStorage).find((key) =>
+          key.endsWith("-auth-token"),
+        );
+        const storedSession = authStorageKey
+          ? (JSON.parse(localStorage.getItem(authStorageKey) ?? "{}") as {
+              access_token?: string;
+            })
+          : null;
+        const response = await fetch("/api/checkin", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(storedSession?.access_token
+              ? { Authorization: `Bearer ${storedSession.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            reservationId,
+            frontImg: "https://example.com/front.jpg",
+            rearImg: "https://example.com/rear.jpg",
+            leftImg: "https://example.com/left.jpg",
+            rightImg: "https://example.com/right.jpg",
+          }),
+        });
+
+        return { status: response.status, payload: await response.json() };
+      }, e2eReservationId);
+      expect(earlyCheckinResult.status).toBe(409);
+      expect(earlyCheckinResult.payload).toMatchObject({
+        error: { code: "CHECKIN_NOT_OPEN" },
+      });
+
+      const checkinStart = new Date(Date.now() + 10 * 60 * 1000);
+      const checkinEnd = new Date(checkinStart.getTime() + 60 * 60 * 1000);
+      const checkinBlockedUntil = new Date(checkinEnd.getTime() + 60 * 60 * 1000);
+      const { error: checkinWindowUpdateError } = await db
+        .from("reservations")
+        .update({
+          start_time: checkinStart.toISOString(),
+          end_time: checkinEnd.toISOString(),
+          reserved_end_time: checkinEnd.toISOString(),
+          blocked_until: checkinBlockedUntil.toISOString(),
+        })
+        .eq("id", e2eReservationId);
+
+      if (checkinWindowUpdateError) {
+        throw checkinWindowUpdateError;
+      }
+
       const checkinButton = page.getByRole("button", { name: "체크인 하러 가기" });
       await expect(checkinButton).toBeVisible();
       await Promise.all([
@@ -392,6 +442,37 @@ test.describe("booking flow smoke", () => {
         "IN_USE",
       ]);
 
+      await page.goto("/guide");
+      const activeReservationLink = page.getByRole("link", {
+        name: /이용 중인 예약으로 가기/,
+      });
+      await expect(activeReservationLink).toBeVisible();
+      await Promise.all([
+        page.waitForURL(/\/in-use\?reservationId=/),
+        activeReservationLink.click(),
+      ]);
+      await expect(page.getByText("이용 중")).toBeVisible();
+
+      const overdueEnd = new Date(Date.now() - 10 * 60 * 1000);
+      const overdueStart = new Date(overdueEnd.getTime() - 60 * 60 * 1000);
+      const overdueBlockedUntil = new Date(overdueEnd.getTime() + 60 * 60 * 1000);
+      const { error: overdueWindowUpdateError } = await db
+        .from("reservations")
+        .update({
+          start_time: overdueStart.toISOString(),
+          end_time: overdueEnd.toISOString(),
+          reserved_end_time: overdueEnd.toISOString(),
+          blocked_until: overdueBlockedUntil.toISOString(),
+        })
+        .eq("id", e2eReservationId);
+
+      if (overdueWindowUpdateError) {
+        throw overdueWindowUpdateError;
+      }
+
+      await page.reload();
+      await expect(page.getByText("이용 중")).toBeVisible();
+
       const endWorkButton = page.getByRole("button", { name: "작업 종료" });
       await expect(endWorkButton).toBeVisible();
       await Promise.all([
@@ -415,7 +496,8 @@ test.describe("booking flow smoke", () => {
 
       await expect(page.getByText("사진1 완료")).toBeVisible();
       await expect(page.getByText("사진2 완료")).toBeVisible();
-      await page.getByLabel(/카 마스터 검수 요청/).check();
+      await expect(page.getByText("카 마스터 검수비")).toBeVisible();
+      await expect(page.getByText("추가 결제비용")).toBeVisible();
 
       const checkoutButton = page.getByRole("button", {
         name: "체크아웃 및 정산하기",
@@ -481,6 +563,10 @@ test.describe("booking flow smoke", () => {
       await expect(page.getByText(e2eReservationId)).toBeVisible();
       await expect(page.getByText("정산 내역")).toBeVisible();
       await expect(page.getByText("총 결제")).toBeVisible();
+      await expect(page.getByRole("link", { name: "다시 예약" })).toHaveAttribute(
+        "href",
+        `/partner/${seed.partnerId}`,
+      );
 
       const { data: completedReservation, error: completedReservationError } =
         await db
@@ -526,8 +612,9 @@ test.describe("booking flow smoke", () => {
       expect(checkout.waste_disposal_completed).toBe(true);
       expect(checkout.checkout_photo_1).toContain("/reservation-photos/");
       expect(checkout.checkout_photo_2).toContain("/reservation-photos/");
-      expect(checkout.helper_verify_requested).toBe(true);
-      expect(Number(checkout.helper_verify_fee)).toBeGreaterThan(0);
+      expect(checkout.helper_verify_requested).toBe(false);
+      expect(Number(checkout.helper_verify_fee)).toBe(0);
+      expect(Number(checkout.extra_fee)).toBeGreaterThan(0);
       expect(Number(checkout.total_settlement)).toBeGreaterThan(
         Number(reservation.total_price),
       );

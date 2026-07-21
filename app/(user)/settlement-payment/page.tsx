@@ -10,6 +10,7 @@ import type {
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
+import { FlowHeader } from "../_components/mobile-ui";
 
 const defaultPaymentMethod: PaymentMethod = "CARD";
 
@@ -190,6 +191,9 @@ function SettlementPaymentContent() {
 
   const paidReservationAmount = checkout?.paidReservationAmount ?? 0;
   const totalSettlement = checkout?.totalSettlement ?? 0;
+  const reservationBasePrice = checkout?.basePrice ?? 0;
+  const helperVerifyFee = checkout?.helperVerifyFee ?? 0;
+  const extraFee = checkout?.extraFee ?? 0;
   const amountDue =
     checkout?.settlementAmountDue ?? Math.max(0, totalSettlement - paidReservationAmount);
   const isAlreadyPaid =
@@ -430,17 +434,7 @@ function SettlementPaymentContent() {
 
   return (
     <section className="pb-24">
-      <header className="mb-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-2xl text-zinc-700"
-          aria-label="뒤로가기"
-        >
-          ←
-        </button>
-        <h1 className="text-3xl font-semibold text-zinc-900">추가 정산</h1>
-      </header>
+      <FlowHeader title="추가 정산" onBack={() => router.back()} />
 
       <div className="rounded-3xl bg-zinc-100 p-4">
         <h2 className="mb-3 text-xl font-semibold">정산 요약</h2>
@@ -464,15 +458,23 @@ function SettlementPaymentContent() {
         </div>
         <div className="my-3 border-t border-zinc-300" />
         <p className="flex justify-between text-base text-zinc-700">
-          <span>예약 시 결제</span>
-          <span>{paidReservationAmount.toLocaleString("ko-KR")}원</span>
+          <span>예약 기본요금</span>
+          <span>{reservationBasePrice.toLocaleString("ko-KR")}원</span>
         </p>
         <p className="mt-2 flex justify-between text-base text-zinc-700">
-          <span>총 정산</span>
-          <span>{totalSettlement.toLocaleString("ko-KR")}원</span>
+          <span>카 마스터 검수비</span>
+          <span>{helperVerifyFee.toLocaleString("ko-KR")}원</span>
+        </p>
+        <p className="mt-2 flex justify-between text-base text-zinc-700">
+          <span>추가요금</span>
+          <span>{extraFee.toLocaleString("ko-KR")}원</span>
+        </p>
+        <p className="mt-2 flex justify-between text-sm font-semibold text-zinc-500">
+          <span>예약 시 결제 완료</span>
+          <span>{paidReservationAmount.toLocaleString("ko-KR")}원</span>
         </p>
         <p className="mt-3 flex justify-between text-2xl font-semibold">
-          <span>추가 결제</span>
+          <span>추가 결제비용</span>
           <span className={isAlreadyPaid ? "text-emerald-600" : "text-red-500"}>
             {amountDue.toLocaleString("ko-KR")}원
           </span>

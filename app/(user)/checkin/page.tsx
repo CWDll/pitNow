@@ -8,6 +8,12 @@ import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
 import { uploadReservationPhoto } from "@/src/lib/reservation-photo-storage";
+import {
+  CHECKIN_EARLY_MINUTES,
+  getCheckinOpensAt,
+  getCheckinWindowState,
+} from "@/src/lib/checkin-window";
+import { FlowHeader } from "../_components/mobile-ui";
 
 type PhotoField = "frontImg" | "rearImg" | "leftImg" | "rightImg";
 
@@ -115,9 +121,16 @@ function CheckinPageContent() {
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isDetailLoading, setIsDetailLoading] = useState<boolean>(Boolean(reservationId));
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const missingReservationId = reservationId.length === 0;
   const canCheckInStatus = detail.status === "CONFIRMED";
+  const checkinWindowState = getCheckinWindowState({
+    startTime: detail.startTime,
+    endTime: detail.endTime,
+    nowMs,
+  });
+  const canCheckInNow = checkinWindowState === "OPEN";
 
   const allPhotosSelected =
     frontImgFile !== null &&
@@ -130,7 +143,13 @@ function CheckinPageContent() {
     allPhotosSelected &&
     !missingReservationId &&
     !isDetailLoading &&
-    canCheckInStatus;
+    canCheckInStatus &&
+    canCheckInNow;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const tiles: Array<{ field: PhotoField; file: File | null }> = useMemo(
     () => [
@@ -203,7 +222,11 @@ function CheckinPageContent() {
       !leftImgFile ||
       !rightImgFile
     ) {
-      setError("QR 스캔과 차량 사진 4장을 모두 완료해 주세요.");
+      setError(
+        canCheckInNow
+          ? "QR 스캔과 차량 사진 4장을 모두 완료해 주세요."
+          : `체크인은 예약 시작 ${CHECKIN_EARLY_MINUTES}분 전부터 가능합니다.`,
+      );
       return;
     }
 
@@ -296,17 +319,7 @@ function CheckinPageContent() {
 
   return (
     <section className="pb-24">
-      <header className="mb-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-2xl text-zinc-700"
-          aria-label="뒤로가기"
-        >
-          ←
-        </button>
-        <h1 className="text-3xl font-semibold text-zinc-900">체크인</h1>
-      </header>
+      <FlowHeader title="체크인" onBack={() => router.back()} />
 
       {missingReservationId ? (
         <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -344,6 +357,25 @@ function CheckinPageContent() {
       {!canCheckInStatus ? (
         <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
           현재 {detail.status} 상태라 체크인을 새로 진행할 수 없습니다.
+        </p>
+      ) : null}
+      {canCheckInStatus && !isDetailLoading && checkinWindowState === "NOT_OPEN" ? (
+        <p className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-sm font-semibold leading-6 text-blue-800">
+          체크인은 예약 시작 {CHECKIN_EARLY_MINUTES}분 전부터 가능합니다.
+          {getCheckinOpensAt(detail.startTime) ? (
+            <span className="block text-blue-600">
+              입장 가능 시각: {new Intl.DateTimeFormat("ko-KR", {
+                timeZone: "Asia/Seoul",
+                hour: "2-digit",
+                minute: "2-digit",
+              }).format(new Date(getCheckinOpensAt(detail.startTime)!))}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
+      {canCheckInStatus && !isDetailLoading && checkinWindowState === "CLOSED" ? (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-800">
+          예약 종료 시각이 지나 체크인할 수 없습니다. 정비소에 문의해 주세요.
         </p>
       ) : null}
 

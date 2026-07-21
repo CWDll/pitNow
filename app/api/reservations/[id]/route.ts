@@ -29,11 +29,15 @@ interface ReservationRow {
   status: ReservationStatus;
   total_price: number | string;
   selected_task_count: number;
+  helper_verify_requested: boolean;
+  helper_verify_fee: number | string;
 }
 
 interface PartnerRow {
   id: string;
   name: string;
+  address: string;
+  phone: string | null;
 }
 
 interface BayRow {
@@ -128,7 +132,7 @@ export async function GET(req: Request, context: Context) {
   const { data: reservation, error: reservationError } = await db
     .from("reservations")
     .select(
-      "id,user_id,partner_id,bay_id,vehicle_id,reservation_type,package_id,start_time,end_time,reserved_end_time,status,total_price,selected_task_count",
+      "id,user_id,partner_id,bay_id,vehicle_id,reservation_type,package_id,start_time,end_time,reserved_end_time,status,total_price,selected_task_count,helper_verify_requested,helper_verify_fee",
     )
     .eq("id", reservationId)
     .eq("user_id", authResult.auth.userId)
@@ -150,7 +154,7 @@ export async function GET(req: Request, context: Context) {
   const [partnerResult, bayResult, vehicleResult] = await Promise.all([
     db
       .from("partners")
-      .select("id,name")
+      .select("id,name,address,phone")
       .eq("id", reservation.partner_id)
       .maybeSingle<PartnerRow>(),
     reservation.bay_id
@@ -281,6 +285,8 @@ export async function GET(req: Request, context: Context) {
         reservation.reservation_type === "SHOP_SERVICE" ? "PACKAGE" : "SELF",
       partnerId: reservation.partner_id,
       garageName: partner?.name ?? "정비소",
+      garageAddress: partner?.address ?? "",
+      garagePhone: partner?.phone ?? "",
       bayId: reservation.bay_id ?? "",
       bayLabel: bay?.name ?? "-",
       carId: reservation.vehicle_id ?? "",
@@ -295,6 +301,8 @@ export async function GET(req: Request, context: Context) {
       ),
       status: reservation.status,
       totalPrice: toNumber(reservation.total_price),
+      helperVerifyRequested: reservation.helper_verify_requested,
+      helperVerifyFee: toNumber(reservation.helper_verify_fee),
       workTitle,
       taskIds: taskIds.join(","),
       taskLabels: taskLabels || workTitle,

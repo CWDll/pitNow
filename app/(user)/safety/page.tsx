@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useRef, useState } from "react";
+import { FlowHeader } from "../_components/mobile-ui";
 
 const safetyChecklist = [
   "리프트와 장비 사용 전 주의사항을 숙지합니다.",
@@ -132,17 +133,7 @@ function SafetyPageContent() {
 
   return (
     <section className="pb-24">
-      <header className="mb-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-2xl text-zinc-700"
-          aria-label="뒤로가기"
-        >
-          ←
-        </button>
-        <h1 className="text-3xl font-semibold text-zinc-900">안전 동의</h1>
-      </header>
+      <FlowHeader title="안전 동의" onBack={() => router.back()} />
 
       <div className="mb-5">
         <h2 className="mb-2 text-xl font-semibold text-zinc-900">

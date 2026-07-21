@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import { Check, Copy, Phone } from "lucide-react";
 
 import type { ReservationType } from "@/src/domain/types";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
@@ -17,6 +18,8 @@ interface ReservationDetail {
   bookingMode: "SELF" | "PACKAGE";
   partnerId: string;
   garageName: string;
+  garageAddress: string;
+  garagePhone: string;
   bayId: string;
   bayLabel: string;
   carId: string;
@@ -54,6 +57,8 @@ function ReservationCompletePageContent() {
       bookingMode,
       partnerId: searchParams.get("partnerId") ?? "",
       garageName: searchParams.get("garageName") ?? "강남 셀프정비소",
+      garageAddress: searchParams.get("garageAddress") ?? "",
+      garagePhone: searchParams.get("garagePhone") ?? "",
       bayId: "",
       bayLabel: searchParams.get("bayLabel") ?? "3번 베이",
       carId: searchParams.get("carId") ?? "",
@@ -71,6 +76,7 @@ function ReservationCompletePageContent() {
     };
   });
   const [error, setError] = useState<string>("");
+  const [contactMessage, setContactMessage] = useState("");
 
   useEffect(() => {
     let isCancelled = false;
@@ -140,6 +146,31 @@ function ReservationCompletePageContent() {
     [detail],
   );
 
+  async function copyText(value: string, successMessage: string) {
+    if (!value) {
+      setContactMessage("등록된 정보가 없습니다.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      setContactMessage(successMessage);
+    } catch {
+      setContactMessage(value);
+    }
+  }
+
+  function handlePhone() {
+    const phone = detail.garagePhone.trim();
+
+    if (!phone) {
+      setContactMessage("등록된 전화번호가 없습니다.");
+      return;
+    }
+
+    window.location.href = `tel:${phone.replace(/[^\d+]/g, "")}`;
+  }
+
   return (
     <section className="pb-24 pt-6">
       <div className="mb-4 text-center">
@@ -194,17 +225,34 @@ function ReservationCompletePageContent() {
       <div className="mt-4 grid grid-cols-2 gap-3">
         <button
           type="button"
+          onClick={() =>
+            void copyText(detail.garageAddress, "정비소 주소를 복사했습니다.")
+          }
           className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700"
         >
-          길찾기
+          <span className="flex items-center justify-center gap-2">
+            <Copy className="size-5" />
+            주소 복사
+          </span>
         </button>
         <button
           type="button"
+          onClick={handlePhone}
           className="rounded-2xl bg-zinc-100 py-3 text-lg font-medium text-zinc-700"
         >
-          전화하기
+          <span className="flex items-center justify-center gap-2">
+            <Phone className="size-5" />
+            전화하기
+          </span>
         </button>
       </div>
+
+      {contactMessage ? (
+        <p className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+          <Check className="size-4" />
+          {contactMessage}
+        </p>
+      ) : null}
 
       <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-zinc-700">
         <p className="font-semibold text-blue-600">준비물 / 주의사항</p>

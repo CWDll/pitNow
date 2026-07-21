@@ -5,6 +5,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireRequestUser } from "@/src/lib/auth";
 import { getSupabaseEnvErrorResponse, hasSupabaseEnv } from "@/src/lib/supabase";
 import { transitionReservationStatus } from "@/src/lib/reservation-status";
+import {
+  CHECKIN_EARLY_MINUTES,
+  getCheckinWindowState,
+} from "@/src/lib/checkin-window";
 
 type ReservationStatus =
   | "CONFIRMED"
@@ -24,6 +28,8 @@ interface CheckinRequestBody {
 interface ReservationRow {
   id: string;
   status: ReservationStatus;
+  start_time: string;
+  end_time: string;
 }
 
 interface CheckinRow {
@@ -144,7 +150,7 @@ export async function POST(req: Request) {
 
   const { data: reservation, error: reservationError } = await db
     .from("reservations")
-    .select("id, status")
+    .select("id, status, start_time, end_time")
     .eq("id", reservationId)
     .eq("user_id", auth.userId)
     .maybeSingle<ReservationRow>();
@@ -163,6 +169,35 @@ export async function POST(req: Request) {
       400,
       "INVALID_RESERVATION_STATUS",
       "CONFIRMED 상태의 예약만 체크인할 수 있습니다.",
+    );
+  }
+
+  const checkinWindowState = getCheckinWindowState({
+    startTime: reservation.start_time,
+    endTime: reservation.end_time,
+  });
+
+  if (checkinWindowState === "NOT_OPEN") {
+    return errorResponse(
+      409,
+      "CHECKIN_NOT_OPEN",
+      `체크인은 예약 시작 ${CHECKIN_EARLY_MINUTES}분 전부터 가능합니다.`,
+    );
+  }
+
+  if (checkinWindowState === "CLOSED") {
+    return errorResponse(
+      409,
+      "CHECKIN_WINDOW_CLOSED",
+      "예약 종료 시각이 지나 체크인할 수 없습니다. 정비소에 문의해 주세요.",
+    );
+  }
+
+  if (checkinWindowState === "INVALID") {
+    return errorResponse(
+      500,
+      "INVALID_RESERVATION_TIME",
+      "예약 시간 정보가 올바르지 않습니다.",
     );
   }
 

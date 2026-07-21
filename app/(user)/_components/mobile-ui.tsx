@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ArrowLeft } from "lucide-react";
 
 interface ScreenProps {
   title: string;
@@ -28,6 +29,11 @@ interface StatePanelProps {
   tone?: "default" | "danger";
 }
 
+interface FlowHeaderProps {
+  title: string;
+  onBack: () => void;
+}
+
 function cx(...classes: Array<string | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }
@@ -41,6 +47,22 @@ export function Screen({ title, subtitle, children }: ScreenProps) {
       </header>
       {children}
     </section>
+  );
+}
+
+export function FlowHeader({ title, onBack }: FlowHeaderProps) {
+  return (
+    <header className="mb-5 flex min-h-11 items-center gap-3 pt-6">
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label="뒤로가기"
+        className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm"
+      >
+        <ArrowLeft className="size-5" />
+      </button>
+      <h1 className="text-2xl font-black text-slate-950">{title}</h1>
+    </header>
   );
 }
 

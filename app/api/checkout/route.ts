@@ -16,7 +16,6 @@ type ReservationStatus =
   | "CANCELLED";
 
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
-const HELPER_VERIFY_BASE_FEE = 5000;
 
 interface CheckoutRequestBody {
   reservationId: string;
@@ -43,16 +42,6 @@ interface ReservationRow {
 
 interface CheckoutRow {
   id: string;
-}
-
-interface ReservationTaskFeeRow {
-  self_maintenance_tasks:
-    | {
-        helper_verify_unit_fee: number | string;
-      }
-    | Array<{
-        helper_verify_unit_fee: number | string;
-      }>;
 }
 
 interface ApiErrorBody {
@@ -192,21 +181,6 @@ function normalizeReservationType(
   return "SELF_SERVICE";
 }
 
-function normalizeTaskFee(
-  value: ReservationTaskFeeRow["self_maintenance_tasks"],
-): number {
-  const task = Array.isArray(value) ? value[0] : value;
-  const rawFee = task?.helper_verify_unit_fee;
-  const fee =
-    typeof rawFee === "number" ? rawFee : Number.parseFloat(String(rawFee));
-
-  if (!Number.isFinite(fee) || fee < 0) {
-    return 0;
-  }
-
-  return fee;
-}
-
 function calculateExtraFee(params: {
   now: Date;
   startTime: Date;
@@ -257,54 +231,6 @@ async function rollbackCheckoutInsert(
   if (error) {
     console.error("CHECKOUT ROLLBACK ERROR:", error);
   }
-}
-
-async function calculateCheckoutHelperVerifyFee(params: {
-  db: SupabaseClient;
-  reservationId: string;
-  reservationType: ReservationType;
-  alreadyRequested: boolean;
-  alreadyChargedFee: number;
-  requestedAtCheckout: boolean;
-}): Promise<number | null> {
-  const {
-    db,
-    reservationId,
-    reservationType,
-    alreadyRequested,
-    alreadyChargedFee,
-    requestedAtCheckout,
-  } = params;
-
-  if (reservationType !== "SELF_SERVICE") {
-    return 0;
-  }
-
-  if (alreadyRequested) {
-    return alreadyChargedFee;
-  }
-
-  if (!requestedAtCheckout) {
-    return 0;
-  }
-
-  const { data, error } = await db
-    .from("reservation_tasks")
-    .select("self_maintenance_tasks!inner(helper_verify_unit_fee)")
-    .eq("reservation_id", reservationId)
-    .returns<ReservationTaskFeeRow[]>();
-
-  if (error) {
-    console.error("HELPER VERIFY TASK FEE LOOKUP ERROR:", error);
-    return null;
-  }
-
-  const taskFees = (data ?? []).reduce(
-    (sum, row) => sum + normalizeTaskFee(row.self_maintenance_tasks),
-    0,
-  );
-
-  return HELPER_VERIFY_BASE_FEE + taskFees;
 }
 
 export async function POST(req: Request) {
@@ -443,27 +369,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const helperVerifyFee = await calculateCheckoutHelperVerifyFee({
-    db,
-    reservationId,
-    reservationType,
-    alreadyRequested: Boolean(reservation.helper_verify_requested),
-    alreadyChargedFee: alreadyHelperVerifyFee,
-    requestedAtCheckout: Boolean(body.helperVerifyRequested),
-  });
-
-  if (helperVerifyFee === null) {
-    return errorResponse(
-      500,
-      "HELPER_VERIFY_FEE_ERROR",
-      "카 마스터 검수 비용 계산 중 오류가 발생했습니다.",
-    );
-  }
-
   const helperVerifyRequested =
     reservationType === "SELF_SERVICE" &&
-    (Boolean(reservation.helper_verify_requested) ||
-      Boolean(body.helperVerifyRequested));
+    Boolean(reservation.helper_verify_requested);
+  const helperVerifyFee = helperVerifyRequested ? alreadyHelperVerifyFee : 0;
   const totalSettlement = Number(
     (basePrice + extraFee + helperVerifyFee).toFixed(2),
   );

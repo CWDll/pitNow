@@ -82,10 +82,9 @@ Package mode 유지, Self 정비 플로우만 변경.
 #### Self Service
 
 - Remaining time display
-- Extend time
-- SOS button
 - 15-minute warning
-- Extension unit is 1 hour
+- Reservation extension is not supported in MVP
+- Show checkout evidence and overtime rules in the in-use screen
 
 ### Checkout
 
@@ -94,7 +93,7 @@ Package mode 유지, Self 정비 플로우만 변경.
 - Waste check
 - Checkout photo
 - Auto extra fee calculation
-- Optional helper verification request (default +5,000 + per-task additional fee)
+- Apply helper verification only when selected and prepaid during reservation (default +5,000 + per-task additional fee)
 
 ### Store Admin
 

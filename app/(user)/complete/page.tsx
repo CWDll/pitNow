@@ -552,7 +552,11 @@ function CompletePageContent() {
           영수증
         </Link>
         <Link
-          href="/"
+          href={
+            detail.partnerId
+              ? `/partner/${encodeURIComponent(detail.partnerId)}`
+              : "/"
+          }
           className="rounded-2xl bg-blue-600 py-3 text-center text-lg font-semibold text-white"
         >
           다시 예약

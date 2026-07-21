@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import {
   CalendarCheck2,
@@ -5,8 +6,12 @@ import {
   ChevronRight,
   CircleCheckBig,
   Clock3,
+  ClipboardCheck,
+  CircleDollarSign,
   MapPinCheck,
+  ShieldCheck,
   Sparkles,
+  UserRoundCheck,
 } from "lucide-react";
 
 import { Card, Screen } from "../_components/mobile-ui";
@@ -33,8 +38,6 @@ const steps = [
     icon: CircleCheckBig,
   },
 ];
-
-const photoDirections = ["전면", "후면", "좌측", "우측"];
 
 export default function GuidePage() {
   return (
@@ -93,26 +96,64 @@ export default function GuidePage() {
             타이머 시작 전 차량 상태를 네 방향에서 기록합니다.
           </p>
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          {photoDirections.map((direction) => (
-            <div
-              key={direction}
-              className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
-            >
-              <Camera className="size-5 text-blue-600" />
-              <span className="text-xs font-bold">{direction}</span>
-            </div>
-          ))}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <Image
+            src="/images/checkin-photo-guide.jpg"
+            alt="같은 차량을 전면, 후면, 좌측, 우측에서 촬영한 체크인 사진 예시"
+            width={900}
+            height={900}
+            className="aspect-square w-full object-cover"
+            priority
+          />
+          <div className="grid grid-cols-4 border-t border-slate-200 bg-white px-2 py-3 text-center text-xs font-black text-slate-700">
+            <span>전면</span>
+            <span>후면</span>
+            <span>좌측</span>
+            <span>우측</span>
+          </div>
         </div>
+        <p className="mt-2 flex items-start gap-2 text-xs font-semibold leading-5 text-slate-500">
+          <Camera className="mt-0.5 size-4 shrink-0 text-blue-600" />
+          차량 전체와 주변 바닥이 보이도록 한두 걸음 떨어져서 촬영해 주세요.
+        </p>
       </section>
+
+      <Card className="space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
+            <UserRoundCheck className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-black text-slate-900">카 마스터 검수</h2>
+            <p className="mt-1 text-sm font-medium leading-6 text-slate-600">
+              예약할 때 선택하면 작업 종료 후 정비소 카 마스터가 차량과 작업 상태를 최종 확인합니다.
+            </p>
+          </div>
+        </div>
+        <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-bold text-slate-700">
+          기본 5,000원 + 선택한 작업별 검수 가산 금액
+        </div>
+      </Card>
 
       <Card className="space-y-3">
         <div className="flex items-center gap-2">
           <CircleCheckBig className="size-5 text-emerald-600" />
-          <h2 className="text-base font-black text-slate-900">체크아웃 전 확인</h2>
+          <h2 className="text-base font-black text-slate-900">체크아웃 체크리스트</h2>
         </div>
-        <p className="text-sm font-medium leading-6 text-slate-600">
-          공구 반납, 베이 청소, 폐유·폐기물 처리를 마친 뒤 사진 2장을 제출해 주세요. 초과 이용이 있으면 추가 정산 후 완료됩니다.
+        <ul className="space-y-2 text-sm font-semibold text-slate-600">
+          <li className="flex gap-2"><ClipboardCheck className="size-4 shrink-0 text-emerald-600" />공구 반납, 베이 청소, 폐유·폐기물 처리 확인</li>
+          <li className="flex gap-2"><Camera className="size-4 shrink-0 text-emerald-600" />정리된 차량과 베이 사진 2장 제출</li>
+          <li className="flex gap-2"><ShieldCheck className="size-4 shrink-0 text-emerald-600" />예약 시 신청한 카 마스터 검수 결과 확인</li>
+        </ul>
+      </Card>
+
+      <Card className="space-y-3 border-amber-200 bg-amber-50">
+        <div className="flex items-center gap-2">
+          <CircleDollarSign className="size-5 text-amber-700" />
+          <h2 className="text-base font-black text-amber-950">추가요금과 패널티</h2>
+        </div>
+        <p className="text-sm font-medium leading-6 text-amber-900">
+          예약 종료 시각을 넘기면 예약 기본 시간요금을 기준으로 1시간 단위 추가요금이 발생합니다. 공구 미반납, 미청소, 폐유·폐기물 미처리 또는 증적 누락은 운영 확인 후 별도 패널티 대상이 될 수 있습니다.
         </p>
       </Card>
 
