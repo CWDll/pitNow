@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LoaderCircle, LocateFixed, MapPin } from "lucide-react";
 
 export interface PartnerMapItem {
   id: string;
@@ -450,32 +451,40 @@ export function PartnerMap({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div>
-          <p className="text-sm font-semibold text-zinc-950">내 주변 정비소</p>
-          <p className="mt-0.5 text-xs text-zinc-500">{locationMessage}</p>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+      <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
+            <MapPin className="size-4.5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-black text-slate-950">주변 정비소 지도</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-slate-500">
+              {locationMessage}
+            </p>
+          </div>
         </div>
         <button
           type="button"
           onClick={moveToCurrentLocation}
           disabled={status !== "ready"}
-          className="rounded-full bg-zinc-950 px-3 py-2 text-xs font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-500"
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-slate-950 px-3 text-xs font-bold text-white transition hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
         >
+          <LocateFixed className="size-3.5" />
           내 위치
         </button>
       </div>
 
-      <div className="relative h-52 bg-zinc-100">
+      <div className="relative h-52 bg-slate-100">
         {status === "fallback" ? (
-          <div className="absolute inset-0 overflow-hidden bg-[#eef3ea]">
+          <div className="absolute inset-0 overflow-hidden bg-[#eef4ef]">
             <div className="absolute left-[-10%] top-[24%] h-4 w-[120%] rotate-[-8deg] bg-white/80" />
             <div className="absolute left-[12%] top-[-10%] h-[120%] w-3 rotate-[24deg] bg-white/80" />
             <div className="absolute left-[60%] top-[-10%] h-[120%] w-4 rotate-[-18deg] bg-white/80" />
             <div className="absolute left-[-20%] top-[62%] h-5 w-[140%] rotate-[4deg] bg-white/80" />
-            <div className="absolute right-[-10%] top-[6%] h-28 w-24 rounded-full bg-blue-100/70" />
-            <div className="absolute bottom-[-18%] left-[-8%] h-28 w-32 rounded-full bg-emerald-100/80" />
-            <div className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-2 text-xs font-medium text-zinc-600 shadow-sm">
+            <div className="absolute right-[-10%] top-[6%] h-28 w-24 rounded-[40%] bg-blue-100/70" />
+            <div className="absolute bottom-[-18%] left-[-8%] h-28 w-32 rounded-[35%] bg-emerald-100/80" />
+            <div className="absolute left-4 top-4 max-w-[75%] rounded-lg bg-white/95 px-3 py-2 text-xs font-bold text-slate-600 shadow-sm">
               {mapFallbackReason}
             </div>
             {mapPartners.map((partner) => {
@@ -490,7 +499,7 @@ export function PartnerMap({
                   aria-label={`${partner.name} 상세 보기`}
                   onClick={() => onPartnerSelect?.(partner.id)}
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-lg ring-4 ring-white">
+                  <span className="flex size-9 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white shadow-lg ring-4 ring-white">
                     P
                   </span>
                 </button>
@@ -503,8 +512,9 @@ export function PartnerMap({
           className={`h-full w-full ${status === "fallback" ? "invisible" : ""}`}
         />
         {status === "loading" ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-100 text-sm text-zinc-500">
-            지도를 불러오는 중입니다.
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100 text-sm font-semibold text-slate-500">
+            <LoaderCircle className="size-5 animate-spin text-blue-600" />
+            주변 정비소를 불러오는 중입니다
           </div>
         ) : null}
       </div>

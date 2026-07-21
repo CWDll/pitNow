@@ -12,6 +12,14 @@ test.describe("mobile public smoke", () => {
     await expect(page.getByRole("link", { name: "예약하기" }).first()).toBeVisible();
     await expect(page.getByRole("navigation")).toContainText("예약");
 
+    const shopModeButton = page.getByRole("button", { name: "Shop 맡기기" });
+    await shopModeButton.click();
+    await expect(shopModeButton).toHaveAttribute("aria-pressed", "true");
+
+    await page.goto("/guide");
+    await expect(page.getByRole("heading", { name: "이용 가이드" })).toBeVisible();
+    await expect(page.getByText("체크인 사진 4장")).toBeVisible();
+
     await page.goto("/login");
     await expect(
       page.getByRole("heading", { name: "정비 루프를 이어가려면 로그인해 주세요" }),

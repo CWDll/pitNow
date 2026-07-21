@@ -2,10 +2,19 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  ChevronRight,
+  MapPinned,
+  Navigation,
+  ShieldCheck,
+  Star,
+  Wrench,
+} from "lucide-react";
 
 import { PartnerMap, type PartnerMapItem } from "./partner-map";
 
 type SortMode = "DEFAULT" | "DISTANCE" | "PRICE" | "RATING";
+type ServiceMode = "SELF" | "SHOP";
 
 export interface HomePartnerExplorerItem extends PartnerMapItem {
   bayCount: number;
@@ -123,14 +132,14 @@ function sortPartners(
 
 function sortButtonClass(active: boolean, disabled = false) {
   if (active) {
-    return "rounded-full bg-blue-600 px-4 py-2 font-semibold text-white";
+    return "h-9 shrink-0 rounded-lg bg-slate-950 px-3.5 font-bold text-white shadow-sm";
   }
 
   if (disabled) {
-    return "rounded-full border border-zinc-200 px-4 py-2 text-zinc-300";
+    return "h-9 shrink-0 rounded-lg border border-slate-200 bg-white px-3.5 font-bold text-slate-300";
   }
 
-  return "rounded-full border border-zinc-300 px-4 py-2 text-zinc-600";
+  return "h-9 shrink-0 rounded-lg border border-slate-200 bg-white px-3.5 font-bold text-slate-600";
 }
 
 export function HomePartnerExplorer({
@@ -138,6 +147,7 @@ export function HomePartnerExplorer({
   kakaoMapAppKey,
 }: HomePartnerExplorerProps) {
   const [sortMode, setSortMode] = useState<SortMode>("DEFAULT");
+  const [serviceMode, setServiceMode] = useState<ServiceMode>("SELF");
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<GeoPoint | null>(null);
   const [toastMessage, setToastMessage] = useState<string>("");
@@ -177,10 +187,56 @@ export function HomePartnerExplorer({
   return (
     <>
       {toastMessage ? (
-        <div className="fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-100 -translate-x-1/2 rounded-2xl bg-zinc-950 px-4 py-3 text-center text-sm font-semibold text-white shadow-lg">
+        <div className="fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-100 -translate-x-1/2 rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white shadow-xl">
           {toastMessage}
         </div>
       ) : null}
+
+      <section aria-labelledby="service-mode-title">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-blue-600">2-WAY SERVICE</p>
+            <h2 id="service-mode-title" className="mt-1 text-lg font-black text-slate-950">
+              원하는 정비 방식을 선택하세요
+            </h2>
+          </div>
+          <span className="shrink-0 text-xs font-semibold text-slate-400">예약 시 변경 가능</span>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            aria-pressed={serviceMode === "SELF"}
+            onClick={() => setServiceMode("SELF")}
+            className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition ${
+              serviceMode === "SELF"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <Wrench className="size-4" />
+            <span>
+              Self <span className="font-semibold opacity-80">직접 정비</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={serviceMode === "SHOP"}
+            onClick={() => setServiceMode("SHOP")}
+            className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition ${
+              serviceMode === "SHOP"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <ShieldCheck className="size-4" />
+            <span>
+              Shop <span className="font-semibold opacity-80">맡기기</span>
+            </span>
+          </button>
+        </div>
+        </div>
+      </section>
 
       <PartnerMap
         partners={partners}
@@ -190,29 +246,46 @@ export function HomePartnerExplorer({
         onUserLocationChange={handleUserLocationChange}
       />
 
-      <div className="flex gap-2 overflow-x-auto text-sm">
-        <button
-          type="button"
-          onClick={handleDistanceSortClick}
-          className={sortButtonClass(sortMode === "DISTANCE", !userLocation)}
-        >
-          거리
-        </button>
-        <button
-          type="button"
-          onClick={() => setSortMode("PRICE")}
-          className={sortButtonClass(sortMode === "PRICE")}
-        >
-          가격
-        </button>
-        <button
-          type="button"
-          onClick={() => setSortMode("RATING")}
-          className={sortButtonClass(sortMode === "RATING")}
-        >
-          평점
-        </button>
-      </div>
+      <section id="nearby-garages" className="scroll-mt-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-blue-600">NEARBY GARAGES</p>
+            <h2 className="mt-1 text-xl font-black text-slate-950">예약 가능한 정비소</h2>
+          </div>
+          <span className="shrink-0 text-xs font-bold text-slate-400">{partners.length}곳</span>
+        </div>
+
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setSortMode("DEFAULT")}
+            className={sortButtonClass(sortMode === "DEFAULT")}
+          >
+            추천
+          </button>
+          <button
+            type="button"
+            onClick={handleDistanceSortClick}
+            className={sortButtonClass(sortMode === "DISTANCE", !userLocation)}
+          >
+            거리
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortMode("PRICE")}
+            className={sortButtonClass(sortMode === "PRICE")}
+          >
+            가격
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortMode("RATING")}
+            className={sortButtonClass(sortMode === "RATING")}
+          >
+            평점
+          </button>
+        </div>
+      </section>
 
       <div className="space-y-3 pb-3">
         {sortedPartners.map((partner) => {
@@ -233,52 +306,82 @@ export function HomePartnerExplorer({
                   cardRefs.current.delete(partner.id);
                 }
               }}
-              className={`rounded-3xl border bg-white p-4 shadow-sm transition ${
+              className={`rounded-2xl border bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition ${
                 selected
                   ? "border-blue-500 ring-4 ring-blue-100"
-                  : "border-zinc-200"
+                  : "border-slate-200"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-semibold text-zinc-900">
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-black text-slate-950">
                     {partner.name}
-                  </h2>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    {partner.address} · {formatBaySummary(partner)}
+                  </h3>
+                  <p className="mt-1 line-clamp-1 text-xs font-medium text-slate-500">
+                    {partner.address}
                   </p>
                 </div>
                 <Link
                   href={`/partner/${partner.id}`}
-                  className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700"
+                  aria-label={`${partner.name} 상세 보기`}
+                  title={`${partner.name} 상세 보기`}
+                  className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
                 >
-                  보기
+                  <ChevronRight className="size-5" />
                 </Link>
               </div>
 
-              <p className="mt-4 text-sm text-zinc-700">
-                평점 {ratingLabel} · 리뷰 {partner.reviewCount}개
-                {distanceLabel(distance) ? ` · ${distanceLabel(distance)}` : ""}
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-bold text-slate-600">
+                <span className="inline-flex items-center gap-1 text-amber-600">
+                  <Star className="size-3.5 fill-current" />
+                  {ratingLabel}
+                  <span className="font-semibold text-slate-400">({partner.reviewCount})</span>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Navigation className="size-3.5 text-blue-600" />
+                  {distanceLabel(distance) ?? "위치 설정 시 거리 표시"}
+                </span>
+                <span
+                  className={`rounded-md px-2 py-1 ${
+                    partner.activeBayCount > 0
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {formatBaySummary(partner)}
+                </span>
+              </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-blue-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
-                    Self
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div
+                  className={`rounded-xl border p-3 ${
+                    serviceMode === "SELF"
+                      ? "border-blue-200 bg-blue-50"
+                      : "border-slate-100 bg-slate-50"
+                  }`}
+                >
+                  <p className="flex items-center gap-1.5 text-xs font-black text-blue-700">
+                    <Wrench className="size-3.5" /> Self
                   </p>
-                  <p className="mt-2 text-sm text-zinc-600">시간대 예약</p>
-                  <p className="mt-1 text-xl font-semibold text-zinc-900">
+                  <p className="mt-2 text-xs font-medium text-slate-500">시간제 베이 예약</p>
+                  <p className="mt-1 text-base font-black text-slate-950">
                     {partner.hourlyPrice
                       ? `${formatPrice(partner.hourlyPrice)}/시간`
                       : "요금 준비중"}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-amber-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
-                    Shop
+                <div
+                  className={`rounded-xl border p-3 ${
+                    serviceMode === "SHOP"
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-slate-100 bg-slate-50"
+                  }`}
+                >
+                  <p className="flex items-center gap-1.5 text-xs font-black text-emerald-700">
+                    <ShieldCheck className="size-3.5" /> Shop
                   </p>
-                  <p className="mt-2 text-sm text-zinc-600">패키지 맡기기</p>
-                  <p className="mt-1 text-xl font-semibold text-zinc-900">
+                  <p className="mt-2 text-xs font-medium text-slate-500">정비 패키지 예약</p>
+                  <p className="mt-1 text-base font-black text-slate-950">
                     {partner.cheapestPackagePrice
                       ? `${formatPrice(partner.cheapestPackagePrice)}부터`
                       : "패키지 준비중"}
@@ -286,15 +389,16 @@ export function HomePartnerExplorer({
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-between">
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
-                  운영 정보는 상세 페이지에서 확인
-                </span>
+              <div className="mt-4 flex items-center gap-3">
+                <p className="min-w-0 flex-1 text-xs font-semibold leading-5 text-slate-500">
+                  상세 화면에서 작업과 시간을 선택할 수 있어요.
+                </p>
                 <Link
                   href={`/partner/${partner.id}`}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                  className="flex h-10 shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
                 >
                   예약하기
+                  <ChevronRight className="size-4" />
                 </Link>
               </div>
             </article>
@@ -302,9 +406,15 @@ export function HomePartnerExplorer({
         })}
 
         {partners.length === 0 ? (
-          <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600">
-            등록된 제휴 정비소가 없습니다.
-          </p>
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center shadow-sm">
+            <div className="mx-auto grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-500">
+              <MapPinned className="size-5" />
+            </div>
+            <p className="mt-3 text-sm font-black text-slate-800">주변 정비소를 준비하고 있습니다</p>
+            <p className="mt-1 text-xs font-medium leading-5 text-slate-500">
+              이용 가능한 제휴 정비소가 등록되면 이곳에 표시됩니다.
+            </p>
+          </div>
         ) : null}
       </div>
     </>

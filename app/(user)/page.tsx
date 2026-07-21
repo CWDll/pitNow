@@ -1,4 +1,6 @@
 import { HomePartnerExplorer } from "./_components/home-partner-explorer";
+import Link from "next/link";
+import { CalendarDays, MapPin } from "lucide-react";
 import {
   hasSupabaseEnv,
   missingSupabaseEnvMessage,
@@ -151,15 +153,18 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
 export default async function HomePage() {
   if (!hasSupabaseEnv) {
     return (
-      <section className="space-y-4">
-        <header className="pt-2">
-          <h1 className="text-4xl font-bold tracking-tight text-zinc-900">
+      <section className="space-y-5 pt-6">
+        <header>
+          <h1 className="text-3xl font-black text-slate-950">
             <span className="text-blue-600">Pit</span>Now
           </h1>
         </header>
-        <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {missingSupabaseEnvMessage}
-        </p>
+        <div className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm">
+          <p className="text-sm font-bold text-red-700">서비스 연결을 확인해 주세요</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {missingSupabaseEnvMessage}
+          </p>
+        </div>
       </section>
     );
   }
@@ -169,19 +174,34 @@ export default async function HomePage() {
     process.env.NEXT_PUBLIC_KAKAO_MAP_APP_KEY?.trim() || null;
 
   return (
-    <section className="space-y-4">
-      <header className="pt-2">
-        <h1 className="text-4xl font-bold tracking-tight text-zinc-900">
-          <span className="text-blue-600">Pit</span>Now
-        </h1>
-        <p className="mt-2 text-sm text-zinc-500">
-          셀프로 정비하거나, 그대로 맡길 수 있는 2-way 예약 서비스
-        </p>
-      </header>
+    <section className="space-y-5 pb-2">
+      <header className="pt-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-[28px] font-black leading-none text-slate-950">
+              <span className="text-blue-600">Pit</span>Now
+            </h1>
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              내 차에 맞는 정비 공간, 지금 예약
+            </p>
+          </div>
+          <Link
+            href="/reservation"
+            className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm"
+          >
+            <CalendarDays className="size-4 text-blue-600" />
+            예약 확인
+          </Link>
+        </div>
 
-      <div className="rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-500">
-        강남구, 서초구 기준 가까운 제휴 정비소
-      </div>
+        <div className="mt-5 flex items-center gap-2 text-xs font-bold text-slate-600">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-2">
+            <MapPin className="size-3.5 text-blue-600" />
+            강남·서초 중심
+          </span>
+          <span className="text-slate-400">주변 제휴 정비소를 확인하세요</span>
+        </div>
+      </header>
 
       <HomePartnerExplorer
         partners={partners}
