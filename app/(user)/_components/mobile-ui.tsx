@@ -20,6 +20,14 @@ interface LineProps {
   widthClass?: string;
 }
 
+interface StatePanelProps {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  action?: ReactNode;
+  tone?: "default" | "danger";
+}
+
 function cx(...classes: Array<string | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }
@@ -78,5 +86,33 @@ export function DotGrid() {
         />
       ))}
     </div>
+  );
+}
+
+export function StatePanel({
+  icon,
+  title,
+  description,
+  action,
+  tone = "default",
+}: StatePanelProps) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white px-5 py-7 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <div
+        className={cx(
+          "mx-auto grid size-12 place-items-center rounded-2xl",
+          tone === "danger"
+            ? "bg-red-50 text-red-600"
+            : "bg-blue-50 text-blue-700",
+        )}
+      >
+        {icon}
+      </div>
+      <h2 className="mt-4 text-lg font-black text-slate-950">{title}</h2>
+      <p className="mx-auto mt-2 max-w-xs text-sm font-medium leading-6 text-slate-500">
+        {description}
+      </p>
+      {action ? <div className="mt-5">{action}</div> : null}
+    </article>
   );
 }

@@ -3,10 +3,25 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import {
+  BookOpen,
+  CalendarDays,
+  CarFront,
+  ChevronRight,
+  LogIn,
+  LogOut,
+  UserRound,
+} from "lucide-react";
 
 import { supabase } from "@/src/lib/supabase";
 
-import { Card, Line, Pill, Screen } from "../_components/mobile-ui";
+import { Card, Line, Screen, StatePanel } from "../_components/mobile-ui";
+
+const menuItems = [
+  { label: "예약 내역", description: "예정된 예약과 지난 이용", href: "/reservation", icon: CalendarDays },
+  { label: "내 차 관리", description: "예약 차량과 정비 이력", href: "/my-car", icon: CarFront },
+  { label: "이용 가이드", description: "체크인과 체크아웃 절차", href: "/guide", icon: BookOpen },
+];
 
 export default function MyPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -17,11 +32,18 @@ export default function MyPage() {
     let mounted = true;
 
     async function loadSession() {
-      const { data } = await supabase.auth.getSession();
+      try {
+        const { data } = await supabase.auth.getSession();
 
-      if (mounted) {
-        setUser(data.session?.user ?? null);
-        setIsLoading(false);
+        if (mounted) {
+          setUser(data.session?.user ?? null);
+          setIsLoading(false);
+        }
+      } catch {
+        if (mounted) {
+          setUser(null);
+          setIsLoading(false);
+        }
       }
     }
 
@@ -47,71 +69,77 @@ export default function MyPage() {
   }
 
   return (
-    <Screen title="My Page" subtitle="계정 및 이용 내역을 확인하세요.">
-      <Card className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-zinc-900">사용자 정보</h2>
-          <Pill label={user ? "로그인" : "게스트"} tone={user ? "accent" : "default"} />
-        </div>
-
-        {isLoading ? (
-          <>
-            <Line widthClass="w-1/3" />
-            <Line widthClass="w-2/3" />
-          </>
-        ) : user ? (
-          <div className="space-y-3">
-            <div className="rounded-2xl bg-zinc-100 px-4 py-3">
-              <p className="text-xs font-medium text-zinc-500">이메일</p>
-              <p className="mt-1 break-all text-sm font-semibold text-zinc-900">
+    <Screen title="마이페이지" subtitle="계정과 PitNow 이용 정보를 관리하세요.">
+      {isLoading ? (
+        <Card className="space-y-3">
+          <Line widthClass="w-1/3" />
+          <Line widthClass="w-2/3" />
+        </Card>
+      ) : user ? (
+        <Card className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700">
+              <UserRound className="size-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-blue-600">PITNOW MEMBER</p>
+              <p className="mt-1 truncate text-sm font-black text-slate-950">
                 {user.email ?? "이메일 정보 없음"}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              disabled={isSigningOut}
-              className="h-11 w-full rounded-2xl border border-zinc-300 text-sm font-semibold text-zinc-700 disabled:text-zinc-400"
-            >
-              {isSigningOut ? "로그아웃 중..." : "로그아웃"}
-            </button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm leading-6 text-zinc-600">
-              예약, 체크인 사진, 체크아웃 정산을 계정에 안전하게 연결하려면
-              로그인이 필요합니다.
-            </p>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 disabled:text-slate-300"
+          >
+            <LogOut className="size-4" />
+            {isSigningOut ? "로그아웃 중..." : "로그아웃"}
+          </button>
+        </Card>
+      ) : (
+        <StatePanel
+          icon={<UserRound className="size-6" />}
+          title="로그인하고 PitNow를 이어서 이용하세요"
+          description="예약, 체크인 사진, 체크아웃 정산을 계정에 안전하게 연결합니다."
+          action={
             <Link
               href="/login?next=/mypage"
-              className="flex h-11 items-center justify-center rounded-2xl bg-zinc-950 text-sm font-semibold text-white"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white"
             >
+              <LogIn className="size-4" />
               로그인 / 회원가입
             </Link>
-          </div>
-        )}
-      </Card>
+          }
+        />
+      )}
 
-      <Card className="space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-900">메뉴</h3>
-        <div className="space-y-2">
-          {[
-            ["예약 내역", "/reservation"],
-            ["결제 수단", "/mypage"],
-            ["알림 설정", "/mypage"],
-            ["고객센터", "/guide"],
-          ].map(([item, href]) => (
+      <section aria-labelledby="my-menu-title">
+        <h2 id="my-menu-title" className="mb-3 text-lg font-black text-slate-950">서비스 메뉴</h2>
+        <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+
+            return (
             <Link
-              key={item}
-              href={href}
-              className="flex items-center justify-between rounded-xl bg-zinc-100 px-3 py-3"
+              key={item.label}
+              href={item.href}
+              className="flex items-center gap-3 py-4"
             >
-              <span className="text-sm text-zinc-700">{item}</span>
-              <span className="text-xs text-zinc-400">&gt;</span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600">
+                <Icon className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-black text-slate-900">{item.label}</span>
+                <span className="mt-1 block text-xs font-semibold text-slate-500">{item.description}</span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-slate-400" />
             </Link>
-          ))}
+            );
+          })}
         </div>
-      </Card>
+      </section>
     </Screen>
   );
 }

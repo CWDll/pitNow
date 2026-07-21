@@ -3,6 +3,18 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  CarFront,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
+  LoaderCircle,
+  ShieldCheck,
+  Wrench,
+  X,
+} from "lucide-react";
 
 import {
   formatMinutesLabel,
@@ -235,90 +247,124 @@ function PartnerWorkPageContent() {
 
   if (!garage) {
     return (
-      <section className="space-y-4">
-        <h1 className="text-3xl font-semibold text-zinc-900">예약 방식 선택</h1>
-        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+      <section className="space-y-5 pt-7">
+        <h1 className="text-2xl font-black text-slate-950">예약 방식 선택</h1>
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm">
+          <LoaderCircle className="size-5 animate-spin text-blue-600" />
           정비소 정보를 불러오는 중입니다.
-        </p>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="pb-24">
-      <header className="mb-4 flex items-center gap-2">
+    <section className="space-y-5 pb-28 pt-5">
+      <header className="flex items-center gap-3">
         <Link
           href={`/partner/${garage.id}`}
-          className="text-2xl text-zinc-700"
+          className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
           aria-label="뒤로가기"
+          title="뒤로가기"
         >
-          ←
+          <ArrowLeft className="size-5" />
         </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900">예약 방식 선택</h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-black text-slate-950">예약 방식 선택</h1>
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{garage.name}</p>
+        </div>
       </header>
 
-      <div className="mb-4 grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
         <button
           type="button"
           onClick={() => setBookingMode("SELF")}
-          className={`rounded-2xl px-3 py-3 text-sm font-semibold ${
+          aria-pressed={bookingMode === "SELF"}
+          className={`flex min-h-13 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition ${
             bookingMode === "SELF"
               ? "bg-blue-600 text-white"
-              : "bg-zinc-100 text-zinc-700"
+              : "text-slate-500 hover:bg-slate-50"
           }`}
         >
+          <Wrench className="size-4" />
           시간제 예약
         </button>
         <button
           type="button"
           onClick={() => setBookingMode("PACKAGE")}
-          className={`rounded-2xl px-3 py-3 text-sm font-semibold ${
+          aria-pressed={bookingMode === "PACKAGE"}
+          className={`flex min-h-13 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition ${
             bookingMode === "PACKAGE"
-              ? "bg-blue-600 text-white"
-              : "bg-zinc-100 text-zinc-700"
+              ? "bg-emerald-600 text-white"
+              : "text-slate-500 hover:bg-slate-50"
           }`}
         >
+          <ShieldCheck className="size-4" />
           패키지 예약
         </button>
       </div>
 
       {bookingMode === "SELF" ? (
-        <p className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          법적으로 허용된 셀프 정비 작업만 선택할 수 있습니다.
+        <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs font-semibold leading-5 text-blue-800">
+          안전 기준에 따라 허용된 셀프 정비 작업만 선택할 수 있습니다.
         </p>
       ) : null}
 
-      <div className="mb-4 rounded-2xl bg-zinc-100 px-4 py-3">
-        <p className="mb-1 block text-xs text-zinc-500">내 차 선택</p>
+      <section aria-labelledby="vehicle-title">
+        <div className="mb-3 flex items-end justify-between">
+          <h2 id="vehicle-title" className="text-lg font-black text-slate-950">예약 차량</h2>
+          <span className="text-xs font-bold text-slate-400">필수</span>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <button
           type="button"
           onClick={() => (cars.length > 0 ? setIsCarPickerOpen(true) : null)}
           disabled={cars.length === 0}
-          className="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 text-left"
+          className="flex w-full items-center gap-3 rounded-xl bg-slate-50 p-3 text-left disabled:cursor-default"
         >
-          <span className="text-lg text-zinc-800">
-            {isCarsLoading
-              ? "차량 정보를 불러오는 중"
-              : selectedCar
-              ? `${selectedCar.model} (${selectedCar.year}) · ${selectedCar.number}`
-              : "차량 없음"}
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-blue-600 shadow-sm">
+            <CarFront className="size-5" />
           </span>
-          <span className="text-sm text-zinc-500">{cars.length > 0 ? "변경" : "필요"}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-black text-slate-900">
+              {isCarsLoading
+                ? "차량 정보를 불러오는 중"
+                : selectedCar
+                  ? `${selectedCar.model} (${selectedCar.year})`
+                  : "예약 차량이 필요합니다"}
+            </span>
+            <span className="mt-1 block text-xs font-semibold text-slate-500">
+              {selectedCar?.number ?? "로그인 후 차량을 선택해 주세요"}
+            </span>
+          </span>
+          {cars.length > 0 ? <ChevronDown className="size-4 text-slate-400" /> : null}
         </button>
         {needsLoginForCars ? (
-          <p className="mt-2 text-sm text-red-600">
-            예약하려면 먼저 로그인해 주세요. <Link href={`/login?next=${loginNextPath}`} className="font-semibold underline">로그인</Link>
-          </p>
+          <Link
+            href={`/login?next=${loginNextPath}`}
+            className="mt-3 flex h-10 items-center justify-center rounded-xl bg-slate-950 text-sm font-black text-white"
+          >
+            로그인하고 계속하기
+          </Link>
         ) : carsErrorMessage ? (
-          <p className="mt-2 text-sm text-red-600">{carsErrorMessage}</p>
+          <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{carsErrorMessage}</p>
         ) : !isCarsLoading && cars.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-600">
-            등록된 차량이 없습니다. <Link href="/my-car" className="font-semibold text-blue-600 underline">내 차량 등록</Link> 후 예약을 진행해 주세요.
-          </p>
+          <Link href="/my-car" className="mt-3 flex h-10 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white">
+            내 차량 등록하기
+          </Link>
         ) : null}
-      </div>
+        </div>
+      </section>
 
-      <div className="space-y-3">
+      <section aria-labelledby="work-list-title">
+        <div className="mb-3 flex items-end justify-between">
+          <h2 id="work-list-title" className="text-lg font-black text-slate-950">
+            {bookingMode === "SELF" ? "정비 작업 선택" : "패키지 선택"}
+          </h2>
+          <span className="text-xs font-bold text-slate-400">
+            {bookingMode === "SELF" ? `${selectedTaskIds.length}개 선택` : "1개 선택"}
+          </span>
+        </div>
+        <div className="space-y-3">
         {bookingMode === "SELF" ? (
           selfMaintenanceTaskOptions.map((option) => {
             const selected = selectedTaskIds.includes(option.id);
@@ -334,19 +380,20 @@ function PartnerWorkPageContent() {
                       : [...prev, option.id],
                   )
                 }
-                className={`w-full rounded-2xl border p-4 text-left transition ${
+                aria-pressed={selected}
+                className={`w-full rounded-2xl border p-4 text-left shadow-sm transition ${
                   selected
-                    ? "border-blue-500 bg-blue-50/40"
-                    : "border-zinc-200 bg-white"
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-slate-200 bg-white"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-2xl font-medium text-zinc-900">
+                  <p className="text-base font-black text-slate-900">
                     {option.title}
                   </p>
                   {selected ? (
-                    <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
-                      선택됨
+                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-600 text-white">
+                      <Check className="size-3.5" />
                     </span>
                   ) : null}
                 </div>
@@ -357,22 +404,23 @@ function PartnerWorkPageContent() {
                   >
                     {option.level}
                   </span>
-                  <span className="rounded-full bg-zinc-100 px-2 py-1 font-medium text-zinc-600">
+                  <span className="rounded-md bg-slate-100 px-2 py-1 font-bold text-slate-600">
                     검수 가산{" "}
                     {option.helperVerifyUnitFee.toLocaleString("ko-KR")}원
                   </span>
                 </div>
 
-                <p className="mt-2 text-base text-zinc-600">
+                <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
                   {option.description}
                 </p>
               </button>
             );
           })
         ) : packages.length === 0 ? (
-          <p className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-base text-zinc-600">
-            현재 노출 가능한 패키지가 없습니다.
-          </p>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center">
+            <ShieldCheck className="mx-auto size-6 text-slate-400" />
+            <p className="mt-3 text-sm font-bold text-slate-600">현재 예약 가능한 패키지가 없습니다.</p>
+          </div>
         ) : (
           packages.map((item) => {
             const selected = resolvedSelectedPackageId === item.id;
@@ -382,41 +430,44 @@ function PartnerWorkPageContent() {
                 key={item.id}
                 type="button"
                 onClick={() => setSelectedPackageId(item.id)}
-                className={`w-full rounded-2xl border p-4 text-left transition ${
+                aria-pressed={selected}
+                className={`w-full rounded-2xl border p-4 text-left shadow-sm transition ${
                   selected
-                    ? "border-blue-500 bg-blue-50/40"
-                    : "border-zinc-200 bg-white"
+                    ? "border-emerald-500 bg-emerald-50"
+                    : "border-slate-200 bg-white"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-2xl font-medium text-zinc-900">
+                    <p className="text-base font-black text-slate-900">
                       {item.name}
                     </p>
-                    <p className="mt-1 text-base text-zinc-600">
+                    <p className="mt-1 text-sm font-medium leading-6 text-slate-600">
                       {item.summary}
                     </p>
                   </div>
                   {selected ? (
-                    <span className="rounded-full bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
-                      선택됨
+                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-emerald-600 text-white">
+                      <Check className="size-3.5" />
                     </span>
                   ) : null}
                 </div>
 
-                <p className="mt-2 text-base text-zinc-500">
-                  ◷ 소요 {formatMinutesLabel(item.durationMinutes)}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  {item.price.toLocaleString("ko-KR")}원
-                </p>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="flex items-center gap-1 text-xs font-bold text-slate-500">
+                    <Clock3 className="size-3.5" />
+                    {formatMinutesLabel(item.durationMinutes)}
+                  </p>
+                  <p className="text-base font-black text-slate-950">{item.price.toLocaleString("ko-KR")}원</p>
+                </div>
               </button>
             );
           })
         )}
-      </div>
+        </div>
+      </section>
 
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+      <div className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur">
         <button
           type="button"
           disabled={
@@ -455,23 +506,26 @@ function PartnerWorkPageContent() {
                 )
               : null
           }
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300"
+          className="flex h-12 w-full items-center justify-center gap-1 rounded-xl bg-blue-600 text-sm font-black text-white shadow-sm disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
         >
-          {bookingMode === "SELF" ? "시간 선택으로 이동" : "시간 선택으로 이동"}
+          시간 선택으로 이동
+          <ChevronRight className="size-4" />
         </button>
       </div>
 
       {isCarPickerOpen ? (
-        <div className="fixed inset-0 z-80 flex items-end bg-black/35">
-          <div className="mb-16 w-full rounded-t-3xl bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-950/40">
+          <div className="mb-[calc(4.25rem+env(safe-area-inset-bottom))] w-full max-w-[430px] rounded-t-2xl bg-white p-4 pb-5 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-zinc-900">차량 선택</h3>
+              <h3 className="text-lg font-black text-slate-900">차량 선택</h3>
               <button
                 type="button"
                 onClick={() => setIsCarPickerOpen(false)}
-                className="text-sm text-zinc-500"
+                aria-label="차량 선택 닫기"
+                title="닫기"
+                className="grid size-9 place-items-center rounded-xl bg-slate-100 text-slate-500"
               >
-                닫기
+                <X className="size-4" />
               </button>
             </div>
             <div
@@ -491,13 +545,13 @@ function PartnerWorkPageContent() {
                     className={`w-full rounded-xl border px-3 py-3 text-left ${
                       selected
                         ? "border-blue-500 bg-blue-50"
-                        : "border-zinc-200 bg-white"
+                        : "border-slate-200 bg-white"
                     }`}
                   >
-                    <p className="text-base font-semibold text-zinc-900">
+                    <p className="text-sm font-black text-slate-900">
                       {car.number}
                     </p>
-                    <p className="mt-1 text-sm text-zinc-600">
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
                       {car.model} ({car.year})
                     </p>
                   </button>

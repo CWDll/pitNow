@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { CalendarDays, LogIn, RefreshCw } from "lucide-react";
 
 import { supabase } from "@/src/lib/supabase";
 import { formatKstDateTimeRange } from "@/src/lib/timezone";
+import { Line, Screen, StatePanel } from "../_components/mobile-ui";
 
 import ReservationListClient, {
   type ReservationListItem,
@@ -232,9 +234,30 @@ export default function ReservationListPage() {
     let cancelled = false;
 
     async function loadReservations() {
-      const { data: sessionData } = await supabase.auth.getSession();
+      setNeedsLogin(false);
+      setError("");
 
-      if (!sessionData.session) {
+      let sessionUserId: string | null = null;
+
+      try {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        sessionUserId = data.session?.user.id ?? null;
+      } catch (sessionError) {
+        console.warn("RESERVATION SESSION LOOKUP ERROR:", sessionError);
+
+        if (!cancelled) {
+          setNeedsLogin(true);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      if (!sessionUserId) {
         if (!cancelled) {
           setNeedsLogin(true);
           setIsLoading(false);
@@ -247,7 +270,7 @@ export default function ReservationListPage() {
         .select(
           "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, reserved_end_time, blocked_until, status, total_price, vehicles(plate_number, model, year)",
         )
-        .eq("user_id", sessionData.session.user.id)
+        .eq("user_id", sessionUserId)
         .order("start_time", { ascending: false })
         .returns<ReservationRow[]>();
 
@@ -501,31 +524,58 @@ export default function ReservationListPage() {
 
   if (isLoading) {
     return (
-      <section className="space-y-4">
-        <h1 className="text-2xl font-semibold text-zinc-900">예약</h1>
-        <div className="rounded-3xl bg-white p-5 text-sm text-zinc-500 shadow-sm">
-          예약 내역을 불러오는 중입니다.
+      <Screen title="예약" subtitle="예정된 예약과 지난 이용 내역을 확인하세요.">
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <Line widthClass="w-1/3" />
+          <Line />
+          <Line widthClass="w-4/5" />
+          <p className="pt-2 text-sm font-semibold text-slate-500">예약 내역을 불러오는 중입니다.</p>
         </div>
-      </section>
+      </Screen>
     );
   }
 
   if (needsLogin) {
     return (
-      <section className="space-y-4">
-        <h1 className="text-2xl font-semibold text-zinc-900">예약</h1>
-        <div className="rounded-3xl bg-white p-5 shadow-sm">
-          <p className="text-sm leading-6 text-zinc-600">
-            내 예약 내역은 로그인 후 확인할 수 있습니다.
-          </p>
+      <Screen title="예약" subtitle="예정된 예약과 지난 이용 내역을 확인하세요.">
+        <StatePanel
+          icon={<CalendarDays className="size-6" />}
+          title="로그인하고 예약을 확인하세요"
+          description="내 예약 내역은 로그인 후 확인할 수 있습니다. 예약 상태와 체크인 시간을 안전하게 이어서 관리해요."
+          action={
           <Link
             href="/login?next=/reservation"
-            className="mt-4 flex h-11 items-center justify-center rounded-2xl bg-zinc-950 text-sm font-semibold text-white"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white"
           >
+            <LogIn className="size-4" />
             로그인하고 예약 보기
           </Link>
-        </div>
-      </section>
+          }
+        />
+      </Screen>
+    );
+  }
+
+  if (error) {
+    return (
+      <Screen title="예약" subtitle="예정된 예약과 지난 이용 내역을 확인하세요.">
+        <StatePanel
+          icon={<RefreshCw className="size-6" />}
+          title="예약 내역을 불러오지 못했습니다"
+          description={error}
+          tone="danger"
+          action={
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-black text-white"
+            >
+              <RefreshCw className="size-4" />
+              다시 시도
+            </button>
+          }
+        />
+      </Screen>
     );
   }
 
@@ -542,16 +592,9 @@ export default function ReservationListPage() {
   );
 
   return (
-    <>
-      {error ? (
-        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-          {error}
-        </p>
-      ) : null}
-      <ReservationListClient
-        upcomingReservations={upcomingReservations}
-        pastReservations={pastReservations}
-      />
-    </>
+    <ReservationListClient
+      upcomingReservations={upcomingReservations}
+      pastReservations={pastReservations}
+    />
   );
 }

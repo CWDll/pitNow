@@ -3,8 +3,18 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  CarFront,
+  CirclePlus,
+  LoaderCircle,
+  LogIn,
+  Plus,
+  Trash2,
+  Wrench,
+  X,
+} from "lucide-react";
 
-import { Card, Pill, Screen } from "../_components/mobile-ui";
+import { Card, Pill, Screen, StatePanel } from "../_components/mobile-ui";
 import type { CarItem } from "../_data/mock-cars";
 import { supabase } from "@/src/lib/supabase";
 
@@ -88,8 +98,19 @@ export default function MyCarPage() {
       setIsLoading(true);
       setMessage("");
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const sessionUserId = sessionData.session?.user.id ?? null;
+      let sessionUserId: string | null = null;
+
+      try {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        sessionUserId = data.session?.user.id ?? null;
+      } catch (sessionError) {
+        console.warn("VEHICLE SESSION LOOKUP ERROR:", sessionError);
+      }
 
       if (!sessionUserId) {
         if (!isCancelled) {
@@ -268,9 +289,10 @@ export default function MyCarPage() {
 
   if (isLoading) {
     return (
-      <Screen title="My Car" subtitle="등록된 차량 정보를 관리하세요.">
-        <Card>
-          <p className="text-sm text-zinc-600">차량 정보를 불러오는 중입니다.</p>
+      <Screen title="내 차" subtitle="예약에 사용할 차량과 정비 이력을 관리하세요.">
+        <Card className="flex items-center gap-3">
+          <LoaderCircle className="size-5 animate-spin text-blue-600" />
+          <p className="text-sm font-semibold text-slate-500">차량 정보를 불러오는 중입니다.</p>
         </Card>
       </Screen>
     );
@@ -278,19 +300,21 @@ export default function MyCarPage() {
 
   if (!userId) {
     return (
-      <Screen title="My Car" subtitle="등록된 차량 정보를 관리하세요.">
-        <Card className="space-y-3">
-          <h2 className="text-2xl font-semibold text-zinc-900">로그인이 필요합니다</h2>
-          <p className="text-sm leading-6 text-zinc-600">
-            차량 정보는 계정별로 안전하게 저장됩니다. 로그인 후 내 차량을 등록해 주세요.
-          </p>
-          <Link
-            href="/login?next=/my-car"
-            className="block rounded-xl bg-blue-600 py-3 text-center text-sm font-semibold text-white"
-          >
-            로그인하러 가기
-          </Link>
-        </Card>
+      <Screen title="내 차" subtitle="예약에 사용할 차량과 정비 이력을 관리하세요.">
+        <StatePanel
+          icon={<CarFront className="size-6" />}
+          title="로그인이 필요합니다"
+          description="차량 정보는 계정별로 안전하게 저장됩니다. 로그인 후 내 차량을 등록해 주세요."
+          action={
+            <Link
+              href="/login?next=/my-car"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white"
+            >
+              <LogIn className="size-4" />
+              로그인하러 가기
+            </Link>
+          }
+        />
       </Screen>
     );
   }
@@ -298,25 +322,23 @@ export default function MyCarPage() {
   if (!selectedCar) {
     return (
       <>
-        <Screen title="My Car" subtitle="등록된 차량 정보를 관리하세요.">
-          <Card className="space-y-3">
-            <h2 className="text-2xl font-semibold text-zinc-900">등록된 차량이 없습니다</h2>
-            <p className="text-sm leading-6 text-zinc-600">
-              예약 전에 사용할 차량을 먼저 등록해 주세요. 첫 차량은 자동으로 대표 차량이 됩니다.
-            </p>
-            {message ? (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-                {message}
-              </p>
-            ) : null}
-            <button
-              type="button"
-              onClick={openAddModal}
-              className="rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white"
-            >
-              차량 추가
-            </button>
-          </Card>
+        <Screen title="내 차" subtitle="예약에 사용할 차량과 정비 이력을 관리하세요.">
+          {message ? <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{message}</p> : null}
+          <StatePanel
+            icon={<CirclePlus className="size-6" />}
+            title="등록된 차량이 없습니다"
+            description="예약 전에 사용할 차량을 등록해 주세요. 첫 차량은 자동으로 대표 차량이 됩니다."
+            action={
+              <button
+                type="button"
+                onClick={openAddModal}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white"
+              >
+                <Plus className="size-4" />
+                차량 추가
+              </button>
+            }
+          />
         </Screen>
         {isAddModalOpen ? (
           <AddCarModal
@@ -333,24 +355,26 @@ export default function MyCarPage() {
 
   return (
     <>
-      <Screen title="My Car" subtitle="등록된 차량 정보를 관리하세요.">
+      <Screen title="내 차" subtitle="예약에 사용할 차량과 정비 이력을 관리하세요.">
         {message ? (
           <Card>
             <p className="text-sm text-red-600">{message}</p>
           </Card>
         ) : null}
 
-        <Card className="space-y-3">
+        <Card className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-zinc-900">대표 차량</h2>
-            <Pill label={selectedCar.isActive ? "ACTIVE" : "SELECTED"} tone="accent" />
+            <h2 className="text-lg font-black text-slate-950">대표 차량</h2>
+            <Pill label={selectedCar.isActive ? "대표 차량" : "선택 차량"} tone="accent" />
           </div>
 
-          <div className="rounded-2xl bg-zinc-100 p-4">
-            <p className="text-4xl font-semibold tracking-tight text-zinc-900">{selectedCar.number}</p>
-            <div className="mt-2 flex items-end justify-between">
-              <p className="text-sm text-zinc-500">{selectedCar.model} ({selectedCar.year})</p>
-              <p className="text-sm text-zinc-500">{selectedCar.typeLabel}</p>
+          <div className="flex items-center gap-3 rounded-xl bg-blue-50 p-4">
+            <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-600 text-white">
+              <CarFront className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xl font-black text-slate-950">{selectedCar.number}</p>
+              <p className="mt-1 truncate text-xs font-semibold text-slate-500">{selectedCar.model} ({selectedCar.year}) · {selectedCar.typeLabel}</p>
             </div>
           </div>
 
@@ -358,22 +382,24 @@ export default function MyCarPage() {
             <button
               type="button"
               onClick={openAddModal}
-              className="rounded-xl bg-blue-600 py-2 text-sm font-semibold text-white"
+              className="flex h-10 items-center justify-center gap-1 rounded-xl bg-blue-600 text-sm font-black text-white"
             >
+              <Plus className="size-4" />
               차량 추가
             </button>
             <button
               type="button"
               onClick={openDeleteModal}
-              className="rounded-xl border border-red-200 bg-red-50 py-2 text-sm font-semibold text-red-600"
+              className="flex h-10 items-center justify-center gap-1 rounded-xl border border-red-200 bg-red-50 text-sm font-bold text-red-600"
             >
+              <Trash2 className="size-4" />
               차량 삭제
             </button>
           </div>
         </Card>
 
         <Card className="space-y-3">
-          <h3 className="text-2xl font-semibold text-zinc-900">차량 목록</h3>
+          <h3 className="text-lg font-black text-slate-950">차량 목록</h3>
           <div className="space-y-2">
             {cars.map((car) => {
               const selected = car.id === selectedCarId;
@@ -391,18 +417,18 @@ export default function MyCarPage() {
                       onClick={() => setSelectedCarId(car.id)}
                       className="flex-1 text-left"
                     >
-                      <p className="text-base font-semibold text-zinc-900">{car.number}</p>
-                      <p className="mt-0.5 text-sm text-zinc-500">{car.model} ({car.year})</p>
+                      <p className="text-sm font-black text-slate-900">{car.number}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{car.model} ({car.year})</p>
                     </button>
                     <button
                       type="button"
                       onClick={() => makeActive(car.id)}
                       disabled={isSaving}
                       className={`rounded-lg px-2 py-1 text-xs font-semibold disabled:opacity-60 ${
-                        car.isActive ? "bg-black text-white" : "bg-zinc-200 text-zinc-700"
+                        car.isActive ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-700"
                       }`}
                     >
-                      {car.isActive ? "ACTIVE" : "대표 설정"}
+                      {car.isActive ? "대표" : "대표 설정"}
                     </button>
                   </div>
                 </article>
@@ -413,12 +439,12 @@ export default function MyCarPage() {
 
         <Card className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-semibold text-zinc-900">정비 이력</h3>
+            <h3 className="flex items-center gap-2 text-lg font-black text-slate-950"><Wrench className="size-4.5 text-blue-600" />정비 이력</h3>
             <span className="text-xs text-zinc-500">선택 차량 기준</span>
           </div>
 
           {selectedCar.history.length === 0 ? (
-            <p className="rounded-xl bg-zinc-100 px-3 py-3 text-sm text-zinc-500">
+            <p className="rounded-xl bg-slate-50 px-3 py-5 text-center text-sm font-medium text-slate-500">
               아직 정비 이력이 없습니다.
             </p>
           ) : (
@@ -451,9 +477,9 @@ export default function MyCarPage() {
       ) : null}
 
       {isDeleteModalOpen ? (
-        <div className="fixed inset-0 z-[70] flex items-end bg-black/35">
-          <div className="w-full rounded-t-3xl bg-white p-4">
-            <h4 className="text-lg font-semibold text-zinc-900">차량 삭제</h4>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40">
+          <div className="w-full max-w-[430px] rounded-t-2xl bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <h4 className="text-lg font-black text-slate-950">차량 삭제</h4>
             <p className="mt-2 text-sm text-zinc-600">
               {selectedCar.number} 차량을 삭제할까요?
             </p>
@@ -495,23 +521,34 @@ interface AddCarModalProps {
 
 function AddCarModal({ newCar, isSaving, onChange, onClose, onSubmit }: AddCarModalProps) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-end bg-black/35">
-      <div className="w-full rounded-t-3xl bg-white p-4">
-        <h4 className="text-lg font-semibold text-zinc-900">차량 추가</h4>
-        <div className="mt-3 space-y-2">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40">
+      <div className="w-full max-w-[430px] rounded-t-2xl bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
+        <div className="flex items-center justify-between">
+          <h4 className="text-lg font-black text-slate-950">차량 추가</h4>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="차량 추가 닫기"
+            title="닫기"
+            className="grid size-9 place-items-center rounded-xl bg-slate-100 text-slate-500"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="mt-4 space-y-3">
           <input
             type="text"
             placeholder="차량 번호 (예: 11가 1234)"
             value={newCar.number}
             onChange={(event) => onChange((prev) => ({ ...prev, number: event.target.value }))}
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+            className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
           />
           <input
             type="text"
             placeholder="모델명 (예: 현대 아반떼 CN7)"
             value={newCar.model}
             onChange={(event) => onChange((prev) => ({ ...prev, model: event.target.value }))}
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+            className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
           />
           <div className="grid grid-cols-2 gap-2">
             <input
@@ -519,9 +556,9 @@ function AddCarModal({ newCar, isSaving, onChange, onClose, onSubmit }: AddCarMo
               placeholder="연식"
               value={newCar.year}
               onChange={(event) => onChange((prev) => ({ ...prev, year: event.target.value }))}
-              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
             />
-            <div className="grid grid-cols-3 gap-1 rounded-xl border border-zinc-300 p-1">
+            <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
               {["세단", "SUV", "해치백"].map((typeLabel) => {
                 const selected = newCar.typeLabel === typeLabel;
 
@@ -531,7 +568,7 @@ function AddCarModal({ newCar, isSaving, onChange, onClose, onSubmit }: AddCarMo
                     type="button"
                     onClick={() => onChange((prev) => ({ ...prev, typeLabel }))}
                     className={`rounded-lg px-2 py-2 text-xs font-medium ${
-                      selected ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"
+                      selected ? "bg-blue-600 text-white" : "bg-white text-slate-700"
                     }`}
                   >
                     {typeLabel}

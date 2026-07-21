@@ -3,6 +3,15 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronRight,
+  Clock3,
+  LoaderCircle,
+  ShieldCheck,
+  Warehouse,
+} from "lucide-react";
 
 import { selfMaintenanceTaskOptions } from "../../../_data/mock-garages";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
@@ -731,87 +740,94 @@ function PartnerSchedulePageContent() {
 
   if (!safeGarage) {
     return (
-      <section className="space-y-4">
-        <h1 className="text-3xl font-semibold text-zinc-900">
-          시간 / 베이 선택
-        </h1>
-        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+      <section className="space-y-5 pt-7">
+        <h1 className="text-2xl font-black text-slate-950">시간 / 베이 선택</h1>
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm">
+          <LoaderCircle className="size-5 animate-spin text-blue-600" />
           정비소 정보를 불러오는 중입니다.
-        </p>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="pb-24">
-      <header className="mb-4 flex items-center gap-2">
+    <section className="space-y-5 pb-28 pt-5">
+      <header className="flex items-center gap-3">
         <Link
           href={`/partner/${safeGarage.id}/work`}
-          className="text-2xl text-zinc-700"
+          className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
           aria-label="뒤로가기"
+          title="뒤로가기"
         >
-          ←
+          <ArrowLeft className="size-5" />
         </Link>
-        <h1 className="text-3xl font-semibold text-zinc-900">
-          시간 / 베이 선택
-        </h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-black text-slate-950">시간 / 베이 선택</h1>
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{safeGarage.name}</p>
+        </div>
       </header>
 
-      <div className="mb-4 rounded-2xl bg-zinc-100 p-4 text-sm text-zinc-700">
-        <p className="font-semibold text-zinc-900">예약 방식</p>
-        <p className="mt-1">
-          {bookingMode === "PACKAGE" ? "패키지 예약" : "시간제 예약"}
-        </p>
-        <p className="mt-2 font-semibold text-zinc-900">선택 항목</p>
-        <p className="mt-1">
-          {bookingMode === "PACKAGE" ? packageTitle : taskLabels}
-        </p>
+      <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className={`grid size-10 shrink-0 place-items-center rounded-xl text-white ${bookingMode === "PACKAGE" ? "bg-emerald-600" : "bg-blue-600"}`}>
+          {bookingMode === "PACKAGE" ? <ShieldCheck className="size-5" /> : <Warehouse className="size-5" />}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-slate-400">
+            {bookingMode === "PACKAGE" ? "SHOP 패키지" : "SELF 시간제"}
+          </p>
+          <p className="mt-1 line-clamp-2 text-sm font-black leading-6 text-slate-900">
+            {bookingMode === "PACKAGE" ? packageTitle : taskLabels}
+          </p>
+        </div>
       </div>
 
-      <div className="mb-4 flex items-center justify-between px-1">
+      <section aria-labelledby="date-title">
+        <div className="mb-3 flex items-center justify-between">
         <button
           type="button"
-          className="text-xl text-zinc-500"
+          className="grid size-9 place-items-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500"
           onClick={() => handleWeekShift(-7)}
         >
           ‹
         </button>
         <button
           type="button"
-          className="text-2xl font-semibold text-zinc-900"
+          id="date-title"
+          className="flex items-center gap-2 text-lg font-black text-slate-950"
           onClick={() => setIsMonthPickerOpen((prev) => !prev)}
         >
+          <CalendarDays className="size-4.5 text-blue-600" />
           {formatMonthLabel(selectedDate)}
         </button>
         <button
           type="button"
-          className="text-xl text-zinc-500"
+          className="grid size-9 place-items-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500"
           onClick={() => handleWeekShift(7)}
         >
           ›
         </button>
-      </div>
+        </div>
 
       {isMonthPickerOpen ? (
-        <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-3">
-          <label className="mb-1 block text-sm text-zinc-600">월 선택</label>
+        <div className="mb-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <label className="mb-2 block text-xs font-bold text-slate-500">월 선택</label>
           <input
             type="month"
             value={formatMonthValue(selectedDate)}
             onChange={(event) => handleMonthChange(event.target.value)}
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm"
+            className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500"
           />
           <button
             type="button"
             onClick={() => setIsMonthPickerOpen(false)}
-            className="mt-2 w-full rounded-xl bg-zinc-100 py-2 text-sm font-medium text-zinc-700"
+            className="mt-2 h-10 w-full rounded-xl bg-slate-100 text-sm font-bold text-slate-700"
           >
             닫기
           </button>
         </div>
       ) : null}
 
-      <div className="mb-6 grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-1.5">
         {weekDates.map((date) => {
           const active = date.getTime() === selectedDate.getTime();
           const disabled = date.getTime() < todayMs;
@@ -821,29 +837,26 @@ function PartnerSchedulePageContent() {
               type="button"
               disabled={disabled}
               onClick={() => selectDate(date)}
-              className={`rounded-2xl px-2 py-3 text-center disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 ${
+              className={`min-w-0 rounded-xl border px-1 py-2.5 text-center disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-100 disabled:text-slate-300 ${
                 active && !disabled
-                  ? "bg-blue-600 text-white"
-                  : "bg-zinc-100 text-zinc-700"
+                  ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                  : "border-slate-200 bg-white text-slate-600"
               }`}
             >
-              <p className="text-xs">{weekdayLabels[date.getDay()]}</p>
-              <p className="text-2xl font-semibold">{date.getDate()}</p>
+              <p className="text-[10px] font-bold">{weekdayLabels[date.getDay()]}</p>
+              <p className="mt-1 text-base font-black">{date.getDate()}</p>
             </button>
           );
         })}
       </div>
+      </section>
 
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-zinc-900">베이 선택</h2>
-        <span className="text-sm text-zinc-500">
-          버퍼 포함 가능 시간만 선택
-        </span>
-      </div>
-
-      <div
-        className={`grid gap-2 ${resolvedBayIds.length > 4 ? "grid-cols-6" : "grid-cols-4"}`}
-      >
+      <section aria-labelledby="bay-title">
+        <div className="mb-3 flex items-end justify-between">
+          <h2 id="bay-title" className="text-lg font-black text-slate-950">베이 선택</h2>
+          <span className="text-xs font-bold text-slate-400">운영 베이 {resolvedBayIds.length}개</span>
+        </div>
+      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {resolvedBayIds.map((bayId, index) => {
           const bayNumber = index + 1;
           const active = bayNumber === selectedBay;
@@ -854,7 +867,7 @@ function PartnerSchedulePageContent() {
               key={bayId}
               type="button"
               onClick={() => handleBayChange(bayNumber)}
-              className={`rounded-xl px-2 py-3 text-lg font-medium ${active ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-800"}`}
+              className={`h-11 shrink-0 rounded-xl border px-4 text-sm font-black ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700"}`}
             >
               {bayLabel}
             </button>
@@ -863,19 +876,18 @@ function PartnerSchedulePageContent() {
       </div>
 
       {resolvedBayIds.length === 0 ? (
-        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
           현재 예약 가능한 베이가 없습니다. 다른 정비소를 선택해 주세요.
         </p>
       ) : null}
+      </section>
 
-      <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-2xl font-semibold text-zinc-900">시간 선택</h2>
-          <span className="text-sm text-zinc-500">
-            블록 연속 선택 + 종료 후 1시간 버퍼
-          </span>
+      <section aria-labelledby="time-title">
+        <div className="mb-3 flex items-end justify-between">
+          <h2 id="time-title" className="text-lg font-black text-slate-950">시간 선택</h2>
+          <span className="text-xs font-bold text-slate-400">종료 후 1시간 버퍼</span>
         </div>
-
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-4 gap-2">
           {Array.from({ length: blockCount }).map((_, idx) => {
             const selectable =
@@ -899,12 +911,12 @@ function PartnerSchedulePageContent() {
                 type="button"
                 disabled={!selectable}
                 onClick={() => handleBlockClick(idx)}
-                className={`rounded-xl px-2 py-3 text-xs font-medium ${
+                className={`h-10 rounded-lg border px-2 text-xs font-bold ${
                   !selectable
-                    ? "bg-zinc-300 text-zinc-500"
+                    ? "border-slate-100 bg-slate-100 text-slate-300"
                     : selected
-                      ? "bg-amber-400 text-white"
-                      : "bg-white text-zinc-700"
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-slate-200 bg-white text-slate-700"
                 }`}
               >
                 {timeBoundaries[idx]}
@@ -913,12 +925,13 @@ function PartnerSchedulePageContent() {
           })}
         </div>
 
-        <p className="mt-3 text-sm text-zinc-600">
-          작업 시간: {startTime ?? "-"} ~ {endTime ?? "-"}
-        </p>
-        <p className="mt-1 text-sm text-zinc-600">
-          버퍼 포함 블록: {startTime ?? "-"} ~ {blockedUntilTime ?? "-"}
-        </p>
+        <div className="mt-4 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+          <Clock3 className="size-5 shrink-0 text-blue-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-black text-slate-900">작업 시간: {startTime ?? "-"} ~ {endTime ?? "-"}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">베이 확보: {startTime ?? "-"} ~ {blockedUntilTime ?? "-"}</p>
+          </div>
+        </div>
 
         {!meetsMinimum && hasSelection ? (
           <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -926,10 +939,12 @@ function PartnerSchedulePageContent() {
           </p>
         ) : null}
       </div>
+      </section>
 
-      <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
-        <h3 className="mb-3 text-2xl font-semibold text-zinc-900">요금 요약</h3>
-        <div className="space-y-1 text-lg text-zinc-700">
+      <section aria-labelledby="price-title">
+        <h2 id="price-title" className="mb-3 text-lg font-black text-slate-950">요금 요약</h2>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="space-y-2 text-sm font-semibold text-slate-600">
           <div className="flex items-center justify-between">
             <span>시간당 요금</span>
             <span>{safeGarage.hourlyPrice.toLocaleString("ko-KR")}원</span>
@@ -944,46 +959,48 @@ function PartnerSchedulePageContent() {
               <span>{carMasterVerifyFee.toLocaleString("ko-KR")}원</span>
             </div>
           ) : null}
-          <div className="my-2 border-t border-zinc-300" />
-          <div className="flex items-center justify-between text-2xl font-semibold text-zinc-900">
+          <div className="my-3 border-t border-slate-200" />
+          <div className="flex items-center justify-between text-base font-black text-slate-950">
             <span>합계</span>
-            <span className="text-blue-600">
+            <span className="text-xl text-blue-600">
               {totalPriceWithVerify.toLocaleString("ko-KR")}원
             </span>
           </div>
         </div>
       </div>
+      </section>
 
       {bookingMode === "SELF" ? (
-        <label className="mt-4 flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-base text-zinc-800">
+        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-sm">
           <input
             type="checkbox"
-            className="mt-1 h-5 w-5"
+            className="mt-0.5 size-5 accent-blue-600"
             checked={carMasterVerifyRequested}
             onChange={() => setCarMasterVerifyRequested((prev) => !prev)}
           />
           <span>
             카 마스터 검수
             <br />
-            <span className="text-sm text-zinc-500">
+            <span className="text-xs font-semibold text-slate-500">
               기본 5,000원 + 선택 작업 검수 가산
             </span>
           </span>
         </label>
       ) : null}
 
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+      <div className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur">
         <button
           type="button"
           onClick={goNextPage}
           disabled={!canProceed || !hasValidHourlyPrice}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
+          className="flex h-12 w-full items-center justify-center gap-1 rounded-xl bg-blue-600 text-sm font-black text-white shadow-sm disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
         >
           {!hasValidHourlyPrice
             ? "매장 요금 정보가 필요합니다"
             : bookingMode === "PACKAGE"
               ? "결제로 이동"
               : "안전 동의"}
+          {canProceed && hasValidHourlyPrice ? <ChevronRight className="size-4" /> : null}
         </button>
       </div>
     </section>

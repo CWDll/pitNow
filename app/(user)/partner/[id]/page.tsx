@@ -1,5 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  ArrowLeft,
+  ChevronRight,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  Star,
+  Warehouse,
+  Wrench,
+} from "lucide-react";
 
 import { formatMinutesLabel } from "@/app/(user)/_data/mock-garages";
 import { getPartnerShopPackages } from "@/src/lib/partner-packages";
@@ -44,14 +54,6 @@ function formatDate(iso: string): string {
     month: "2-digit",
     day: "2-digit",
   });
-}
-
-function formatBaySummary(params: { bayCount: number; activeBayCount: number }) {
-  if (params.activeBayCount === params.bayCount) {
-    return `베이 ${params.bayCount}개`;
-  }
-
-  return `베이 ${params.bayCount}개 중 ${params.activeBayCount}개 사용 가능`;
 }
 
 async function getSelfTasks(): Promise<SelfTaskRow[]> {
@@ -117,42 +119,94 @@ export default async function PartnerDetailPage({
       : 0;
 
   return (
-    <section className="pb-28">
-      <div className="-mx-4 mb-4 h-48 rounded-b-4xl bg-[linear-gradient(135deg,#dbeafe_0%,#f8fafc_45%,#fde68a_100%)]" />
+    <section className="space-y-6 pb-28">
+      <header className="-mx-4 border-b border-slate-200 bg-white px-4 pb-5 pt-5">
+        <Link
+          href="/"
+          aria-label="홈으로 돌아가기"
+          title="홈으로 돌아가기"
+          className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"
+        >
+          <ArrowLeft className="size-5" />
+        </Link>
 
-      <div className="space-y-2">
-        <h1 className="text-4xl font-semibold text-zinc-900">{garage.name}</h1>
-        <p className="text-lg text-zinc-700">
-          ★ {averageRating.toFixed(1)} ({reviews.length}개 후기)
-        </p>
-        <p className="text-lg text-zinc-700">📍 {garage.address}</p>
-        <p className="text-lg text-zinc-700">🕒 {garage.hours}</p>
-        <p className="text-lg text-zinc-700">
-          🚗 {formatBaySummary(garage)}
-        </p>
-        <p className="text-lg text-zinc-700">📞 {garage.phone}</p>
-      </div>
+        <div className="mt-5 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-blue-600">PITNOW PARTNER</p>
+            <h1 className="mt-1 text-[26px] font-black leading-tight text-slate-950">
+              {garage.name}
+            </h1>
+            <p className="mt-2 flex items-start gap-1.5 text-sm font-medium leading-6 text-slate-500">
+              <MapPin className="mt-1 size-4 shrink-0 text-blue-600" />
+              {garage.address}
+            </p>
+          </div>
+          <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-sm">
+            <Warehouse className="size-6" />
+          </div>
+        </div>
 
-      <div className="mt-6 space-y-3">
-        <article className="rounded-3xl bg-blue-50 p-5">
-          <h2 className="text-2xl font-semibold text-zinc-900">
-            셀프 정비 추천 작업
-          </h2>
-          <div className="mt-4 space-y-3">
+        <div className="mt-5 grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200 bg-slate-50 py-3">
+          <div className="px-3 text-center">
+            <p className="flex items-center justify-center gap-1 text-sm font-black text-slate-900">
+              <Star className="size-3.5 fill-amber-400 text-amber-400" />
+              {averageRating.toFixed(1)}
+            </p>
+            <p className="mt-1 text-[11px] font-semibold text-slate-400">후기 {reviews.length}</p>
+          </div>
+          <div className="px-3 text-center">
+            <p className="text-sm font-black text-slate-900">{garage.activeBayCount}/{garage.bayCount}</p>
+            <p className="mt-1 text-[11px] font-semibold text-slate-400">운영 베이</p>
+          </div>
+          <div className="px-3 text-center">
+            <p className="truncate text-sm font-black text-slate-900">{garage.hours}</p>
+            <p className="mt-1 text-[11px] font-semibold text-slate-400">운영 시간</p>
+          </div>
+        </div>
+
+        <a
+          href={`tel:${garage.phone}`}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-slate-500"
+        >
+          <Phone className="size-3.5" />
+          {garage.phone}
+        </a>
+      </header>
+
+      <section aria-labelledby="self-service-title">
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <p className="text-xs font-bold text-blue-600">SELF SERVICE</p>
+            <h2 id="self-service-title" className="mt-1 text-xl font-black text-slate-950">
+              직접 정비하기
+            </h2>
+          </div>
+          <span className="text-xs font-bold text-slate-400">시간제 베이</span>
+        </div>
+        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex items-start gap-3 border-b border-blue-100 bg-blue-50 p-4">
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white">
+              <Wrench className="size-4.5" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-slate-900">베이와 장비를 직접 사용해요</p>
+              <p className="mt-1 text-xs font-medium leading-5 text-slate-600">
+                허용된 작업을 선택하고 필요한 시간만큼 예약할 수 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100">
             {selfTasks.map((task) => (
-              <div key={task.id} className="rounded-2xl bg-white p-4">
+              <div key={task.id} className="p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-lg font-semibold text-zinc-900">
+                  <p className="text-sm font-black text-slate-900">
                     {task.name}
                   </p>
-                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-600">
+                  <span className="rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">
                     셀프 허용
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-zinc-600">
-                  법적 허용 셀프 정비 작업
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
+                <p className="mt-1 text-xs font-medium text-slate-500">
                   검수 가산{" "}
                   {Number(task.helper_verify_unit_fee).toLocaleString("ko-KR")}
                   원
@@ -161,38 +215,58 @@ export default async function PartnerDetailPage({
             ))}
 
             {selfTasks.length === 0 ? (
-              <p className="rounded-2xl bg-white p-4 text-sm text-zinc-600">
+              <p className="p-4 text-sm font-medium text-slate-500">
                 현재 등록된 셀프 정비 작업이 없습니다.
               </p>
             ) : null}
           </div>
           <Link
             href={`/partner/${garage.id}/work?mode=SELF_SERVICE`}
-            className="mt-5 flex h-12 items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
+            className="m-4 flex h-11 items-center justify-center gap-1 rounded-xl bg-blue-600 text-sm font-black text-white"
           >
-            셀프 정비 예약
+            Self로 예약
+            <ChevronRight className="size-4" />
           </Link>
         </article>
+      </section>
 
-        <article className="rounded-3xl bg-amber-50 p-5">
-          <h2 className="text-2xl font-semibold text-zinc-900">
-            전문가 맡기기 패키지
-          </h2>
-          <div className="mt-4 space-y-3">
+      <section aria-labelledby="shop-service-title">
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <p className="text-xs font-bold text-emerald-600">SHOP SERVICE</p>
+            <h2 id="shop-service-title" className="mt-1 text-xl font-black text-slate-950">
+              정비 맡기기
+            </h2>
+          </div>
+          <span className="text-xs font-bold text-slate-400">패키지 예약</span>
+        </div>
+        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex items-start gap-3 border-b border-emerald-100 bg-emerald-50 p-4">
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white">
+              <ShieldCheck className="size-4.5" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-slate-900">정비소에 차량을 맡겨요</p>
+              <p className="mt-1 text-xs font-medium leading-5 text-slate-600">
+                작업과 소요 시간이 정해진 패키지를 선택할 수 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100">
             {packages.map((item) => (
-              <div key={item.id} className="rounded-2xl bg-white p-4">
+              <div key={item.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-semibold text-zinc-900">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-slate-900">
                       {item.name}
                     </p>
-                    <p className="mt-1 text-sm text-zinc-600">{item.summary}</p>
+                    <p className="mt-1 text-xs font-medium leading-5 text-slate-500">{item.summary}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-semibold text-zinc-900">
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-black text-slate-900">
                       {formatPrice(item.price)}
                     </p>
-                    <p className="text-xs text-zinc-500">
+                    <p className="mt-1 text-[11px] font-semibold text-slate-400">
                       소요 {formatMinutesLabel(item.durationMinutes)}
                     </p>
                   </div>
@@ -202,53 +276,55 @@ export default async function PartnerDetailPage({
           </div>
           <Link
             href={`/partner/${garage.id}/work?mode=SHOP_SERVICE`}
-            className="mt-5 flex h-12 items-center justify-center rounded-2xl bg-zinc-900 text-lg font-semibold text-white"
+            className="m-4 flex h-11 items-center justify-center gap-1 rounded-xl bg-emerald-600 text-sm font-black text-white"
           >
-            전문가 맡기기 예약
+            Shop으로 예약
+            <ChevronRight className="size-4" />
           </Link>
         </article>
-      </div>
+      </section>
 
-      <div className="mt-6 rounded-3xl bg-zinc-100 p-4">
+      <section aria-labelledby="review-title">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-2xl font-semibold text-zinc-900">후기</h3>
+          <h2 id="review-title" className="text-xl font-black text-slate-950">최근 후기</h2>
           <Link
             href={`/partner/${garage.id}/reviews`}
-            className="text-sm font-semibold text-blue-600"
+            className="text-xs font-bold text-blue-600"
           >
             전체보기
           </Link>
         </div>
 
         {reviews.length === 0 ? (
-          <p className="text-base text-zinc-600">
+          <p className="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-center text-sm font-medium text-slate-500">
             아직 등록된 후기가 없습니다.
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
             {reviews.map((review) => (
-              <article key={review.id} className="rounded-xl bg-white p-3">
-                <p className="text-lg text-amber-500">
+              <article key={review.id} className="py-4">
+                <p className="text-sm text-amber-500">
                   {renderStars(review.rating)}
                 </p>
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-1 text-[11px] font-semibold text-slate-400">
                   {formatDate(review.created_at)}
                 </p>
-                <p className="mt-2 text-base text-zinc-700">
+                <p className="mt-2 text-sm font-medium leading-6 text-slate-700">
                   {review.comment || "코멘트 없음"}
                 </p>
               </article>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+      <div className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur">
         <Link
           href={`/partner/${garage.id}/work`}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
+          className="flex h-12 w-full items-center justify-center gap-1 rounded-xl bg-blue-600 text-sm font-black text-white shadow-sm"
         >
           예약하기
+          <ChevronRight className="size-4" />
         </Link>
       </div>
     </section>

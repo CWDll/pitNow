@@ -46,7 +46,7 @@ test.describe("authenticated user smoke", () => {
     await expect(page.getByText("차량 정보를 불러오는 중입니다.")).toBeHidden({
       timeout: 15_000,
     });
-    await expect(page.getByText("대표 차량")).toBeVisible({
+    await expect(page.getByRole("heading", { name: "대표 차량" })).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.getByText("E2E 2026").first()).toBeVisible();
