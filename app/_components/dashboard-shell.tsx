@@ -49,6 +49,9 @@ const partnerNavItems = [
   },
 ] as const;
 
+const sidebarActionClassName =
+  "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950";
+
 export function DashboardShell({ children, variant }: DashboardShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -160,7 +163,7 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
         <div className="mt-auto space-y-1 border-t border-slate-200 pt-4">
           <Link
             href="/"
-            className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+            className={sidebarActionClassName}
           >
             <ExternalLink size={17} />
             사용자 앱 열기
@@ -169,21 +172,30 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
             <Link
               href="/admin/logout"
               prefetch={false}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+              className={sidebarActionClassName}
             >
               <LogOut size={17} />
               로그아웃
             </Link>
           ) : (
-            <button
-              type="button"
-              onClick={() => void signOutPartner()}
-              disabled={isSigningOut}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950 disabled:opacity-50"
+            <Link
+              href="/login?next=/partner-admin"
+              aria-disabled={isSigningOut}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!isSigningOut) {
+                  void signOutPartner();
+                }
+              }}
+              className={
+                isSigningOut
+                  ? `${sidebarActionClassName} pointer-events-none opacity-50`
+                  : sidebarActionClassName
+              }
             >
               <LogOut size={17} />
               {isSigningOut ? "로그아웃 중" : "로그아웃"}
-            </button>
+            </Link>
           )}
         </div>
       </aside>

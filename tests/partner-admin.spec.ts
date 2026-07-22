@@ -94,7 +94,7 @@ test.describe("partner admin dashboard", () => {
       expect(await durationInput.evaluate((input) => (input as HTMLInputElement).checkValidity())).toBe(true);
 
       const userAppLink = page.getByRole("link", { name: "사용자 앱 열기" });
-      const logoutButton = page.getByRole("button", { name: "로그아웃" });
+      const logoutLink = page.getByRole("link", { name: "로그아웃" });
       const sharedActionClasses = [
         "h-10",
         "w-full",
@@ -106,7 +106,7 @@ test.describe("partner admin dashboard", () => {
         "text-slate-600",
       ];
       const userAppClasses = (await userAppLink.getAttribute("class")) ?? "";
-      const logoutClasses = (await logoutButton.getAttribute("class")) ?? "";
+      const logoutClasses = (await logoutLink.getAttribute("class")) ?? "";
 
       for (const className of sharedActionClasses) {
         expect(userAppClasses).toContain(className);
