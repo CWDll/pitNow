@@ -199,6 +199,7 @@ Migration:
 
 - `db/migrations/20260629_partner_admin_audit_logs.sql`
 - `db/migrations/20260629_partner_admin_audit_search.sql`
+- `db/migrations/20260722_partner_admin_bay_compatibility_audit.sql`
 
 ---
 
