@@ -10,6 +10,7 @@
     "check:supabase": "node scripts/check-supabase-schema.mjs",
     "verify:static": "npm run lint && npx tsc --noEmit && npm run build",
     "verify:admin": "PITNOW_PAYMENT_PROVIDER=FAKE playwright test tests/admin.spec.ts --project=admin-chromium",
+    "verify:partner-admin-ui": "PITNOW_PAYMENT_PROVIDER=FAKE playwright test tests/partner-admin.spec.ts --project=partner-admin-chromium",
     "verify:release": "npm run verify:static && npm run check:supabase && npm run e2e:storage-hardening && npm run e2e:partner-admin && npm run e2e:ui",
     "verify:mvp": "npm run verify:release",
     "e2e:checkout": "node scripts/e2e-checkout-loop.mjs",
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "heic-to": "^1.5.2",
     "lucide-react": "^1.25.0",
     "next": "16.1.6",
     "react": "19.2.3",

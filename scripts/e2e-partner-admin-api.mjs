@@ -374,7 +374,7 @@ async function createPastReservation({ admin, userId, vehicleId, bay }) {
         selected_task_count: 1,
         helper_verify_requested: false,
         helper_verify_fee: 0,
-        status: "CONFIRMED",
+        status: "CHECKED_IN",
         total_price: bay.hourlyPrice,
       })
       .select("id,start_time,end_time")
@@ -874,7 +874,7 @@ async function main() {
         "bays API 응답의 예약 보유/비활성화 가능 상태가 올바르지 않습니다.",
       );
     }
-    formatStep("bays API 과거 예약 제외 확인");
+      formatStep("bays API 버퍼가 지난 체크인 예약 제외 확인");
 
     const packagesPayload = await apiRequest({
       baseUrl,
@@ -977,6 +977,29 @@ async function main() {
       }
       records.packageCreationRequestIds.push(packageCreationPayload.request.id);
       formatStep("package creation request 생성 API 확인");
+
+      const packageCreationListPayload = await apiRequest({
+        baseUrl,
+        token: adminToken,
+        path: `/api/partner-admin/package-creation-requests?partnerId=${bay.partnerId}`,
+      });
+      if (
+        !packageCreationListPayload.requests?.some(
+          (item) => item.id === packageCreationPayload.request.id,
+        )
+      ) {
+        throw new Error("package creation request 목록에 생성 요청이 없습니다.");
+      }
+      formatStep("package creation request 승인 대기 목록 확인");
+
+      await apiRequest({
+        baseUrl,
+        token: outsiderToken,
+        path: `/api/partner-admin/package-creation-requests?partnerId=${bay.partnerId}`,
+        expectedStatus: 403,
+        expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
+      });
+      formatStep("비권한 유저 package creation request 목록 403 확인");
 
       await apiRequest({
         baseUrl,

@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import { normalizeReservationImage } from "@/src/lib/heic-image";
 
 export const RESERVATION_PHOTO_BUCKET = "reservation-photos";
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -59,16 +60,21 @@ export async function uploadReservationPhoto({
   field,
   file,
 }: UploadReservationPhotoParams): Promise<string> {
-  assertValidImageFile(file);
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    throw new Error("이미지 파일은 10MB 이하만 업로드할 수 있습니다.");
+  }
 
-  const extension = getSafeFileExtension(file);
+  const uploadFile = await normalizeReservationImage(file);
+  assertValidImageFile(uploadFile);
+
+  const extension = getSafeFileExtension(uploadFile);
   const path = `${phase}/${reservationId}/${field}-${Date.now()}-${crypto.randomUUID()}.${extension}`;
 
   const { error } = await supabase.storage
     .from(RESERVATION_PHOTO_BUCKET)
-    .upload(path, file, {
+    .upload(path, uploadFile, {
       cacheControl: "3600",
-      contentType: file.type,
+      contentType: uploadFile.type,
       upsert: false,
     });
 

@@ -15,6 +15,8 @@
 
 `POST /api/partner-admin/package-creation-requests`
 
+`GET /api/partner-admin/package-creation-requests?partnerId={partnerId}`
+
 Input:
 
 ```json
@@ -31,8 +33,9 @@ Input:
 Rules:
 
 - Requires authenticated active partner membership.
-- Name, positive duration, and non-negative integer labor price are required.
+- Name, positive 5-minute-unit duration, and non-negative integer labor price are required.
 - Creates a `PENDING` request for internal Admin review.
+- GET returns the partner's creation requests so pending/reviewed status can be displayed in Partner-admin.
 - Does not mutate `service_packages` or `partner_package_prices` directly.
 
 ---

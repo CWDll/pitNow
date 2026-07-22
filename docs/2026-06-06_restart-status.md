@@ -2087,7 +2087,7 @@ DB 선행 작업:
 
 - 예약 조회 날짜 선택을 예약 목록 헤더로 이동하고 각 예약 row에 날짜를 추가했다.
 - 베이 비활성화를 막는 실제 예약의 날짜, 시간, 상태를 베이 카드에 표시한다.
-- 과거 `CONFIRMED`는 기존처럼 베이 잠금에서 제외하고 `CHECKED_IN`, `IN_USE`는 날짜와 무관하게 보호한다.
+- `CONFIRMED`, `CHECKED_IN`, `IN_USE`는 예약 버퍼 종료 전까지 베이 잠금 대상으로 보호한다.
 - 예약 상세에 예약자 이메일/메타데이터를 추가하고 체크인 4장과 체크아웃 2장을 즉시 표시한다.
 - 예약 상세 모달은 바깥 배경을 선택해 닫을 수 있다.
 - availability block 입력을 날짜 + 정시 드롭다운으로 바꾸고 API도 정각 외 요청을 거부한다.
@@ -2107,3 +2107,30 @@ DB 적용:
 - `npm run e2e:ui` 성공, 9 passed.
 - `npm run verify:admin` 성공, 5 passed.
 - `npm run e2e:partner-admin` 성공. 신규 package creation request 생성과 비권한 사용자 403을 원격 DB에서 확인.
+
+## 63. 2026-07-23 Partner-admin 배포 QA 2차 후속 개선
+
+- 2026-07-22 비정각 예약은 차량 `PitNow E2E`/번호 `E2E 2026`인 과거 UI 자동 테스트 데이터로 확인했다.
+- UI E2E cleanup은 이미 예약·결제·증적 row를 삭제하도록 보강되어 신규 잔존 데이터는 발생하지 않는다.
+- 2026-07-21 실제 예약의 JPG 증적은 정상이고 HEIC 증적은 Storage에 존재하지만 Chromium 미지원으로 다운로드되던 원인을 확인했다.
+- 신규 HEIC/HEIF 업로드를 JPEG로 변환하고, 기존 HEIC 증적은 Partner-admin에서 로컬 변환해 미리보기한다.
+- 실제 Storage 객체가 없는 과거 테스트 URL은 깨진 이미지 대신 확인 불가 상태로 표시한다.
+- 증적 선택 시 새 탭 다운로드 대신 화면 내 확대 보기를 사용한다.
+- 버퍼가 지난 `CHECKED_IN`, `IN_USE`는 과거 상태 이력으로 남기되 베이 비활성화를 막지 않는다.
+- 신규 패키지 요청 폼에 필드 라벨을 추가하고 소요시간 제약을 `min=5`, `step=5`로 고쳐 60분 입력 오류를 해결했다.
+- Partner-admin은 신규 패키지 요청을 `승인 대기 중`, `처리 완료`, `거절됨` 상태 카드로 조회한다.
+- Partner 사이드바는 앵커 선택 시 색상을 바꾸지 않고, 상단 바에는 선택 메뉴 대신 현재 영업소 이름과 관리 범위를 표시한다.
+- 사용자 앱 링크와 Partner 로그아웃 action 스타일을 통일했다.
+
+현재 검증:
+
+- `npx tsc --noEmit` 성공.
+- `npm run lint` 성공.
+- `npm run build` 성공.
+- `npm run e2e:partner-admin` 성공. 버퍼가 지난 체크인 제외, 생성 요청 목록과 비권한 403 확인.
+- `npm run verify:partner-admin-ui` 성공, 1 passed. 영업소 헤더, 입력 라벨/60분 유효성, 승인 대기 카드와 action 스타일 확인.
+- `npm run e2e:ui` 성공, 10 passed. 사용자 예약 전체 흐름과 Admin/Partner-admin 회귀 포함.
+
+별도 후속 작업:
+
+- `npm audit --omit=dev`에서 기존 Next.js `16.1.6`과 전이 의존성 보안 권고가 확인됐다. 수정 가능 버전 `16.2.11` 업그레이드는 이번 UI 변경과 분리해 전체 회귀 검증과 함께 진행한다.

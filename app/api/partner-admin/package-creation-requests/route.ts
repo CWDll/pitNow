@@ -18,6 +18,17 @@ interface RequestBody {
   reason?: unknown;
 }
 
+interface PackageCreationRequestRow {
+  id: string;
+  requested_name: string;
+  requested_description: string | null;
+  requested_duration_minutes: number;
+  requested_labor_price: number | string;
+  reason: string | null;
+  status: "PENDING" | "FULFILLED" | "REJECTED";
+  created_at: string;
+}
+
 function jsonError(status: number, code: string, message: string) {
   return NextResponse.json(
     { success: false, error: { code, message } },
@@ -33,6 +44,67 @@ function nonNegativeInteger(value: unknown): number | null {
 function positiveInteger(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function mapRequest(row: PackageCreationRequestRow) {
+  return {
+    id: row.id,
+    requestedName: row.requested_name,
+    requestedDescription: row.requested_description ?? "",
+    requestedDurationMinutes: row.requested_duration_minutes,
+    requestedLaborPrice: Number(row.requested_labor_price),
+    reason: row.reason ?? "",
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+export async function GET(req: Request) {
+  if (!hasSupabaseEnv) {
+    return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
+  }
+
+  const authResult = await requireRequestUser(req);
+  if (!authResult.ok) {
+    return authResult.response;
+  }
+
+  const partnerId = new URL(req.url).searchParams.get("partnerId")?.trim();
+  if (!partnerId) {
+    return jsonError(400, "INVALID_INPUT", "partnerId는 필수입니다.");
+  }
+
+  const membership = await hasPartnerAdminMembership(
+    authResult.auth.client,
+    authResult.auth.userId,
+    partnerId,
+  );
+
+  if (membership.error) {
+    console.error("PARTNER PACKAGE CREATION LIST MEMBERSHIP ERROR:", membership.error);
+    return jsonError(500, "DB_ERROR", "정비소 관리자 권한을 확인하지 못했습니다.");
+  }
+
+  if (!membership.allowed) {
+    return jsonError(403, "PARTNER_ADMIN_FORBIDDEN", "이 정비소의 패키지 요청 조회 권한이 없습니다.");
+  }
+
+  const { data, error } = await authResult.auth.client
+    .from("partner_package_creation_requests")
+    .select("id,requested_name,requested_description,requested_duration_minutes,requested_labor_price,reason,status,created_at")
+    .eq("partner_id", partnerId)
+    .order("created_at", { ascending: false })
+    .returns<PackageCreationRequestRow[]>();
+
+  if (error) {
+    console.error("PARTNER PACKAGE CREATION LIST ERROR:", error);
+    return jsonError(500, "DB_ERROR", "신규 패키지 요청을 불러오지 못했습니다.");
+  }
+
+  return NextResponse.json({
+    success: true,
+    requests: (data ?? []).map(mapRequest),
+  });
 }
 
 export async function POST(req: Request) {
@@ -78,12 +150,13 @@ export async function POST(req: Request) {
     !partnerId ||
     !requestedName ||
     requestedDurationMinutes === null ||
+    requestedDurationMinutes % 5 !== 0 ||
     requestedLaborPrice === null
   ) {
     return jsonError(
       400,
       "INVALID_INPUT",
-      "패키지명, 소요시간, 희망가격을 확인해 주세요.",
+      "패키지명, 5분 단위 소요시간, 희망가격을 확인해 주세요.",
     );
   }
 
@@ -125,8 +198,8 @@ export async function POST(req: Request) {
       requested_by: authResult.auth.userId,
       status: "PENDING",
     })
-    .select("id,status")
-    .single<{ id: string; status: string }>();
+    .select("id,requested_name,requested_description,requested_duration_minutes,requested_labor_price,reason,status,created_at")
+    .single<PackageCreationRequestRow>();
 
   if (error || !data) {
     console.error("PARTNER PACKAGE CREATION REQUEST ERROR:", error);
@@ -137,5 +210,5 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ success: true, request: data });
+  return NextResponse.json({ success: true, request: mapRequest(data) });
 }

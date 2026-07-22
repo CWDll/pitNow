@@ -12,16 +12,16 @@ export function isBayBlockingReservation(params: {
   now?: Date;
   status: string;
 }) {
-  if (params.status === "CHECKED_IN" || params.status === "IN_USE") {
-    return true;
-  }
-
-  if (params.status !== "CONFIRMED") {
+  if (
+    params.status !== "CONFIRMED" &&
+    params.status !== "CHECKED_IN" &&
+    params.status !== "IN_USE"
+  ) {
     return false;
   }
 
   if (!params.blockedUntil) {
-    return false;
+    return params.status === "CHECKED_IN" || params.status === "IN_USE";
   }
 
   const blockedUntilMs = new Date(params.blockedUntil).getTime();

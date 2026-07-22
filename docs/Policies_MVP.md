@@ -31,6 +31,7 @@
 
 - 4 vehicle photos required
 - Without photo, timer cannot start
+- HEIC/HEIF uploads are converted to JPEG in the browser before storage so evidence remains previewable in web consoles.
 - Check-in and usage start open 15 minutes before the reserved start time
 - Check-in is rejected before the opening time and after the reserved end time
 
@@ -40,6 +41,7 @@
 - Tool check required
 - Waste disposal check required
 - 2 checkout photos required
+- Partner-admin shows evidence inline and converts legacy HEIC/HEIF objects locally for preview without forcing a download.
 - Extra fee auto calculated
 
 ## Store Admin

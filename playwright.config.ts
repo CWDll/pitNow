@@ -54,7 +54,15 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 1000 },
       },
-      testMatch: /admin\.spec\.ts/,
+      testMatch: /(^|\/)admin\.spec\.ts$/,
+    },
+    {
+      name: "partner-admin-chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 1000 },
+      },
+      testMatch: /(^|\/)partner-admin\.spec\.ts$/,
     },
   ],
 });

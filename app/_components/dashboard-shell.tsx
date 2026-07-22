@@ -54,6 +54,7 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
   const router = useRouter();
   const [hash, setHash] = useState("");
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [partnerName, setPartnerName] = useState("정비소 운영 콘솔");
   const isAdmin = variant === "admin";
   const navItems = isAdmin ? adminNavItems : partnerNavItems;
 
@@ -63,6 +64,21 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
     window.addEventListener("hashchange", updateHash);
     return () => window.removeEventListener("hashchange", updateHash);
   }, []);
+
+  useEffect(() => {
+    if (isAdmin) {
+      return;
+    }
+
+    const updatePartnerName = (event: Event) => {
+      const detail = (event as CustomEvent<{ partnerName?: string }>).detail;
+      setPartnerName(detail?.partnerName?.trim() || "정비소 운영 콘솔");
+    };
+
+    window.addEventListener("pitnow:partner-context", updatePartnerName);
+    return () =>
+      window.removeEventListener("pitnow:partner-context", updatePartnerName);
+  }, [isAdmin]);
 
   const isActive = (href: string) => {
     const [itemPath, itemHash = ""] = href.split("#");
@@ -129,12 +145,12 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
                   setHash(nextHash);
                 }}
                 className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
-                  active
+                  isAdmin && active
                     ? "bg-blue-50 text-blue-700"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
-                <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+                <Icon size={18} strokeWidth={isAdmin && active ? 2.5 : 2} />
                 {item.label}
               </Link>
             );
@@ -144,7 +160,7 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
         <div className="mt-auto space-y-1 border-t border-slate-200 pt-4">
           <Link
             href="/"
-            className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+            className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
           >
             <ExternalLink size={17} />
             사용자 앱 열기
@@ -153,7 +169,7 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
             <Link
               href="/admin/logout"
               prefetch={false}
-              className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
             >
               <LogOut size={17} />
               로그아웃
@@ -176,10 +192,12 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-7 backdrop-blur">
           <div>
             <p className="text-sm font-bold text-slate-900">
-              {currentItem?.label ?? "운영 콘솔"}
+              {isAdmin ? (currentItem?.label ?? "운영 콘솔") : partnerName}
             </p>
             <p className="text-xs text-slate-500">
-              {isAdmin ? "PitNow 전체 서비스 운영" : "정비소 현장 운영"}
+              {isAdmin
+                ? "PitNow 전체 서비스 운영"
+                : "예약, 베이, 패키지와 영업 차단을 관리합니다."}
             </p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">

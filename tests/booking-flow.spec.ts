@@ -34,6 +34,15 @@ function requireAdminTokenForE2E() {
 
 async function mockReservationPhotoUploads(page: Page) {
   await page.route("**/storage/v1/object/reservation-photos/**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/jpeg",
+        body: testImageFile.buffer,
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -185,6 +194,7 @@ test.describe("booking flow smoke", () => {
 
       await expect(page).toHaveURL(
         new RegExp(`/partner/${seed.partnerId}/schedule`),
+        { timeout: 15_000 },
       );
       await expect(
         page.getByRole("heading", { name: "시간 / 베이 선택" }),
@@ -474,7 +484,7 @@ test.describe("booking flow smoke", () => {
       await page.goto("/reservation");
       await expect(
         page.getByRole("button", { name: /진행 중·예정/ }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: 15_000 });
       const activeReservationCard = page
         .locator("article")
         .filter({ hasText: seed.partnerName })

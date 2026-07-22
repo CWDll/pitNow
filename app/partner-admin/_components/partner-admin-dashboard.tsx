@@ -6,6 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { VEHICLE_TYPE_OPTIONS, type VehicleType } from "@/src/domain/vehicle";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { redirectToLogin } from "@/src/lib/client-auth";
+import {
+  convertHeicBlobToJpeg,
+  looksLikeHeic,
+} from "@/src/lib/heic-image";
 
 // type, interface, API는 나중에 분리해야 함. 한번에 옮길 것.
 
@@ -73,6 +77,17 @@ interface PartnerAdminPackage {
   isActive: boolean;
   priceActive: boolean;
   catalogActive: boolean;
+}
+
+interface PartnerPackageCreationRequest {
+  id: string;
+  requestedName: string;
+  requestedDescription: string;
+  requestedDurationMinutes: number;
+  requestedLaborPrice: number;
+  reason: string;
+  status: "PENDING" | "FULFILLED" | "REJECTED";
+  createdAt: string;
 }
 
 interface AvailabilityBlock {
@@ -283,23 +298,125 @@ function formatPrice(value: number): string {
 }
 
 function EvidenceImage({ label, src }: { label: string; src: string }) {
+  const [hasError, setHasError] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [displaySrc, setDisplaySrc] = useState(src);
+  const [isConverting, setIsConverting] = useState(false);
+
+  useEffect(() => {
+    if (!looksLikeHeic({ name: src })) {
+      setDisplaySrc(src);
+      setHasError(false);
+      return;
+    }
+
+    let objectUrl = "";
+    let cancelled = false;
+    setIsConverting(true);
+    setHasError(false);
+
+    async function convertForPreview() {
+      try {
+        const response = await fetch(src);
+        if (!response.ok) {
+          throw new Error("Evidence image fetch failed");
+        }
+        const converted = await convertHeicBlobToJpeg(await response.blob());
+        objectUrl = URL.createObjectURL(converted);
+        if (!cancelled) {
+          setDisplaySrc(objectUrl);
+        }
+      } catch {
+        if (!cancelled) {
+          setHasError(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsConverting(false);
+        }
+      }
+    }
+
+    void convertForPreview();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [src]);
+
+  if (isConverting) {
+    return (
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
+        <div className="grid aspect-video place-items-center text-xs font-semibold text-zinc-500">
+          HEIC 사진을 불러오는 중입니다.
+        </div>
+        <span className="block border-t border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700">
+          {label}
+        </span>
+      </div>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <div className="overflow-hidden rounded-lg border border-amber-200 bg-amber-50">
+        <div className="grid aspect-video place-items-center px-4 text-center text-xs font-semibold text-amber-800">
+          저장 정보는 있지만 실제 사진 파일을 확인할 수 없습니다.
+        </div>
+        <span className="block border-t border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700">
+          {label}
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <a
-      href={src}
-      target="_blank"
-      rel="noreferrer"
-      className="group overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={`${label} 증적 사진`}
-        className="aspect-video w-full bg-zinc-100 object-cover transition group-hover:scale-[1.02]"
-      />
-      <span className="block border-t border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700">
-        {label}
-      </span>
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={() => setIsPreviewOpen(true)}
+        className="group overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 text-left"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={displaySrc}
+          alt={`${label} 증적 사진`}
+          onError={() => setHasError(true)}
+          className="aspect-video w-full bg-zinc-100 object-cover transition group-hover:scale-[1.02]"
+        />
+        <span className="block border-t border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700">
+          {label}
+        </span>
+      </button>
+      {isPreviewOpen ? (
+        <div
+          className="fixed inset-0 z-[70] grid place-items-center bg-black/75 p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${label} 사진 확대`}
+          onClick={() => setIsPreviewOpen(false)}
+        >
+          <div className="max-h-full max-w-5xl" onClick={(event) => event.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={displaySrc}
+              alt={`${label} 증적 사진 확대`}
+              className="max-h-[80vh] max-w-full rounded-lg bg-white object-contain"
+            />
+            <button
+              type="button"
+              onClick={() => setIsPreviewOpen(false)}
+              className="mt-3 h-10 w-full rounded-lg bg-white text-sm font-semibold text-zinc-900"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -448,6 +565,9 @@ export function PartnerAdminDashboard() {
   );
   const [bays, setBays] = useState<PartnerBay[]>([]);
   const [packages, setPackages] = useState<PartnerAdminPackage[]>([]);
+  const [packageCreationRequests, setPackageCreationRequests] = useState<
+    PartnerPackageCreationRequest[]
+  >([]);
   const [availabilityBlocks, setAvailabilityBlocks] = useState<
     AvailabilityBlock[]
   >([]);
@@ -470,6 +590,7 @@ export function PartnerAdminDashboard() {
     reason: "",
   });
   const [isRequestingNewPackage, setIsRequestingNewPackage] = useState(false);
+  const [packageReloadKey, setPackageReloadKey] = useState(0);
   const [editingBlockId, setEditingBlockId] = useState("");
   const [editBlockStartsAt, setEditBlockStartsAt] = useState("");
   const [editBlockEndsAt, setEditBlockEndsAt] = useState("");
@@ -511,6 +632,14 @@ export function PartnerAdminDashboard() {
     () => partners.find((partner) => partner.partnerId === selectedPartnerId),
     [partners, selectedPartnerId],
   );
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("pitnow:partner-context", {
+        detail: { partnerName: selectedPartner?.partnerName ?? "" },
+      }),
+    );
+  }, [selectedPartner]);
 
   useEffect(() => {
     let mounted = true;
@@ -682,18 +811,25 @@ export function PartnerAdminDashboard() {
       const query = new URLSearchParams({
         partnerId: selectedPartnerId,
       });
-      const response = await authFetch(
-        `/api/partner-admin/packages?${query.toString()}`,
-      );
-      const payload = await readJson(response);
+      const [response, requestsResponse] = await Promise.all([
+        authFetch(`/api/partner-admin/packages?${query.toString()}`),
+        authFetch(
+          `/api/partner-admin/package-creation-requests?${query.toString()}`,
+        ),
+      ]);
+      const [payload, requestsPayload] = await Promise.all([
+        readJson(response),
+        readJson(requestsResponse),
+      ]);
 
-      if (!response.ok) {
+      if (!response.ok || !requestsResponse.ok) {
         if (mounted) {
           setError(
-            extractErrorMessage(payload) ??
+            extractErrorMessage(response.ok ? requestsPayload : payload) ??
               "업장 패키지 목록을 불러오지 못했습니다.",
           );
           setPackages([]);
+          setPackageCreationRequests([]);
           setIsLoadingPackages(false);
         }
         return;
@@ -705,9 +841,22 @@ export function PartnerAdminDashboard() {
         Array.isArray((payload as { packages?: unknown }).packages)
           ? (payload as { packages: PartnerAdminPackage[] }).packages
           : [];
+      const nextCreationRequests =
+        requestsPayload &&
+        typeof requestsPayload === "object" &&
+        Array.isArray(
+          (requestsPayload as { requests?: unknown }).requests,
+        )
+          ? (
+              requestsPayload as {
+                requests: PartnerPackageCreationRequest[];
+              }
+            ).requests
+          : [];
 
       if (mounted) {
         setPackages(nextPackages);
+        setPackageCreationRequests(nextCreationRequests);
         setIsLoadingPackages(false);
       }
     }
@@ -717,7 +866,7 @@ export function PartnerAdminDashboard() {
     return () => {
       mounted = false;
     };
-  }, [selectedPartnerId]);
+  }, [packageReloadKey, selectedPartnerId]);
 
   useEffect(() => {
     if (!selectedPartnerId) {
@@ -1368,6 +1517,7 @@ export function PartnerAdminDashboard() {
     setPackageRequestMessage(
       "신규 패키지 생성 요청을 Admin 검토 대기 상태로 저장했습니다.",
     );
+    setPackageReloadKey((current) => current + 1);
     setIsRequestingNewPackage(false);
   }
 
@@ -1496,9 +1646,9 @@ export function PartnerAdminDashboard() {
               <div>
                 <h2 className="text-base font-semibold">베이 관리</h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  진행/예정 예약이 있는 베이는 완료 또는 취소 전까지 비활성화할
-                  수 없습니다. 입점 시 확인한 차종과 중량 조건도 베이별로
-                  관리합니다.
+                  예약 버퍼 종료 전인 확정·이용 예약이 있는 베이는 비활성화할 수
+                  없습니다. 버퍼가 지난 과거 기록은 이력으로 보존하되 베이를
+                  잠그지 않습니다. 차종과 중량 조건도 베이별로 관리합니다.
                 </p>
               </div>
               {isLoadingBays ? (
@@ -1677,78 +1827,91 @@ export function PartnerAdminDashboard() {
                     Admin 검토
                   </span>
                 </div>
-                <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_110px_140px_1.2fr]">
-                  <input
-                    required
-                    value={newPackageRequest.name}
-                    onChange={(event) =>
-                      setNewPackageRequest((current) => ({
-                        ...current,
-                        name: event.target.value,
-                      }))
-                    }
-                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
-                    placeholder="패키지명"
-                    aria-label="신규 패키지명"
-                  />
-                  <input
-                    required
-                    type="number"
-                    min="1"
-                    step="5"
-                    value={newPackageRequest.durationMinutes}
-                    onChange={(event) =>
-                      setNewPackageRequest((current) => ({
-                        ...current,
-                        durationMinutes: event.target.value,
-                      }))
-                    }
-                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
-                    placeholder="소요 분"
-                    aria-label="신규 패키지 소요시간"
-                  />
-                  <input
-                    required
-                    type="number"
-                    min="0"
-                    step="1000"
-                    value={newPackageRequest.laborPrice}
-                    onChange={(event) =>
-                      setNewPackageRequest((current) => ({
-                        ...current,
-                        laborPrice: event.target.value,
-                      }))
-                    }
-                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
-                    placeholder="희망 공임"
-                    aria-label="신규 패키지 희망 공임"
-                  />
-                  <input
-                    value={newPackageRequest.description}
-                    onChange={(event) =>
-                      setNewPackageRequest((current) => ({
-                        ...current,
-                        description: event.target.value,
-                      }))
-                    }
-                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
-                    placeholder="사용자에게 보일 설명"
-                    aria-label="신규 패키지 설명"
-                  />
+                <div className="mt-3 grid items-start gap-3 lg:grid-cols-[1fr_140px_160px_1.2fr]">
+                  <label className="text-xs font-semibold text-blue-950">
+                    패키지명 <span className="text-blue-600">필수</span>
+                    <input
+                      required
+                      value={newPackageRequest.name}
+                      onChange={(event) =>
+                        setNewPackageRequest((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-blue-200 bg-white px-3 text-sm font-normal text-zinc-900 outline-none ring-blue-200 focus:ring-4"
+                      placeholder="예: 시트 내부 청소 패키지"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-blue-950">
+                    소요시간(분) <span className="text-blue-600">필수</span>
+                    <input
+                      required
+                      type="number"
+                      min="5"
+                      step="5"
+                      value={newPackageRequest.durationMinutes}
+                      onChange={(event) =>
+                        setNewPackageRequest((current) => ({
+                          ...current,
+                          durationMinutes: event.target.value,
+                        }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-blue-200 bg-white px-3 text-sm font-normal text-zinc-900 outline-none ring-blue-200 focus:ring-4"
+                      placeholder="예: 60"
+                    />
+                    <span className="mt-1 block font-normal text-blue-700">
+                      5분 단위
+                    </span>
+                  </label>
+                  <label className="text-xs font-semibold text-blue-950">
+                    희망 공임(원) <span className="text-blue-600">필수</span>
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      step="1000"
+                      value={newPackageRequest.laborPrice}
+                      onChange={(event) =>
+                        setNewPackageRequest((current) => ({
+                          ...current,
+                          laborPrice: event.target.value,
+                        }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-blue-200 bg-white px-3 text-sm font-normal text-zinc-900 outline-none ring-blue-200 focus:ring-4"
+                      placeholder="예: 50000"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-blue-950">
+                    사용자 노출 설명
+                    <input
+                      value={newPackageRequest.description}
+                      onChange={(event) =>
+                        setNewPackageRequest((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-blue-200 bg-white px-3 text-sm font-normal text-zinc-900 outline-none ring-blue-200 focus:ring-4"
+                      placeholder="예: 내부 시트, 핸들, 바닥 청소"
+                    />
+                  </label>
                 </div>
-                <div className="mt-2 grid gap-2 lg:grid-cols-[1fr_auto]">
-                  <input
-                    value={newPackageRequest.reason}
-                    onChange={(event) =>
-                      setNewPackageRequest((current) => ({
-                        ...current,
-                        reason: event.target.value,
-                      }))
-                    }
-                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
-                    placeholder="필요 사유, 적용 희망일 등"
-                    aria-label="신규 패키지 요청 사유"
-                  />
+                <div className="mt-3 grid items-end gap-2 lg:grid-cols-[1fr_auto]">
+                  <label className="text-xs font-semibold text-blue-950">
+                    Admin 검토 참고사항
+                    <input
+                      value={newPackageRequest.reason}
+                      onChange={(event) =>
+                        setNewPackageRequest((current) => ({
+                          ...current,
+                          reason: event.target.value,
+                        }))
+                      }
+                      className="mt-1 h-10 w-full rounded-lg border border-blue-200 bg-white px-3 text-sm font-normal text-zinc-900 outline-none ring-blue-200 focus:ring-4"
+                      placeholder="필요 사유, 적용 희망일 등"
+                    />
+                  </label>
                   <button
                     type="submit"
                     disabled={isRequestingNewPackage}
@@ -1758,6 +1921,49 @@ export function PartnerAdminDashboard() {
                   </button>
                 </div>
               </form>
+              {packageCreationRequests.map((request) => (
+                <div
+                  key={request.id}
+                  data-testid="package-creation-request"
+                  className="rounded-lg border border-amber-200 bg-amber-50 p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-zinc-950">
+                        {request.requestedName}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-600">
+                        {request.requestedDescription || "설명 없음"}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        request.status === "PENDING"
+                          ? "bg-amber-100 text-amber-800"
+                          : request.status === "FULFILLED"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-zinc-200 text-zinc-700"
+                      }`}
+                    >
+                      {request.status === "PENDING"
+                        ? "승인 대기 중"
+                        : request.status === "FULFILLED"
+                          ? "처리 완료"
+                          : "거절됨"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-700">
+                    <span>소요 {request.requestedDurationMinutes}분</span>
+                    <span>희망 공임 {formatPrice(request.requestedLaborPrice)}</span>
+                    <span>요청일 {formatDate(request.createdAt)}</span>
+                  </div>
+                  {request.reason ? (
+                    <p className="mt-2 border-t border-amber-200 pt-2 text-xs text-amber-900">
+                      검토 참고: {request.reason}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
               {packages.length === 0 ? (
                 <p className="text-sm text-zinc-500">
                   등록된 Shop Service 패키지가 없습니다.
@@ -2321,6 +2527,14 @@ export function PartnerAdminDashboard() {
 
                     <section>
                       <h3 className="text-sm font-semibold">체크아웃 검수</h3>
+                      {detail.checkout && !detail.checkin ? (
+                        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                          체크아웃 기록은 있으나 체크인 증적이 없습니다. 현재
+                          정상 흐름에서는 체크인 사진 4장 없이는 이용을 시작할 수
+                          없으므로, 이 예약은 과거 테스트 또는 비정상 데이터로
+                          확인이 필요합니다.
+                        </p>
+                      ) : null}
                       {detail.checkout ? (
                         <div className="mt-2 space-y-3">
                           {detail.checkout.checkoutPhoto1 &&
