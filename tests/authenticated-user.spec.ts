@@ -34,7 +34,10 @@ test.describe("authenticated user smoke", () => {
       }),
     );
     const vehicle = await ensureE2EVehicle({ db, userId: user.id });
-    const seed = await getSelfReservationSeed(db);
+    const seed = await getSelfReservationSeed(db, {
+      typeLabel: "세단",
+      weightKg: 1550,
+    });
     const { startTime, endTime } = getFutureReservationWindow();
 
     await page.goto("/login?next=/my-car");
@@ -56,6 +59,15 @@ test.describe("authenticated user smoke", () => {
     await page.getByPlaceholder("공차중량 kg (선택)").fill("1550");
     await page.getByRole("button", { name: "저장", exact: true }).click();
     await expect(page.getByText("1,550kg")).toBeVisible();
+
+    await page.goto(`/partner/${seed.partnerId}/work?mode=SELF_SERVICE`);
+    await expect(page.getByText("자동 선택")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /PitNow E2E \(2026\)/ }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("heading", { name: "차량 선택" }),
+    ).not.toBeVisible();
 
     await page.goto("/reservation");
     await expect(
@@ -123,7 +135,10 @@ test.describe("authenticated user smoke", () => {
       },
     );
 
-    expect(prepareResult.status).toBe(200);
+    expect(
+      prepareResult.status,
+      JSON.stringify(prepareResult.payload),
+    ).toBe(200);
     expect(prepareResult.payload.success).toBe(true);
     expect(prepareResult.payload.paymentId).toEqual(expect.any(String));
     expect(prepareResult.payload.amount).toBeGreaterThan(0);

@@ -274,6 +274,10 @@ export async function ensureE2EVehicle(params: {
 
 export async function getSelfReservationSeed(
   db: SupabaseClient,
+  vehicle: { typeLabel: string; weightKg: number } = {
+    typeLabel: "세단",
+    weightKg: 1500,
+  },
 ): Promise<E2EReservationSeed> {
   const { data: partners, error: partnerError } = await db
     .from("partners")
@@ -287,16 +291,30 @@ export async function getSelfReservationSeed(
   }
 
   for (const partner of partners ?? []) {
-    const { data: bay, error: bayError } = await db
+    const { data: bays, error: bayError } = await db
       .from("bays")
-      .select("id")
+      .select("id,allowed_vehicle_types,max_vehicle_weight_kg")
       .eq("partner_id", partner.id)
-      .limit(1)
-      .maybeSingle<{ id: string }>();
+      .eq("is_active", true)
+      .returns<
+        Array<{
+          id: string;
+          allowed_vehicle_types: string[];
+          max_vehicle_weight_kg: number | null;
+        }>
+      >();
 
     if (bayError) {
       throw bayError;
     }
+
+    const bay = (bays ?? []).find(
+      (candidate) =>
+        (candidate.allowed_vehicle_types.length === 0 ||
+          candidate.allowed_vehicle_types.includes(vehicle.typeLabel)) &&
+        (candidate.max_vehicle_weight_kg === null ||
+          candidate.max_vehicle_weight_kg >= vehicle.weightKg),
+    );
 
     if (bay) {
       const { data: task, error: taskError } = await db

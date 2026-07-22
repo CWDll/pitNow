@@ -316,13 +316,19 @@ function PartnerWorkPageContent() {
       <section aria-labelledby="vehicle-title">
         <div className="mb-3 flex items-end justify-between">
           <h2 id="vehicle-title" className="text-lg font-black text-slate-950">예약 차량</h2>
-          <span className="text-xs font-bold text-slate-400">필수</span>
+          <span className="text-xs font-bold text-slate-400">
+            {cars.length === 1
+              ? "자동 선택"
+              : cars.length > 1
+                ? `${cars.length}대`
+                : "필수"}
+          </span>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <button
           type="button"
-          onClick={() => (cars.length > 0 ? setIsCarPickerOpen(true) : null)}
-          disabled={cars.length === 0}
+          onClick={() => (cars.length > 1 ? setIsCarPickerOpen(true) : null)}
+          disabled={cars.length <= 1}
           className="flex w-full items-center gap-3 rounded-xl bg-slate-50 p-3 text-left disabled:cursor-default"
         >
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-blue-600 shadow-sm">
@@ -340,7 +346,7 @@ function PartnerWorkPageContent() {
               {selectedCar?.number ?? "로그인 후 차량을 선택해 주세요"}
             </span>
           </span>
-          {cars.length > 0 ? <ChevronDown className="size-4 text-slate-400" /> : null}
+          {cars.length > 1 ? <ChevronDown className="size-4 text-slate-400" /> : null}
         </button>
         {needsLoginForCars ? (
           <Link
@@ -517,7 +523,7 @@ function PartnerWorkPageContent() {
         </button>
       </div>
 
-      {isCarPickerOpen ? (
+      {isCarPickerOpen && cars.length > 1 ? (
         <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-950/40">
           <div className="mb-[calc(4.25rem+env(safe-area-inset-bottom))] w-full max-w-[430px] rounded-t-2xl bg-white p-4 pb-5 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
