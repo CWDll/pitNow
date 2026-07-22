@@ -111,7 +111,14 @@ const checks = [
   {
     label: "20260329 seed catalog: bays",
     table: "bays",
-    columns: ["id", "partner_id", "name", "is_active"],
+    columns: [
+      "id",
+      "partner_id",
+      "name",
+      "is_active",
+      "allowed_vehicle_types",
+      "max_vehicle_weight_kg",
+    ],
   },
   {
     label: "20260329 seed catalog: service_packages",
@@ -161,6 +168,7 @@ const checks = [
       "model",
       "year",
       "type_label",
+      "vehicle_weight_kg",
       "is_active",
     ],
   },

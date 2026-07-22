@@ -180,7 +180,9 @@ async function apiRequest({
 async function getTestBay(admin) {
   const { data, error } = await admin
     .from("bays")
-    .select("id,partner_id,name,is_active,partners!inner(id,name,hourly_price)")
+    .select(
+      "id,partner_id,name,is_active,allowed_vehicle_types,max_vehicle_weight_kg,partners!inner(id,name,hourly_price)",
+    )
     .limit(50);
 
   if (error) {
@@ -230,6 +232,8 @@ async function getTestBay(admin) {
     partnerId: bay.partner_id,
     name: bay.name,
     isActive: bay.is_active,
+    allowedVehicleTypes: bay.allowed_vehicle_types ?? [],
+    maxVehicleWeightKg: bay.max_vehicle_weight_kg,
     partnerName: partner.name,
     hourlyPrice: Number(partner.hourly_price),
   };
@@ -261,7 +265,8 @@ async function createVehicle({ admin, userId, runId }) {
       plate_number: `${TEST_PLATE_PREFIX}-${runId}`,
       model: "PitNow Partner API E2E",
       year: 2026,
-      type_label: "테스트",
+      type_label: "세단",
+      vehicle_weight_kg: 1500,
       is_active: false,
     })
     .select("id")
@@ -662,7 +667,11 @@ async function cleanup(admin, records) {
   if (records.bayId && typeof records.originalBayActive === "boolean") {
     const { error } = await admin
       .from("bays")
-      .update({ is_active: records.originalBayActive })
+      .update({
+        is_active: records.originalBayActive,
+        allowed_vehicle_types: records.originalAllowedVehicleTypes ?? [],
+        max_vehicle_weight_kg: records.originalMaxVehicleWeightKg ?? null,
+      })
       .eq("id", records.bayId);
 
     if (error) {
@@ -751,6 +760,8 @@ async function main() {
     const bay = await getTestBay(admin);
     records.bayId = bay.id;
     records.originalBayActive = bay.isActive;
+    records.originalAllowedVehicleTypes = bay.allowedVehicleTypes;
+    records.originalMaxVehicleWeightKg = bay.maxVehicleWeightKg;
     formatStep("테스트 정비소/베이 선택", `${bay.partnerName} / ${bay.name}`);
 
     await ensurePartnerAdmin({
@@ -959,6 +970,118 @@ async function main() {
       expectedErrorCode: "PAST_RESERVATION_TIME",
     });
     formatStep("과거 시간 결제 준비 거부 확인");
+
+    const compatibilityStart = addHours(new Date(), 24 * 400);
+    compatibilityStart.setUTCMinutes(0, 0, 0);
+    const compatibilityEnd = addHours(compatibilityStart, 1);
+    const compatibilityReservation = {
+      reservationType: "SELF_SERVICE",
+      bayId: bay.id,
+      vehicleId: records.vehicleId,
+      taskIds: [legalTaskId],
+      agreeOnlySelectedTasks: true,
+      consentMethod: "CHECKBOX",
+      helperVerifyRequested: false,
+      startTime: compatibilityStart.toISOString(),
+      endTime: compatibilityEnd.toISOString(),
+    };
+
+    const compatibilityPayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/bays/${bay.id}`,
+      method: "PATCH",
+      body: {
+        allowedVehicleTypes: ["SUV"],
+        maxVehicleWeightKg: 1800,
+      },
+    });
+    if (
+      compatibilityPayload.bay?.allowedVehicleTypes?.[0] !== "SUV" ||
+      compatibilityPayload.bay?.maxVehicleWeightKg !== 1800
+    ) {
+      throw new Error("bay 이용 조건 PATCH 응답이 올바르지 않습니다.");
+    }
+
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: "/api/payments/prepare",
+      method: "POST",
+      body: { method: "CARD", reservation: compatibilityReservation },
+      expectedStatus: 400,
+      expectedErrorCode: "VEHICLE_TYPE_NOT_ALLOWED",
+    });
+
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/bays/${bay.id}`,
+      method: "PATCH",
+      body: {
+        allowedVehicleTypes: ["세단"],
+        maxVehicleWeightKg: 1400,
+      },
+    });
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: "/api/payments/prepare",
+      method: "POST",
+      body: { method: "CARD", reservation: compatibilityReservation },
+      expectedStatus: 400,
+      expectedErrorCode: "VEHICLE_WEIGHT_EXCEEDED",
+    });
+
+    await admin
+      .from("vehicles")
+      .update({ vehicle_weight_kg: null })
+      .eq("id", records.vehicleId);
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/bays/${bay.id}`,
+      method: "PATCH",
+      body: {
+        allowedVehicleTypes: ["세단"],
+        maxVehicleWeightKg: 1800,
+      },
+    });
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: "/api/payments/prepare",
+      method: "POST",
+      body: { method: "CARD", reservation: compatibilityReservation },
+      expectedStatus: 400,
+      expectedErrorCode: "VEHICLE_WEIGHT_REQUIRED",
+    });
+
+    await apiRequest({
+      baseUrl,
+      token: outsiderToken,
+      path: `/api/partner-admin/bays/${bay.id}`,
+      method: "PATCH",
+      body: { allowedVehicleTypes: [], maxVehicleWeightKg: null },
+      expectedStatus: 403,
+      expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
+    });
+
+    await admin
+      .from("vehicles")
+      .update({ vehicle_weight_kg: 1500 })
+      .eq("id", records.vehicleId);
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/bays/${bay.id}`,
+      method: "PATCH",
+      body: {
+        allowedVehicleTypes: bay.allowedVehicleTypes,
+        maxVehicleWeightKg: bay.maxVehicleWeightKg,
+      },
+    });
+    formatStep("bay 차종/중량 설정과 예약 서버 검증 확인");
 
     await apiRequest({
       baseUrl,
@@ -1324,6 +1447,15 @@ async function main() {
         log.before_state?.isActive === bay.isActive &&
         log.after_state?.isActive === !bay.isActive,
       "bay 비활성/활성 변경 audit before/after 상태가 없습니다.",
+    );
+
+    assertAuditLog(
+      auditLogs,
+      (log) =>
+        log.action === "BAY_COMPATIBILITY_UPDATED" &&
+        log.target_type === "BAY" &&
+        log.target_id === bay.id,
+      "bay 이용 조건 변경 audit 로그가 없습니다.",
     );
 
     assertAuditLog(

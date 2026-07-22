@@ -52,6 +52,11 @@ test.describe("authenticated user smoke", () => {
     await expect(page.getByText("E2E 2026").first()).toBeVisible();
     await expect(page.getByText("PitNow E2E (2026)").first()).toBeVisible();
 
+    await page.getByRole("button", { name: "정보 수정" }).click();
+    await page.getByPlaceholder("공차중량 kg (선택)").fill("1550");
+    await page.getByRole("button", { name: "저장", exact: true }).click();
+    await expect(page.getByText("1,550kg")).toBeVisible();
+
     await page.goto("/reservation");
     await expect(
       page.getByText("내 예약 내역은 로그인 후 확인할 수 있습니다."),

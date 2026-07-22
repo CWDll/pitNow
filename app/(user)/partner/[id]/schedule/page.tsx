@@ -14,6 +14,11 @@ import {
 } from "lucide-react";
 
 import { selfMaintenanceTaskOptions } from "../../../_data/mock-garages";
+import type { VehicleType } from "@/src/domain/vehicle";
+import {
+  checkBayCompatibility,
+  type BayCompatibilityResult,
+} from "@/src/lib/bay-compatibility";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 import { kstWallTimeToUtcIso } from "@/src/lib/timezone";
 
@@ -39,6 +44,14 @@ const MIN_BLOCKS = 1;
 interface BayRow {
   id: string;
   name: string;
+  allowed_vehicle_types: VehicleType[];
+  max_vehicle_weight_kg: number | null;
+}
+
+interface VehicleRow {
+  id: string;
+  type_label: string;
+  vehicle_weight_kg: number | null;
 }
 
 interface ReservationRangeRow {
@@ -109,6 +122,27 @@ function formatMonthLabel(date: Date): string {
 function formatMonthValue(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${date.getFullYear()}-${month}`;
+}
+
+function getCompatibilityLabel(
+  result: BayCompatibilityResult | undefined,
+  maxWeightKg: number | null,
+): string {
+  if (!result || result.compatible) {
+    return "선택 가능";
+  }
+
+  if (result.code === "VEHICLE_TYPE_NOT_ALLOWED") {
+    return "차종 미지원";
+  }
+
+  if (result.code === "VEHICLE_WEIGHT_REQUIRED") {
+    return "차량 중량 등록 필요";
+  }
+
+  return maxWeightKg === null
+    ? "중량 초과"
+    : `최대 ${maxWeightKg.toLocaleString("ko-KR")}kg`;
 }
 
 function monthValueToDate(monthValue: string, prevDate: Date): Date | null {
@@ -205,6 +239,12 @@ function PartnerSchedulePageContent() {
     useState<boolean>(false);
   const [bayIds, setBayIds] = useState<string[]>([]);
   const [bayLabels, setBayLabels] = useState<string[]>([]);
+  const [bayRows, setBayRows] = useState<BayRow[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<VehicleRow | null>(
+    null,
+  );
+  const [isCompatibilityLoaded, setIsCompatibilityLoaded] =
+    useState<boolean>(false);
   const [reservationRanges, setReservationRanges] = useState<
     Array<{ bayId: string; startMs: number; endMs: number }>
   >([]);
@@ -280,6 +320,32 @@ function PartnerSchedulePageContent() {
     resolvedBayIds[selectedBay - 1] ?? resolvedBayIds[0] ?? null;
   const selectedBayLabel =
     resolvedBayLabels[selectedBay - 1] ?? resolvedBayLabels[0] ?? "베이";
+  const bayCompatibilityById = useMemo(() => {
+    const result = new Map<string, BayCompatibilityResult>();
+
+    for (const bay of bayRows) {
+      result.set(
+        bay.id,
+        selectedVehicle
+          ? checkBayCompatibility({
+              allowedVehicleTypes: bay.allowed_vehicle_types ?? [],
+              maxVehicleWeightKg: bay.max_vehicle_weight_kg,
+              vehicleType: selectedVehicle.type_label,
+              vehicleWeightKg: selectedVehicle.vehicle_weight_kg,
+            })
+          : {
+              compatible: false,
+              code: "VEHICLE_WEIGHT_REQUIRED",
+              message: "선택 차량 정보를 확인하는 중입니다.",
+            },
+      );
+    }
+
+    return result;
+  }, [bayRows, selectedVehicle]);
+  const selectedBayCompatibility = selectedBayId
+    ? bayCompatibilityById.get(selectedBayId)
+    : undefined;
   const todayMs = useMemo(() => stripTime(new Date(nowMs)).getTime(), [nowMs]);
 
   useEffect(() => {
@@ -298,27 +364,50 @@ function PartnerSchedulePageContent() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("bays")
-        .select("id,name")
-        .eq("partner_id", safeGarage.id)
-        .eq("is_active", true)
-        .order("name", { ascending: true })
-        .returns<BayRow[]>();
+      setIsCompatibilityLoaded(false);
 
-      if (error || !data || data.length === 0 || isCancelled) {
+      const [bayResult, vehicleResult] = await Promise.all([
+        supabase
+          .from("bays")
+          .select(
+            "id,name,allowed_vehicle_types,max_vehicle_weight_kg",
+          )
+          .eq("partner_id", safeGarage.id)
+          .eq("is_active", true)
+          .order("name", { ascending: true })
+          .returns<BayRow[]>(),
+        supabase
+          .from("vehicles")
+          .select("id,type_label,vehicle_weight_kg")
+          .eq("id", carId)
+          .maybeSingle<VehicleRow>(),
+      ]);
+
+      const { data, error } = bayResult;
+
+      if (error || !data || isCancelled) {
         return;
       }
 
+      const vehicle = vehicleResult.data ?? null;
+      setBayRows(data);
+      setSelectedVehicle(vehicle);
+      setIsCompatibilityLoaded(true);
       setBayIds(data.map((row) => row.id));
       setBayLabels(data.map((row) => row.name));
-      setSelectedBay((prev) => {
-        const max = data.length;
-        if (max < 1) {
-          return 1;
+      const firstCompatibleIndex = data.findIndex((bay) => {
+        if (!vehicle) {
+          return false;
         }
-        return Math.min(Math.max(prev, 1), max);
+
+        return checkBayCompatibility({
+          allowedVehicleTypes: bay.allowed_vehicle_types ?? [],
+          maxVehicleWeightKg: bay.max_vehicle_weight_kg,
+          vehicleType: vehicle.type_label,
+          vehicleWeightKg: vehicle.vehicle_weight_kg,
+        }).compatible;
       });
+      setSelectedBay(firstCompatibleIndex >= 0 ? firstCompatibleIndex + 1 : 1);
     }
 
     void loadBays();
@@ -326,7 +415,7 @@ function PartnerSchedulePageContent() {
     return () => {
       isCancelled = true;
     };
-  }, [safeGarage?.id]);
+  }, [carId, safeGarage?.id]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -531,6 +620,8 @@ function PartnerSchedulePageContent() {
     selectedEndIdx !== null &&
     isRangeSelectable(selectedStartIdx, selectedEndIdx, selectedBay);
   const canProceed =
+    isCompatibilityLoaded &&
+    selectedVehicle !== null &&
     resolvedBayIds.length > 0 &&
     (bookingMode === "PACKAGE"
       ? selectedRangeSelectable && selectedBlocks === packageDurationBlocks
@@ -591,6 +682,15 @@ function PartnerSchedulePageContent() {
     endExclusiveIdx: number,
     bay: number,
   ): boolean {
+    const bayId = resolvedBayIds[bay - 1];
+    const compatibility = bayId
+      ? bayCompatibilityById.get(bayId)
+      : undefined;
+
+    if (compatibility && !compatibility.compatible) {
+      return false;
+    }
+
     if (
       startIdx < 0 ||
       endExclusiveIdx > blockCount ||
@@ -861,19 +961,46 @@ function PartnerSchedulePageContent() {
           const bayNumber = index + 1;
           const active = bayNumber === selectedBay;
           const bayLabel = resolvedBayLabels[index] ?? `${bayNumber}번 베이`;
+          const compatibility = bayCompatibilityById.get(bayId);
+          const incompatible = compatibility && !compatibility.compatible;
+          const bayRow = bayRows.find((row) => row.id === bayId);
 
           return (
             <button
               key={bayId}
               type="button"
+              disabled={incompatible}
               onClick={() => handleBayChange(bayNumber)}
-              className={`h-11 shrink-0 rounded-xl border px-4 text-sm font-black ${active ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700"}`}
+              className={`min-h-14 min-w-32 shrink-0 rounded-xl border px-4 py-2 text-left text-sm font-black disabled:cursor-not-allowed ${
+                incompatible
+                  ? "border-slate-200 bg-slate-100 text-slate-400"
+                  : active
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700"
+              }`}
             >
-              {bayLabel}
+              <span className="block">{bayLabel}</span>
+              <span className={`mt-0.5 block text-[10px] font-semibold ${active && !incompatible ? "text-blue-100" : "text-slate-400"}`}>
+                {getCompatibilityLabel(
+                  compatibility,
+                  bayRow?.max_vehicle_weight_kg ?? null,
+                )}
+              </span>
             </button>
           );
         })}
       </div>
+
+      {selectedBayCompatibility && !selectedBayCompatibility.compatible ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          <p>{selectedBayCompatibility.message}</p>
+          {selectedBayCompatibility.code === "VEHICLE_WEIGHT_REQUIRED" ? (
+            <Link href="/my-car" className="mt-2 inline-block text-blue-700 underline">
+              내 차에서 차량 중량 등록하기
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
 
       {resolvedBayIds.length === 0 ? (
         <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">

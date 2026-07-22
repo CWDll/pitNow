@@ -4,6 +4,10 @@ import Link from "next/link";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  VEHICLE_TYPE_OPTIONS,
+  type VehicleType,
+} from "@/src/domain/vehicle";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { redirectToLogin } from "@/src/lib/client-auth";
 
@@ -52,6 +56,8 @@ interface PartnerBay {
   partnerId: string;
   name: string;
   isActive: boolean;
+  allowedVehicleTypes: VehicleType[];
+  maxVehicleWeightKg: number | null;
 }
 
 interface PartnerAdminPackage {
@@ -406,6 +412,11 @@ export function PartnerAdminDashboard() {
     useState(false);
   const [updatingNoteId, setUpdatingNoteId] = useState("");
   const [updatingBayId, setUpdatingBayId] = useState("");
+  const [configuringBay, setConfiguringBay] = useState<PartnerBay | null>(null);
+  const [configVehicleTypes, setConfigVehicleTypes] = useState<VehicleType[]>(
+    [],
+  );
+  const [configMaxWeightKg, setConfigMaxWeightKg] = useState("");
   const [updatingBlockId, setUpdatingBlockId] = useState("");
   const [error, setError] = useState("");
 
@@ -936,6 +947,80 @@ export function PartnerAdminDashboard() {
     setUpdatingBayId("");
   }
 
+  function openBayCompatibility(bay: PartnerBay) {
+    setConfiguringBay(bay);
+    setConfigVehicleTypes(bay.allowedVehicleTypes);
+    setConfigMaxWeightKg(
+      bay.maxVehicleWeightKg === null ? "" : String(bay.maxVehicleWeightKg),
+    );
+  }
+
+  function toggleConfigVehicleType(type: VehicleType) {
+    setConfigVehicleTypes((current) =>
+      current.includes(type)
+        ? current.filter((item) => item !== type)
+        : [...current, type],
+    );
+  }
+
+  async function saveBayCompatibility(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!configuringBay) {
+      return;
+    }
+
+    const maxWeightKg = configMaxWeightKg.trim()
+      ? Number(configMaxWeightKg)
+      : null;
+
+    if (
+      maxWeightKg !== null &&
+      (!Number.isInteger(maxWeightKg) || maxWeightKg <= 0)
+    ) {
+      setError("최대 허용 중량은 1kg 이상의 정수로 입력해 주세요.");
+      return;
+    }
+
+    setUpdatingBayId(configuringBay.id);
+    setError("");
+
+    const response = await authFetch(
+      `/api/partner-admin/bays/${configuringBay.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          allowedVehicleTypes: configVehicleTypes,
+          maxVehicleWeightKg: maxWeightKg,
+        }),
+      },
+    );
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ?? "베이 이용 조건을 저장하지 못했습니다.",
+      );
+      setUpdatingBayId("");
+      return;
+    }
+
+    const updatedBay =
+      payload && typeof payload === "object"
+        ? (payload as { bay?: PartnerBay }).bay
+        : null;
+
+    if (updatedBay) {
+      setBays((current) =>
+        current.map((item) => (item.id === updatedBay.id ? updatedBay : item)),
+      );
+    }
+
+    setUpdatingBayId("");
+    setConfiguringBay(null);
+  }
+
   async function createAvailabilityBlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1282,7 +1367,8 @@ export function PartnerAdminDashboard() {
                 <h2 className="text-base font-semibold">베이 관리</h2>
                 <p className="mt-1 text-xs text-zinc-500">
                   진행/예정 예약이 있는 베이는 완료 또는 취소 전까지 비활성화할
-                  수 없습니다.
+                  수 없습니다. 입점 시 확인한 차종과 중량 조건도 베이별로
+                  관리합니다.
                 </p>
               </div>
               {isLoadingBays ? (
@@ -1307,9 +1393,10 @@ export function PartnerAdminDashboard() {
                   return (
                     <div
                       key={bay.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3"
+                      className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3"
                     >
-                      <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
                         <p className="font-semibold">{bay.name}</p>
                         <p
                           className={`mt-1 text-xs font-semibold ${
@@ -1329,32 +1416,53 @@ export function PartnerAdminDashboard() {
                             ? `진행/예정 예약 ${bay.activeReservationCount}건`
                             : "진행/예정 예약 없음"}
                         </p>
+                        </div>
+                        <span className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-600">
+                          {bay.maxVehicleWeightKg === null
+                            ? "중량 제한 없음"
+                            : `${bay.maxVehicleWeightKg.toLocaleString("ko-KR")}kg 이하`}
+                        </span>
                       </div>
-                      <button
-                        type="button"
-                        disabled={isButtonDisabled}
-                        title={
-                          disableDeactivateButton
-                            ? "진행/예정 예약이 있어 비활성화할 수 없습니다."
-                            : undefined
-                        }
-                        onClick={() =>
-                          void updateBayActiveState(bay, !bay.isActive)
-                        }
-                        className={`h-9 rounded-full px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                          bay.isActive
-                            ? "bg-zinc-900 text-white hover:bg-zinc-700"
-                            : "bg-blue-600 text-white hover:bg-blue-500"
-                        }`}
-                      >
-                        {updatingBayId === bay.id
-                          ? "변경 중"
-                          : disableDeactivateButton
-                            ? "비활성화 불가"
-                            : bay.isActive
-                              ? "비활성화"
-                              : "활성화"}
-                      </button>
+                      <p className="mt-3 line-clamp-2 text-xs leading-5 text-zinc-600">
+                        허용 차종: {bay.allowedVehicleTypes.length === 0
+                          ? "전체"
+                          : bay.allowedVehicleTypes.join(", ")}
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openBayCompatibility(bay)}
+                          disabled={updatingBayId === bay.id}
+                          className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+                        >
+                          이용 조건 설정
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isButtonDisabled}
+                          title={
+                            disableDeactivateButton
+                              ? "진행/예정 예약이 있어 비활성화할 수 없습니다."
+                              : undefined
+                          }
+                          onClick={() =>
+                            void updateBayActiveState(bay, !bay.isActive)
+                          }
+                          className={`h-9 rounded-lg px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            bay.isActive
+                              ? "bg-zinc-900 text-white hover:bg-zinc-700"
+                              : "bg-blue-600 text-white hover:bg-blue-500"
+                          }`}
+                        >
+                          {updatingBayId === bay.id
+                            ? "변경 중"
+                            : disableDeactivateButton
+                              ? "비활성화 불가"
+                              : bay.isActive
+                                ? "비활성화"
+                                : "활성화"}
+                        </button>
+                      </div>
                     </div>
                   );
                 })
@@ -2313,6 +2421,91 @@ export function PartnerAdminDashboard() {
                   {isCreatingOperationalNote ? "저장 중" : "저장"}
                 </button>
               </div>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {configuringBay ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-zinc-950/45 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bay-compatibility-title"
+        >
+          <form
+            onSubmit={saveBayCompatibility}
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-lg bg-white p-4 shadow-2xl sm:rounded-lg sm:p-5"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 id="bay-compatibility-title" className="text-xl font-bold">
+                  {configuringBay.name} 이용 조건
+                </h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  입점 시 확인한 베이 수용 조건을 입력합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfiguringBay(null)}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold"
+              >
+                닫기
+              </button>
+            </div>
+
+            <fieldset className="mt-5">
+              <legend className="text-sm font-semibold">허용 차종</legend>
+              <p className="mt-1 text-xs text-zinc-500">
+                아무 차종도 선택하지 않으면 전체 차종을 허용합니다.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {VEHICLE_TYPE_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={configVehicleTypes.includes(option.value)}
+                      onChange={() => toggleConfigVehicleType(option.value)}
+                      className="size-4 accent-blue-600"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <label className="mt-5 block">
+              <span className="text-sm font-semibold">최대 허용 중량 (kg)</span>
+              <input
+                type="number"
+                min="1"
+                inputMode="numeric"
+                value={configMaxWeightKg}
+                onChange={(event) => setConfigMaxWeightKg(event.target.value)}
+                placeholder="비워두면 중량 제한 없음"
+                className="mt-2 h-11 w-full rounded-lg border border-zinc-300 px-3 text-sm outline-none ring-blue-200 focus:ring-4"
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfiguringBay(null)}
+                className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={updatingBayId === configuringBay.id}
+                className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white disabled:bg-zinc-300"
+              >
+                {updatingBayId === configuringBay.id ? "저장 중" : "저장"}
+              </button>
             </div>
           </form>
         </div>

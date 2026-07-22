@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireRequestUser } from "@/src/lib/auth";
+import type { VehicleType } from "@/src/domain/vehicle";
 import {
   BAY_BLOCKING_RESERVATION_STATUSES,
   isBayBlockingReservation,
@@ -17,6 +18,8 @@ interface BayRow {
   partner_id: string;
   name: string;
   is_active: boolean;
+  allowed_vehicle_types: VehicleType[];
+  max_vehicle_weight_kg: number | null;
 }
 
 interface ReservationBayRow {
@@ -82,7 +85,9 @@ export async function GET(req: Request) {
   const db = supabaseAdmin ?? authResult.auth.client;
   const { data, error } = await db
     .from("bays")
-    .select("id,partner_id,name,is_active")
+    .select(
+      "id,partner_id,name,is_active,allowed_vehicle_types,max_vehicle_weight_kg",
+    )
     .eq("partner_id", partnerId)
     .order("name", { ascending: true })
     .returns<BayRow[]>();
@@ -148,6 +153,8 @@ export async function GET(req: Request) {
         partnerId: bay.partner_id,
         name: bay.name,
         isActive: bay.is_active,
+        allowedVehicleTypes: bay.allowed_vehicle_types ?? [],
+        maxVehicleWeightKg: bay.max_vehicle_weight_kg,
       };
     }),
   });

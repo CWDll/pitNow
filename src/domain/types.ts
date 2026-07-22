@@ -83,6 +83,7 @@ export interface Vehicle {
   model: string;
   year: number;
   typeLabel: string;
+  vehicleWeightKg: number | null;
   isActive: boolean;
   createdAt: string;
 }

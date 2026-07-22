@@ -58,6 +58,7 @@
   - own partner reservation field notes/issues
 - Store-admin may update:
   - own partner `bays.is_active`
+  - own partner `bays.allowed_vehicle_types`, `bays.max_vehicle_weight_kg`
   - own partner `partner_availability_blocks`
   - own partner `partner_reservation_notes.is_resolved`
 - Store-admin may insert:
@@ -80,3 +81,16 @@
 - Store-admin write actions must be logged in `partner_admin_audit_logs` as best-effort operational audit.
 - Audit-covered MVP actions: bay active changes, availability block create/update/deactivate/reactivate, reservation note create/resolve/reopen.
 - Audit insert failure must be logged server-side, but must not roll back the primary business mutation.
+
+## Bay Vehicle Compatibility
+
+- Partner onboarding collects allowed vehicle types and maximum curb weight for each existing bay.
+- An empty allowed vehicle type list means all supported vehicle types are allowed.
+- A null maximum vehicle weight means no weight restriction.
+- A configured maximum weight must be a positive integer in kg.
+- Vehicle weight means curb weight. Missing weight is allowed in the vehicle registry.
+- A vehicle with missing weight may use an unrestricted bay, but cannot use a weight-restricted bay.
+- The schedule UI keeps incompatible active bays visible but disabled and explains the reason.
+- Payment prepare and final reservation confirmation must reload and validate both bay and vehicle conditions.
+- Partner-admin may correct onboarding values for bays within their active partner membership, and changes are audit logged.
+- Lift type, dimensions, wheelbase, payload, loaded state, and manual approval remain out of MVP scope.

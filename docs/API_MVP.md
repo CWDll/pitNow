@@ -51,6 +51,7 @@ endTime: string (ISO)
 • SHOP_SERVICE는 packageId 필수
 • SHOP_SERVICE는 partner_package_prices 기준으로 packageId/가격/소요시간 검증
 • vehicleId는 로그인한 사용자 소유 vehicles row만 허용
+• 선택 차량의 차종과 공차중량이 bay의 허용 차종/최대 중량 조건을 만족해야 함
 • blockedUntil = endTime + 1시간
 • SELF_SERVICE에서 helperVerifyRequested=true 이면 helperVerifyFee 계산
 (기본 5,000 + 선택 작업별 단가 합산)
@@ -68,6 +69,9 @@ endTime: string (ISO)
 • 잘못된 시간 범위
 • bay 없음
 • 로그인 사용자 소유가 아닌 vehicleId
+• bay 허용 차종 불일치 (`VEHICLE_TYPE_NOT_ALLOWED`)
+• 중량 제한 bay에서 차량 중량 미등록 (`VEHICLE_WEIGHT_REQUIRED`)
+• bay 최대 허용 중량 초과 (`VEHICLE_WEIGHT_EXCEEDED`)
 • 법적 허용 외 작업 선택
 • 서약/동의 누락
 
@@ -646,7 +650,9 @@ partnerId,
 name,
 isActive,
 activeReservationCount,
-canDeactivate
+canDeactivate,
+allowedVehicleTypes,
+maxVehicleWeightKg
 }
 ]
 }
@@ -658,18 +664,23 @@ canDeactivate
 ⸻
 
 기능:
-store-admin 본인 정비소 bay 활성/비활성 관리
+store-admin 본인 정비소 bay 활성/비활성 및 입점 시 확인한 이용 조건 관리
 
 입력:
 {
-isActive: boolean
+isActive?: boolean,
+allowedVehicleTypes?: VehicleType[],
+maxVehicleWeightKg?: number | null
 }
 
 검증:
 • Supabase Auth session 필수
 • bay.partner_id가 요청 user의 active `partner_admins.partner_id`에 포함되어야 함
 • active bay를 비활성화할 때 해당 bay에 `CONFIRMED`, `CHECKED_IN`, `IN_USE` 예약이 있으면 409 `BAY_HAS_ACTIVE_RESERVATION`
+• `allowedVehicleTypes = []`는 전체 차종 허용
+• `maxVehicleWeightKg = null`은 중량 제한 없음, 값이 있으면 양의 정수 kg만 허용
 • 성공 시 `partner_admin_audit_logs.action = BAY_ACTIVE_UPDATED` best-effort 기록
+• 이용 조건 변경 시 `partner_admin_audit_logs.action = BAY_COMPATIBILITY_UPDATED` best-effort 기록
 
 성공 응답:
 {
@@ -678,7 +689,9 @@ bay: {
 id,
 partnerId,
 name,
-isActive
+isActive,
+allowedVehicleTypes,
+maxVehicleWeightKg
 }
 }
 

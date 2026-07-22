@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isVehicleType, type VehicleType } from "@/src/domain/vehicle";
 import { requireRequestUser } from "@/src/lib/auth";
 import {
   BAY_BLOCKING_RESERVATION_STATUSES,
@@ -22,6 +23,8 @@ interface BayRow {
   partner_id: string;
   name: string;
   is_active: boolean;
+  allowed_vehicle_types: VehicleType[];
+  max_vehicle_weight_kg: number | null;
 }
 
 interface ActiveReservationRow {
@@ -43,18 +46,53 @@ function jsonError(status: number, code: string, message: string) {
   );
 }
 
-function parseBody(payload: unknown): { isActive: boolean } | null {
+interface PatchBody {
+  isActive?: boolean;
+  allowedVehicleTypes?: VehicleType[];
+  maxVehicleWeightKg?: number | null;
+}
+
+function parseBody(payload: unknown): PatchBody | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
 
-  const isActive = (payload as { isActive?: unknown }).isActive;
+  const source = payload as Record<string, unknown>;
+  const body: PatchBody = {};
 
-  if (typeof isActive !== "boolean") {
+  if ("isActive" in source) {
+    if (typeof source.isActive !== "boolean") {
+      return null;
+    }
+    body.isActive = source.isActive;
+  }
+
+  if ("allowedVehicleTypes" in source) {
+    if (
+      !Array.isArray(source.allowedVehicleTypes) ||
+      !source.allowedVehicleTypes.every(isVehicleType)
+    ) {
+      return null;
+    }
+    body.allowedVehicleTypes = [...new Set(source.allowedVehicleTypes)];
+  }
+
+  if ("maxVehicleWeightKg" in source) {
+    const value = source.maxVehicleWeightKg;
+    if (
+      value !== null &&
+      (typeof value !== "number" || !Number.isInteger(value) || value <= 0)
+    ) {
+      return null;
+    }
+    body.maxVehicleWeightKg = value as number | null;
+  }
+
+  if (Object.keys(body).length === 0) {
     return null;
   }
 
-  return { isActive };
+  return body;
 }
 
 export async function PATCH(req: Request, context: Context) {
@@ -86,13 +124,19 @@ export async function PATCH(req: Request, context: Context) {
   const body = parseBody(payload);
 
   if (!body) {
-    return jsonError(400, "INVALID_INPUT", "isActive boolean 값이 필요합니다.");
+    return jsonError(
+      400,
+      "INVALID_INPUT",
+      "베이 상태 또는 허용 차종·중량 제한 값을 올바르게 입력해 주세요.",
+    );
   }
 
   const db = supabaseAdmin ?? authResult.auth.client;
   const { data: bay, error: bayError } = await db
     .from("bays")
-    .select("id,partner_id,name,is_active")
+    .select(
+      "id,partner_id,name,is_active,allowed_vehicle_types,max_vehicle_weight_kg",
+    )
     .eq("id", bayId)
     .maybeSingle<BayRow>();
 
@@ -128,7 +172,7 @@ export async function PATCH(req: Request, context: Context) {
     );
   }
 
-  if (bay.is_active && !body.isActive) {
+  if (bay.is_active && body.isActive === false) {
     const { data: activeReservations, error: activeReservationError } = await db
       .from("reservations")
       .select("id,status,blocked_until")
@@ -167,11 +211,25 @@ export async function PATCH(req: Request, context: Context) {
     }
   }
 
+  const updates: Record<string, unknown> = {};
+
+  if (body.isActive !== undefined) {
+    updates.is_active = body.isActive;
+  }
+  if (body.allowedVehicleTypes !== undefined) {
+    updates.allowed_vehicle_types = body.allowedVehicleTypes;
+  }
+  if (body.maxVehicleWeightKg !== undefined) {
+    updates.max_vehicle_weight_kg = body.maxVehicleWeightKg;
+  }
+
   const { data: updatedBay, error: updateError } = await db
     .from("bays")
-    .update({ is_active: body.isActive })
+    .update(updates)
     .eq("id", bay.id)
-    .select("id,partner_id,name,is_active")
+    .select(
+      "id,partner_id,name,is_active,allowed_vehicle_types,max_vehicle_weight_kg",
+    )
     .maybeSingle<BayRow>();
 
   if (updateError || !updatedBay) {
@@ -183,14 +241,22 @@ export async function PATCH(req: Request, context: Context) {
     db,
     partnerId: updatedBay.partner_id,
     actorUserId: authResult.auth.userId,
-    action: "BAY_ACTIVE_UPDATED",
+    action:
+      body.allowedVehicleTypes !== undefined ||
+      body.maxVehicleWeightKg !== undefined
+        ? "BAY_COMPATIBILITY_UPDATED"
+        : "BAY_ACTIVE_UPDATED",
     targetType: "BAY",
     targetId: updatedBay.id,
     beforeState: {
       isActive: bay.is_active,
+      allowedVehicleTypes: bay.allowed_vehicle_types ?? [],
+      maxVehicleWeightKg: bay.max_vehicle_weight_kg,
     },
     afterState: {
       isActive: updatedBay.is_active,
+      allowedVehicleTypes: updatedBay.allowed_vehicle_types ?? [],
+      maxVehicleWeightKg: updatedBay.max_vehicle_weight_kg,
     },
     metadata: {
       bayName: updatedBay.name,
@@ -235,6 +301,8 @@ export async function PATCH(req: Request, context: Context) {
       partnerId: updatedBay.partner_id,
       name: updatedBay.name,
       isActive: updatedBay.is_active,
+      allowedVehicleTypes: updatedBay.allowed_vehicle_types ?? [],
+      maxVehicleWeightKg: updatedBay.max_vehicle_weight_kg,
     },
   });
 }

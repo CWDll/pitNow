@@ -59,6 +59,7 @@ interface VehicleRow {
   model: string;
   year: number;
   type_label: string;
+  vehicle_weight_kg: number | null;
   is_active: boolean;
   created_at: string;
 }
@@ -74,6 +75,7 @@ function mapVehicleToCar(row: VehicleRow): CarItem {
     model: row.model,
     year: row.year,
     typeLabel: row.type_label,
+    vehicleWeightKg: row.vehicle_weight_kg,
     isActive: row.is_active,
     history: [],
   };
@@ -139,7 +141,9 @@ function PartnerWorkPageContent() {
 
       const { data, error } = await supabase
         .from("vehicles")
-        .select("id,user_id,plate_number,model,year,type_label,is_active,created_at")
+        .select(
+          "id,user_id,plate_number,model,year,type_label,vehicle_weight_kg,is_active,created_at",
+        )
         .order("is_active", { ascending: false })
         .order("created_at", { ascending: false });
 

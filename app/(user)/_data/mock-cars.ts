@@ -12,6 +12,7 @@ export interface CarItem {
   model: string;
   year: number;
   typeLabel: string;
+  vehicleWeightKg: number | null;
   isActive: boolean;
   history: MaintenanceHistoryItem[];
 }
@@ -25,6 +26,7 @@ export const initialMockCars: CarItem[] = [
     model: "현대 아반떼 CN7",
     year: 2022,
     typeLabel: "SUV",
+    vehicleWeightKg: 1530,
     isActive: true,
     history: [
       {
@@ -49,6 +51,7 @@ export const initialMockCars: CarItem[] = [
     model: "기아 K5",
     year: 2021,
     typeLabel: "세단",
+    vehicleWeightKg: 1460,
     isActive: false,
     history: [
       {
@@ -66,6 +69,7 @@ export const initialMockCars: CarItem[] = [
     model: "제네시스 GV70",
     year: 2024,
     typeLabel: "SUV",
+    vehicleWeightKg: 1820,
     isActive: false,
     history: [],
   },
@@ -88,6 +92,9 @@ function isCarItem(value: unknown): value is CarItem {
     typeof car.model === "string" &&
     typeof car.year === "number" &&
     typeof car.typeLabel === "string" &&
+    (typeof car.vehicleWeightKg === "number" ||
+      car.vehicleWeightKg === null ||
+      typeof car.vehicleWeightKg === "undefined") &&
     typeof car.isActive === "boolean" &&
     Array.isArray(car.history)
   );
@@ -109,7 +116,10 @@ export function loadMockCarsFromStorage(): CarItem[] | null {
       return null;
     }
 
-    const cars = parsed.filter(isCarItem);
+    const cars = parsed.filter(isCarItem).map((car) => ({
+      ...car,
+      vehicleWeightKg: car.vehicleWeightKg ?? null,
+    }));
     return cars.length > 0 ? cars : null;
   } catch {
     return null;

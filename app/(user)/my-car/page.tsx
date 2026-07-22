@@ -9,6 +9,7 @@ import {
   CirclePlus,
   LoaderCircle,
   LogIn,
+  Pencil,
   Plus,
   Trash2,
   Wrench,
@@ -17,6 +18,7 @@ import {
 
 import { Card, Screen, StatePanel } from "../_components/mobile-ui";
 import type { CarItem, MaintenanceHistoryItem } from "../_data/mock-cars";
+import { VEHICLE_TYPE_OPTIONS } from "@/src/domain/vehicle";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { supabase } from "@/src/lib/supabase";
 
@@ -25,22 +27,8 @@ interface CarFormState {
   model: string;
   year: string;
   typeLabel: string;
+  weightKg: string;
 }
-
-const VEHICLE_TYPE_OPTIONS = [
-  { value: "경차", label: "경차" },
-  { value: "세단", label: "세단" },
-  { value: "SUV", label: "SUV" },
-  { value: "해치백", label: "해치백" },
-  { value: "왜건", label: "왜건" },
-  { value: "쿠페", label: "쿠페" },
-  { value: "컨버터블", label: "컨버터블" },
-  { value: "미니밴/MPV", label: "미니밴 / MPV" },
-  { value: "승합차", label: "승합차" },
-  { value: "픽업트럭", label: "픽업트럭" },
-  { value: "소형 화물차", label: "소형 화물차 (포터 등)" },
-  { value: "기타", label: "기타" },
-] as const;
 
 interface VehicleRow {
   id: string;
@@ -49,6 +37,7 @@ interface VehicleRow {
   model: string;
   year: number;
   type_label: string;
+  vehicle_weight_kg: number | null;
   is_active: boolean;
   created_at: string;
 }
@@ -72,6 +61,7 @@ function mapVehicleToCar(
     model: row.model,
     year: row.year,
     typeLabel: row.type_label,
+    vehicleWeightKg: row.vehicle_weight_kg,
     isActive: row.is_active,
     history: historyByVehicle.get(row.id) ?? [],
   };
@@ -102,6 +92,7 @@ export default function MyCarPage() {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<string>("");
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
 
   const [newCar, setNewCar] = useState<CarFormState>({
@@ -109,6 +100,7 @@ export default function MyCarPage() {
     model: "",
     year: "",
     typeLabel: "세단",
+    weightKg: "",
   });
 
   const selectedCar = useMemo(
@@ -152,7 +144,7 @@ export default function MyCarPage() {
           supabase
             .from("vehicles")
             .select(
-              "id,user_id,plate_number,model,year,type_label,is_active,created_at",
+              "id,user_id,plate_number,model,year,type_label,vehicle_weight_kg,is_active,created_at",
             )
             .order("is_active", { ascending: false })
             .order("created_at", { ascending: false }),
@@ -222,12 +214,40 @@ export default function MyCarPage() {
   }, []);
 
   function openAddModal() {
-    setNewCar({ number: "", model: "", year: "", typeLabel: "세단" });
+    setNewCar({
+      number: "",
+      model: "",
+      year: "",
+      typeLabel: "세단",
+      weightKg: "",
+    });
     setIsAddModalOpen(true);
   }
 
   function closeAddModal() {
     setIsAddModalOpen(false);
+  }
+
+  function openEditModal() {
+    if (!selectedCar) {
+      return;
+    }
+
+    setNewCar({
+      number: selectedCar.number,
+      model: selectedCar.model,
+      year: String(selectedCar.year),
+      typeLabel: selectedCar.typeLabel,
+      weightKg:
+        selectedCar.vehicleWeightKg === null
+          ? ""
+          : String(selectedCar.vehicleWeightKg),
+    });
+    setIsEditModalOpen(true);
+  }
+
+  function closeEditModal() {
+    setIsEditModalOpen(false);
   }
 
   async function handleAddCar() {
@@ -239,13 +259,18 @@ export default function MyCarPage() {
     const model = newCar.model.trim();
     const yearNumber = Number(newCar.year.trim());
     const typeLabel = newCar.typeLabel.trim() || "세단";
+    const weightNumber = newCar.weightKg.trim()
+      ? Number(newCar.weightKg.trim())
+      : null;
 
     if (
       !number ||
       !model ||
       !Number.isInteger(yearNumber) ||
       yearNumber < 1990 ||
-      yearNumber > 2100
+      yearNumber > 2100 ||
+      (weightNumber !== null &&
+        (!Number.isInteger(weightNumber) || weightNumber <= 0))
     ) {
       return;
     }
@@ -261,10 +286,11 @@ export default function MyCarPage() {
         model,
         year: yearNumber,
         type_label: typeLabel,
+        vehicle_weight_kg: weightNumber,
         is_active: cars.length === 0,
       })
       .select(
-        "id,user_id,plate_number,model,year,type_label,is_active,created_at",
+        "id,user_id,plate_number,model,year,type_label,vehicle_weight_kg,is_active,created_at",
       )
       .single();
 
@@ -279,6 +305,66 @@ export default function MyCarPage() {
     setCars((prev) => [...prev, nextCar]);
     setSelectedCarId(nextCar.id);
     setIsAddModalOpen(false);
+  }
+
+  async function handleEditCar() {
+    if (!selectedCar || isSaving) {
+      return;
+    }
+
+    const number = newCar.number.trim();
+    const model = newCar.model.trim();
+    const yearNumber = Number(newCar.year.trim());
+    const weightNumber = newCar.weightKg.trim()
+      ? Number(newCar.weightKg.trim())
+      : null;
+
+    if (
+      !number ||
+      !model ||
+      !Number.isInteger(yearNumber) ||
+      yearNumber < 1990 ||
+      yearNumber > 2100 ||
+      (weightNumber !== null &&
+        (!Number.isInteger(weightNumber) || weightNumber <= 0))
+    ) {
+      setMessage("차량 정보와 중량을 올바르게 입력해 주세요.");
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage("");
+
+    const { data, error } = await supabase
+      .from("vehicles")
+      .update({
+        plate_number: number,
+        model,
+        year: yearNumber,
+        type_label: newCar.typeLabel,
+        vehicle_weight_kg: weightNumber,
+      })
+      .eq("id", selectedCar.id)
+      .select(
+        "id,user_id,plate_number,model,year,type_label,vehicle_weight_kg,is_active,created_at",
+      )
+      .single();
+
+    setIsSaving(false);
+
+    if (error || !data) {
+      setMessage(getVehicleErrorMessage(error));
+      return;
+    }
+
+    const nextCar = mapVehicleToCar(
+      data as VehicleRow,
+      new Map([[selectedCar.id, selectedCar.history]]),
+    );
+    setCars((prev) =>
+      prev.map((car) => (car.id === nextCar.id ? nextCar : car)),
+    );
+    setIsEditModalOpen(false);
   }
 
   function openDeleteModal() {
@@ -438,7 +524,9 @@ export default function MyCarPage() {
           />
         </Screen>
         {isAddModalOpen ? (
-          <AddCarModal
+          <CarFormModal
+            title="차량 추가"
+            submitLabel="추가"
             newCar={newCar}
             isSaving={isSaving}
             onChange={setNewCar}
@@ -479,10 +567,15 @@ export default function MyCarPage() {
                 {selectedCar.model} ({selectedCar.year}) ·{" "}
                 {selectedCar.typeLabel}
               </p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {selectedCar.vehicleWeightKg === null
+                  ? "차량 중량 미등록"
+                  : `${selectedCar.vehicleWeightKg.toLocaleString("ko-KR")}kg`}
+              </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={openAddModal}
@@ -490,6 +583,14 @@ export default function MyCarPage() {
             >
               <Plus className="size-4" />
               차량 추가
+            </button>
+            <button
+              type="button"
+              onClick={openEditModal}
+              className="flex h-10 items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700"
+            >
+              <Pencil className="size-4" />
+              정보 수정
             </button>
             <button
               type="button"
@@ -527,7 +628,7 @@ export default function MyCarPage() {
                         {car.number}
                       </p>
                       <p className="mt-1 text-xs font-semibold text-slate-500">
-                        {car.model} ({car.year})
+                        {car.model} ({car.year}) · {car.typeLabel}
                       </p>
                     </button>
                     <button
@@ -593,12 +694,26 @@ export default function MyCarPage() {
       </Screen>
 
       {isAddModalOpen ? (
-        <AddCarModal
+        <CarFormModal
+          title="차량 추가"
+          submitLabel="추가"
           newCar={newCar}
           isSaving={isSaving}
           onChange={setNewCar}
           onClose={closeAddModal}
           onSubmit={handleAddCar}
+        />
+      ) : null}
+
+      {isEditModalOpen ? (
+        <CarFormModal
+          title="차량 정보 수정"
+          submitLabel="저장"
+          newCar={newCar}
+          isSaving={isSaving}
+          onChange={setNewCar}
+          onClose={closeEditModal}
+          onSubmit={handleEditCar}
         />
       ) : null}
 
@@ -637,7 +752,9 @@ export default function MyCarPage() {
   );
 }
 
-interface AddCarModalProps {
+interface CarFormModalProps {
+  title: string;
+  submitLabel: string;
   newCar: CarFormState;
   isSaving: boolean;
   onChange: Dispatch<SetStateAction<CarFormState>>;
@@ -645,22 +762,24 @@ interface AddCarModalProps {
   onSubmit: () => void | Promise<void>;
 }
 
-function AddCarModal({
+function CarFormModal({
+  title,
+  submitLabel,
   newCar,
   isSaving,
   onChange,
   onClose,
   onSubmit,
-}: AddCarModalProps) {
+}: CarFormModalProps) {
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40">
-      <div className="w-full max-w-[430px] rounded-t-2xl bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
+      <div className="max-h-[88dvh] w-full max-w-[430px] overflow-y-auto rounded-t-2xl bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
         <div className="flex items-center justify-between">
-          <h4 className="text-lg font-black text-slate-950">차량 추가</h4>
+          <h4 className="text-lg font-black text-slate-950">{title}</h4>
           <button
             type="button"
             onClick={onClose}
-            aria-label="차량 추가 닫기"
+            aria-label={`${title} 닫기`}
             title="닫기"
             className="grid size-9 place-items-center rounded-xl bg-slate-100 text-slate-500"
           >
@@ -717,6 +836,25 @@ function AddCarModal({
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
           </label>
+          <div>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              placeholder="공차중량 kg (선택)"
+              value={newCar.weightKg}
+              onChange={(event) =>
+                onChange((prev) => ({
+                  ...prev,
+                  weightKg: event.target.value,
+                }))
+              }
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
+            />
+            <p className="mt-1 px-1 text-xs font-medium text-slate-500">
+              중량 제한 베이를 예약할 때 필요합니다. 차량 등록증의 공차중량을 입력해 주세요.
+            </p>
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
@@ -734,7 +872,7 @@ function AddCarModal({
             disabled={isSaving}
             className="rounded-xl bg-blue-600 py-2 text-sm font-semibold text-white disabled:bg-zinc-300"
           >
-            {isSaving ? "저장 중" : "추가"}
+            {isSaving ? "저장 중" : submitLabel}
           </button>
         </div>
       </div>

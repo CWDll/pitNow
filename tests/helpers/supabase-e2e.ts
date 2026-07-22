@@ -190,7 +190,8 @@ export async function ensureE2EVehicle(params: {
   const plateNumber = "E2E 2026";
   const model = "PitNow E2E";
   const year = 2026;
-  const typeLabel = "테스트";
+  const typeLabel = "세단";
+  const vehicleWeightKg = 1500;
 
   await params.db
     .from("vehicles")
@@ -220,6 +221,7 @@ export async function ensureE2EVehicle(params: {
         model,
         year,
         type_label: typeLabel,
+        vehicle_weight_kg: vehicleWeightKg,
         is_active: true,
       })
       .eq("id", existing.id)
@@ -249,6 +251,7 @@ export async function ensureE2EVehicle(params: {
       model,
       year,
       type_label: typeLabel,
+      vehicle_weight_kg: vehicleWeightKg,
       is_active: true,
     })
     .select("id, plate_number, model, year")

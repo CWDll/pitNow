@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type PartnerAdminAuditAction =
   | "BAY_ACTIVE_UPDATED"
+  | "BAY_COMPATIBILITY_UPDATED"
   | "AVAILABILITY_BLOCK_CREATED"
   | "AVAILABILITY_BLOCK_UPDATED"
   | "AVAILABILITY_BLOCK_DEACTIVATED"

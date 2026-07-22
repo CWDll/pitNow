@@ -45,11 +45,22 @@ create table bays (
   partner_id uuid references partners(id) on delete cascade,
   name text not null,
   is_active boolean default true,
+  allowed_vehicle_types text[] not null default '{}',
+  max_vehicle_weight_kg integer check (
+    max_vehicle_weight_kg is null or max_vehicle_weight_kg > 0
+  ),
   created_at timestamptz default now()
 );
 
 create index idx_bays_partner on bays(partner_id);
 ```
+
+Rules:
+
+- `allowed_vehicle_types = '{}'` means every supported vehicle type is allowed.
+- `max_vehicle_weight_kg = null` means no weight restriction.
+- Allowed vehicle type values use the existing Korean vehicle type catalog.
+- Existing bays stay unrestricted until onboarding data is entered.
 
 ---
 
@@ -480,6 +491,9 @@ create table vehicles (
   model text not null,
   year int not null check (year >= 1990 and year <= 2100),
   type_label text not null default '세단',
+  vehicle_weight_kg integer check (
+    vehicle_weight_kg is null or vehicle_weight_kg > 0
+  ),
   is_active boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -497,10 +511,12 @@ RLS:
 - First registered vehicle is set active by the client.
 - Representative vehicle changes use `set_active_vehicle(uuid)` so deactivating the previous vehicle and activating the next vehicle happen in one DB transaction.
 - Reservation vehicle picker reads this table instead of local mock storage.
+- `vehicle_weight_kg` is curb weight in kg. It may be null, but a vehicle with no weight cannot reserve a weight-restricted bay.
 
 Migration:
 
 - `db/migrations/20260611_user_vehicles.sql`
+- `db/migrations/20260722_bay_vehicle_compatibility.sql`
 
 ⸻
 

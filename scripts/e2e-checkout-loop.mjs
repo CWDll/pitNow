@@ -143,7 +143,8 @@ async function ensureVehicle({ admin, userId }) {
       plate_number: TEST_PLATE_NUMBER,
       model: "PitNow E2E",
       year: 2026,
-      type_label: "테스트",
+      type_label: "세단",
+      vehicle_weight_kg: 1500,
       is_active: false,
     })
     .select("id")

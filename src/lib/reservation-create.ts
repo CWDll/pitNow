@@ -1,6 +1,8 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 
 import type { ReservationType } from "@/src/domain/types";
+import type { VehicleType } from "@/src/domain/vehicle";
+import { checkBayCompatibility } from "@/src/lib/bay-compatibility";
 import {
   isReservationStatusLogFailureFatal,
   logReservationStatusChange,
@@ -28,6 +30,8 @@ interface BayRow {
   id: string;
   partner_id: string | null;
   is_active: boolean;
+  allowed_vehicle_types: VehicleType[];
+  max_vehicle_weight_kg: number | null;
 }
 
 interface PartnerRow {
@@ -41,6 +45,8 @@ interface VehicleRow {
   plate_number: string;
   model: string;
   year: number;
+  type_label: string;
+  vehicle_weight_kg: number | null;
 }
 
 interface SelfMaintenanceTaskRow {
@@ -341,7 +347,9 @@ async function getOwnedVehicle(params: {
   const { db, vehicleId, userId } = params;
   const { data, error } = await db
     .from("vehicles")
-    .select("id, user_id, plate_number, model, year")
+    .select(
+      "id, user_id, plate_number, model, year, type_label, vehicle_weight_kg",
+    )
     .eq("id", vehicleId)
     .eq("user_id", userId)
     .maybeSingle<VehicleRow>();
@@ -372,7 +380,9 @@ async function getBayAndPartner(
 ): Promise<LookupResult<{ bay: BayRow; hourlyPrice: number }>> {
   const { data: bay, error: bayError } = await db
     .from("bays")
-    .select("id, partner_id, is_active")
+    .select(
+      "id, partner_id, is_active, allowed_vehicle_types, max_vehicle_weight_kg",
+    )
     .eq("id", bayId)
     .maybeSingle<BayRow>();
 
@@ -685,6 +695,20 @@ export async function quoteReservation(params: {
 
   if ("error" in vehicleResult) {
     return { ok: false, error: vehicleResult.error };
+  }
+
+  const compatibility = checkBayCompatibility({
+    allowedVehicleTypes: bayResult.bay.allowed_vehicle_types ?? [],
+    maxVehicleWeightKg: bayResult.bay.max_vehicle_weight_kg,
+    vehicleType: vehicleResult.vehicle.type_label,
+    vehicleWeightKg: vehicleResult.vehicle.vehicle_weight_kg,
+  });
+
+  if (!compatibility.compatible) {
+    return {
+      ok: false,
+      error: apiError(400, compatibility.code, compatibility.message),
+    };
   }
 
   const partnerId = bayResult.bay.partner_id;
