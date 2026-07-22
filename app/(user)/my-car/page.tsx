@@ -135,7 +135,9 @@ export default function MyCarPage() {
         const [vehicleResult, historyResponse] = await Promise.all([
           supabase
             .from("vehicles")
-            .select("id,user_id,plate_number,model,year,type_label,is_active,created_at")
+            .select(
+              "id,user_id,plate_number,model,year,type_label,is_active,created_at",
+            )
             .order("is_active", { ascending: false })
             .order("created_at", { ascending: false }),
           authFetch("/api/vehicles/maintenance-history", {
@@ -145,7 +147,8 @@ export default function MyCarPage() {
         ]);
 
         const { data, error } = vehicleResult;
-        const historyPayload = (await historyResponse.json()) as MaintenanceHistoryResponse;
+        const historyPayload =
+          (await historyResponse.json()) as MaintenanceHistoryResponse;
 
         if (isCancelled) {
           return;
@@ -153,7 +156,9 @@ export default function MyCarPage() {
 
         if (error) {
           setUserId(sessionUserId);
-          setMessage("차량 목록을 불러오지 못했습니다. Supabase SQL 적용 여부를 확인해 주세요.");
+          setMessage(
+            "차량 목록을 불러오지 못했습니다. Supabase SQL 적용 여부를 확인해 주세요.",
+          );
           setIsLoading(false);
           return;
         }
@@ -161,12 +166,14 @@ export default function MyCarPage() {
         const historyByVehicle = new Map<string, MaintenanceHistoryItem[]>();
 
         if (historyResponse.ok && historyPayload.success) {
-          (historyPayload.histories ?? []).forEach(({ vehicleId, ...history }) => {
-            historyByVehicle.set(vehicleId, [
-              ...(historyByVehicle.get(vehicleId) ?? []),
-              history,
-            ]);
-          });
+          (historyPayload.histories ?? []).forEach(
+            ({ vehicleId, ...history }) => {
+              historyByVehicle.set(vehicleId, [
+                ...(historyByVehicle.get(vehicleId) ?? []),
+                history,
+              ]);
+            },
+          );
         }
 
         const nextCars = ((data ?? []) as VehicleRow[]).map((row) =>
@@ -183,7 +190,9 @@ export default function MyCarPage() {
         console.warn("VEHICLE DATA LOOKUP ERROR:", loadError);
         if (!isCancelled) {
           setUserId(sessionUserId);
-          setMessage("차량 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          setMessage(
+            "차량 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          );
           setIsLoading(false);
         }
       }
@@ -215,7 +224,13 @@ export default function MyCarPage() {
     const yearNumber = Number(newCar.year.trim());
     const typeLabel = newCar.typeLabel.trim() || "세단";
 
-    if (!number || !model || !Number.isInteger(yearNumber) || yearNumber < 1990 || yearNumber > 2100) {
+    if (
+      !number ||
+      !model ||
+      !Number.isInteger(yearNumber) ||
+      yearNumber < 1990 ||
+      yearNumber > 2100
+    ) {
       return;
     }
 
@@ -232,7 +247,9 @@ export default function MyCarPage() {
         type_label: typeLabel,
         is_active: cars.length === 0,
       })
-      .select("id,user_id,plate_number,model,year,type_label,is_active,created_at")
+      .select(
+        "id,user_id,plate_number,model,year,type_label,is_active,created_at",
+      )
       .single();
 
     setIsSaving(false);
@@ -294,7 +311,9 @@ export default function MyCarPage() {
 
       if (activeError) {
         setIsSaving(false);
-        setMessage("삭제 후 대표 차량을 다시 설정하지 못했습니다. 차량 목록을 새로고침해 주세요.");
+        setMessage(
+          "삭제 후 대표 차량을 다시 설정하지 못했습니다. 차량 목록을 새로고침해 주세요.",
+        );
         return;
       }
 
@@ -322,20 +341,29 @@ export default function MyCarPage() {
     setIsSaving(false);
 
     if (error) {
-      setMessage("대표 차량을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setMessage(
+        "대표 차량을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
       return;
     }
 
-    setCars((prev) => prev.map((car) => ({ ...car, isActive: car.id === carId })));
+    setCars((prev) =>
+      prev.map((car) => ({ ...car, isActive: car.id === carId })),
+    );
     setSelectedCarId(carId);
   }
 
   if (isLoading) {
     return (
-      <Screen title="내 차" subtitle="예약에 사용할 차량과 정비 이력을 관리하세요.">
+      <Screen
+        title="내 차"
+        subtitle="예약에 사용할 차량과 정비 이력을 관리하세요."
+      >
         <Card className="flex items-center gap-3">
           <LoaderCircle className="size-5 animate-spin text-blue-600" />
-          <p className="text-sm font-semibold text-slate-500">차량 정보를 불러오는 중입니다.</p>
+          <p className="text-sm font-semibold text-slate-500">
+            차량 정보를 불러오는 중입니다.
+          </p>
         </Card>
       </Screen>
     );
@@ -343,7 +371,10 @@ export default function MyCarPage() {
 
   if (!userId) {
     return (
-      <Screen title="내 차" subtitle="예약에 사용할 차량과 정비 이력을 관리하세요.">
+      <Screen
+        title="내 차"
+        subtitle="예약에 사용할 차량과 정비 이력을 관리하세요."
+      >
         <StatePanel
           icon={<CarFront className="size-6" />}
           title="로그인이 필요합니다"
@@ -365,8 +396,15 @@ export default function MyCarPage() {
   if (!selectedCar) {
     return (
       <>
-        <Screen title="내 차" subtitle="예약에 사용할 차량과 정비 이력을 관리하세요.">
-          {message ? <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{message}</p> : null}
+        <Screen
+          title="내 차"
+          subtitle="예약에 사용할 차량과 정비 이력을 관리하세요."
+        >
+          {message ? (
+            <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+              {message}
+            </p>
+          ) : null}
           <StatePanel
             icon={<CirclePlus className="size-6" />}
             title="등록된 차량이 없습니다"
@@ -398,7 +436,10 @@ export default function MyCarPage() {
 
   return (
     <>
-      <Screen title="내 차" subtitle="예약에 사용할 차량과 정비 이력을 관리하세요.">
+      <Screen
+        title="내 차"
+        subtitle="예약에 사용할 차량과 정비 이력을 관리하세요."
+      >
         {message ? (
           <Card>
             <p className="text-sm text-red-600">{message}</p>
@@ -408,7 +449,10 @@ export default function MyCarPage() {
         <Card className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-black text-slate-950">대표 차량</h2>
-            <Pill label={selectedCar.isActive ? "대표 차량" : "선택 차량"} tone="accent" />
+            {/* <Pill
+              label={selectedCar.isActive ? "대표 차량" : "선택 차량"}
+              tone="accent"
+            /> */}
           </div>
 
           <div className="flex items-center gap-3 rounded-xl bg-blue-50 p-4">
@@ -416,8 +460,13 @@ export default function MyCarPage() {
               <CarFront className="size-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xl font-black text-slate-950">{selectedCar.number}</p>
-              <p className="mt-1 truncate text-xs font-semibold text-slate-500">{selectedCar.model} ({selectedCar.year}) · {selectedCar.typeLabel}</p>
+              <p className="truncate text-xl font-black text-slate-950">
+                {selectedCar.number}
+              </p>
+              <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+                {selectedCar.model} ({selectedCar.year}) ·{" "}
+                {selectedCar.typeLabel}
+              </p>
             </div>
           </div>
 
@@ -451,7 +500,9 @@ export default function MyCarPage() {
                 <article
                   key={car.id}
                   className={`rounded-xl border px-3 py-3 ${
-                    selected ? "border-blue-500 bg-blue-50" : "border-zinc-200 bg-white"
+                    selected
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-zinc-200 bg-white"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -460,18 +511,24 @@ export default function MyCarPage() {
                       onClick={() => setSelectedCarId(car.id)}
                       className="flex-1 text-left"
                     >
-                      <p className="text-sm font-black text-slate-900">{car.number}</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">{car.model} ({car.year})</p>
+                      <p className="text-sm font-black text-slate-900">
+                        {car.number}
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        {car.model} ({car.year})
+                      </p>
                     </button>
                     <button
                       type="button"
                       onClick={() => makeActive(car.id)}
                       disabled={isSaving}
                       className={`rounded-lg px-2 py-1 text-xs font-semibold disabled:opacity-60 ${
-                        car.isActive ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-700"
+                        car.isActive
+                          ? "bg-slate-950 text-white"
+                          : "bg-slate-100 text-slate-700"
                       }`}
                     >
-                      {car.isActive ? "대표" : "대표 설정"}
+                      {car.isActive ? "대표 차량" : "대표 설정"}
                     </button>
                   </div>
                 </article>
@@ -482,7 +539,10 @@ export default function MyCarPage() {
 
         <Card className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-lg font-black text-slate-950"><Wrench className="size-4.5 text-blue-600" />정비 이력</h3>
+            <h3 className="flex items-center gap-2 text-lg font-black text-slate-950">
+              <Wrench className="size-4.5 text-blue-600" />
+              정비 이력
+            </h3>
             <span className="text-xs text-zinc-500">선택 차량 기준</span>
           </div>
 
@@ -493,14 +553,25 @@ export default function MyCarPage() {
           ) : (
             <div className="space-y-2">
               {selectedCar.history.map((history) => (
-                <article key={history.id} className="rounded-xl border border-zinc-200 p-3">
+                <article
+                  key={history.id}
+                  className="rounded-xl border border-zinc-200 p-3"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-zinc-900">{history.workTitle}</p>
-                      <p className="mt-1 text-xs text-zinc-500">{history.garageName}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500">{history.dateLabel}</p>
+                      <p className="text-sm font-semibold text-zinc-900">
+                        {history.workTitle}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {history.garageName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        {history.dateLabel}
+                      </p>
                     </div>
-                    <p className="text-sm font-semibold text-blue-600">{formatPrice(history.totalPrice)}</p>
+                    <p className="text-sm font-semibold text-blue-600">
+                      {formatPrice(history.totalPrice)}
+                    </p>
                   </div>
                 </article>
               ))}
@@ -562,7 +633,13 @@ interface AddCarModalProps {
   onSubmit: () => void | Promise<void>;
 }
 
-function AddCarModal({ newCar, isSaving, onChange, onClose, onSubmit }: AddCarModalProps) {
+function AddCarModal({
+  newCar,
+  isSaving,
+  onChange,
+  onClose,
+  onSubmit,
+}: AddCarModalProps) {
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40">
       <div className="w-full max-w-[430px] rounded-t-2xl bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
@@ -583,14 +660,18 @@ function AddCarModal({ newCar, isSaving, onChange, onClose, onSubmit }: AddCarMo
             type="text"
             placeholder="차량 번호 (예: 11가 1234)"
             value={newCar.number}
-            onChange={(event) => onChange((prev) => ({ ...prev, number: event.target.value }))}
+            onChange={(event) =>
+              onChange((prev) => ({ ...prev, number: event.target.value }))
+            }
             className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
           />
           <input
             type="text"
             placeholder="모델명 (예: 현대 아반떼 CN7)"
             value={newCar.model}
-            onChange={(event) => onChange((prev) => ({ ...prev, model: event.target.value }))}
+            onChange={(event) =>
+              onChange((prev) => ({ ...prev, model: event.target.value }))
+            }
             className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
           />
           <div className="grid grid-cols-2 gap-2">
@@ -598,7 +679,9 @@ function AddCarModal({ newCar, isSaving, onChange, onClose, onSubmit }: AddCarMo
               type="number"
               placeholder="연식"
               value={newCar.year}
-              onChange={(event) => onChange((prev) => ({ ...prev, year: event.target.value }))}
+              onChange={(event) =>
+                onChange((prev) => ({ ...prev, year: event.target.value }))
+              }
               className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
             />
             <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -611,7 +694,9 @@ function AddCarModal({ newCar, isSaving, onChange, onClose, onSubmit }: AddCarMo
                     type="button"
                     onClick={() => onChange((prev) => ({ ...prev, typeLabel }))}
                     className={`rounded-lg px-2 py-2 text-xs font-medium ${
-                      selected ? "bg-blue-600 text-white" : "bg-white text-slate-700"
+                      selected
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-slate-700"
                     }`}
                   >
                     {typeLabel}
