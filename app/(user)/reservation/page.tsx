@@ -208,6 +208,10 @@ function isUpcomingReservation(
   item: ReservationListItem,
   nowMs: number,
 ): boolean {
+  if (item.status === "CHECKED_IN" || item.status === "IN_USE") {
+    return true;
+  }
+
   if (item.status === "COMPLETED" || item.status === "CANCELLED") {
     return false;
   }

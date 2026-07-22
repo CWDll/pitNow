@@ -453,7 +453,8 @@ test.describe("booking flow smoke", () => {
       ]);
       await expect(page.getByText("이용 중")).toBeVisible();
 
-      const overdueEnd = new Date(Date.now() - 10 * 60 * 1000);
+      const inUseUrl = page.url();
+      const overdueEnd = new Date(Date.now() - 3 * 60 * 60 * 1000);
       const overdueStart = new Date(overdueEnd.getTime() - 60 * 60 * 1000);
       const overdueBlockedUntil = new Date(overdueEnd.getTime() + 60 * 60 * 1000);
       const { error: overdueWindowUpdateError } = await db
@@ -470,8 +471,22 @@ test.describe("booking flow smoke", () => {
         throw overdueWindowUpdateError;
       }
 
-      await page.reload();
+      await page.goto("/reservation");
+      await expect(
+        page.getByRole("button", { name: /진행 중·예정/ }),
+      ).toBeVisible();
+      const activeReservationCard = page
+        .locator("article")
+        .filter({ hasText: seed.partnerName })
+        .filter({ hasText: "이용중" });
+      await expect(activeReservationCard).toBeVisible();
+
+      await page.goto(inUseUrl);
       await expect(page.getByText("이용 중")).toBeVisible();
+      await expect(page.getByText("초과 이용")).toBeVisible();
+      await expect(page.getByText("01:00:00", { exact: true })).toBeVisible();
+      await expect(page.getByText("최대 과금 시간 적용")).toBeVisible();
+      await expect(page.getByText(/예상 초과요금 \(최대\):/)).toBeVisible();
 
       const endWorkButton = page.getByRole("button", { name: "작업 종료" });
       await expect(endWorkButton).toBeVisible();
@@ -614,9 +629,9 @@ test.describe("booking flow smoke", () => {
       expect(checkout.checkout_photo_2).toContain("/reservation-photos/");
       expect(checkout.helper_verify_requested).toBe(false);
       expect(Number(checkout.helper_verify_fee)).toBe(0);
-      expect(Number(checkout.extra_fee)).toBeGreaterThan(0);
-      expect(Number(checkout.total_settlement)).toBeGreaterThan(
-        Number(reservation.total_price),
+      expect(Number(checkout.extra_fee)).toBe(Number(reservation.total_price));
+      expect(Number(checkout.total_settlement)).toBe(
+        Number(reservation.total_price) * 2,
       );
 
       const { data: settlementPayment, error: settlementPaymentError } =

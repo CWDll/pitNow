@@ -7,6 +7,7 @@ import {
   hasSupabaseEnv,
 } from "@/src/lib/supabase";
 import { transitionReservationStatus } from "@/src/lib/reservation-status";
+import { getBillableOvertimeMinutes } from "@/src/lib/overtime-policy";
 
 type ReservationStatus =
   | "CONFIRMED"
@@ -208,7 +209,7 @@ function calculateExtraFee(params: {
     return 0;
   }
 
-  const diffMinutes = diffMs / (1000 * 60);
+  const diffMinutes = getBillableOvertimeMinutes(diffMs);
   const roundedBlocks = Math.ceil(diffMinutes / 60);
   const rawExtraFee = roundedBlocks * hourlyPrice;
 

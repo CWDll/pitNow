@@ -17,6 +17,8 @@
 
 - Overtime calculated per 1 hour
 - Rounded up
+- Billable overtime is capped at 60 minutes (one hourly charge)
+- An active reservation must be checked out even after the billing cap is reached
 
 ## Car Master Verification (Optional)
 

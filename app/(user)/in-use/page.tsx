@@ -40,6 +40,7 @@ interface ReservationDetail {
   dateLabel: string;
   status: ReservationStatus;
   totalPrice: number;
+  helperVerifyFee: number;
   workTitle: string;
   taskIds: string;
   taskLabels: string;
@@ -79,6 +80,7 @@ function InUsePageContent() {
     dateLabel: "",
     status: "IN_USE",
     totalPrice: Number(searchParams.get("totalPrice") ?? "15000"),
+    helperVerifyFee: Number(searchParams.get("helperVerifyFee") ?? "0"),
     workTitle: workTitleFromQuery,
     taskIds: searchParams.get("taskIds") ?? "",
     taskLabels: searchParams.get("taskLabels") ?? workTitleFromQuery,
@@ -93,6 +95,8 @@ function InUsePageContent() {
   );
   const [confirmedTotalPrice, setConfirmedTotalPrice] =
     useState<number>(detail.totalPrice);
+  const [confirmedHelperVerifyFee, setConfirmedHelperVerifyFee] =
+    useState<number>(detail.helperVerifyFee);
 
   useEffect(() => {
     const id = window.setInterval(() => setTick(Date.now()), 1000);
@@ -132,6 +136,7 @@ function InUsePageContent() {
         setStartTime(payload.reservation.startTime);
         setEndTime(payload.reservation.endTime);
         setConfirmedTotalPrice(payload.reservation.totalPrice);
+        setConfirmedHelperVerifyFee(payload.reservation.helperVerifyFee);
       } catch {
         if (!isCancelled) {
           setDetailError("예약 상세 정보를 불러오지 못했습니다.");
@@ -220,13 +225,24 @@ function InUsePageContent() {
   }, [endTime, serverNowMs]);
 
   const overdue = useMemo(() => {
+    const basePrice = Math.max(
+      0,
+      confirmedTotalPrice - confirmedHelperVerifyFee,
+    );
+
     return calculateOverduePreviewAt(
       endTime,
-      confirmedTotalPrice,
+      basePrice,
       startTime,
       serverNowMs,
     );
-  }, [confirmedTotalPrice, endTime, startTime, serverNowMs]);
+  }, [
+    confirmedHelperVerifyFee,
+    confirmedTotalPrice,
+    endTime,
+    startTime,
+    serverNowMs,
+  ]);
 
   const timeText = formatRemainingTime(remaining.remainingMs);
 
@@ -353,8 +369,13 @@ function InUsePageContent() {
       <p className="text-lg text-zinc-500">이용 중</p>
 
       <div className="mx-auto mt-4 flex h-64 w-64 flex-col items-center justify-center rounded-full border-4 border-blue-600 text-blue-600 shadow-[0_0_0_8px_rgba(59,130,246,0.2)]">
-        <p className="text-2xl">남은 시간</p>
+        <p className="text-2xl">
+          {remaining.isOverdue ? "초과 이용" : "남은 시간"}
+        </p>
         <p className="mt-2 text-5xl font-semibold">{timeText}</p>
+        {overdue.isCapped ? (
+          <p className="mt-2 text-sm font-semibold">최대 과금 시간 적용</p>
+        ) : null}
       </div>
 
       <p className="mt-6 text-lg text-zinc-600">
@@ -373,7 +394,7 @@ function InUsePageContent() {
           <p className="mt-2 text-sm text-red-500">{startError}</p>
         ) : null}
         <p className="mt-2 text-sm text-zinc-500">
-          예상 초과요금: {Number(overdue.previewFee).toLocaleString("ko-KR")}원
+          예상 초과요금{overdue.isCapped ? " (최대)" : ""}: {Number(overdue.previewFee).toLocaleString("ko-KR")}원
         </p>
       </div>
 
@@ -393,7 +414,7 @@ function InUsePageContent() {
           </li>
           <li className="flex gap-2">
             <CircleAlert className="mt-1 size-4 shrink-0 text-blue-600" />
-            종료 시각 이후에는 1시간 단위 추가요금이 발생합니다. 베이 운영 버퍼는 연장 시간이 아닙니다.
+            종료 시각 이후에는 1시간 단위 추가요금이 발생하며, 최대 1시간분까지만 청구됩니다. 베이 운영 버퍼는 연장 시간이 아닙니다.
           </li>
         </ul>
       </div>

@@ -443,7 +443,7 @@ export default function ReservationListClient(props: {
   }
 
   const tabs: Array<{ id: ReservationTab; label: string; count: number }> = [
-    { id: "upcoming", label: "다가오는 예약", count: upcomingReservations.length },
+    { id: "upcoming", label: "진행 중·예정", count: upcomingReservations.length },
     { id: "history", label: "지난 이용", count: pastReservations.length },
   ];
 
@@ -480,7 +480,7 @@ export default function ReservationListClient(props: {
           <EmptyState
             text={
               activeTab === "upcoming"
-                ? "아직 잡힌 예약이 없습니다."
+                ? "진행 중이거나 예정된 예약이 없습니다."
                 : "아직 완료된 이용 내역이 없습니다."
             }
           />

@@ -242,6 +242,7 @@ checkoutPhoto2?: string
 • 현재 서버시간과 end_time 비교
 • 초과 시간 계산
 • 1시간 단위 올림
+• 과금 대상 초과 시간은 최대 60분으로 제한
 • extra_fee 계산
 • SELF_SERVICE는 tool/cleaning/waste 체크와 체크아웃 사진 2장 필수
 • 카 마스터 검수 여부와 비용은 예약 시 확정된 reservation 값을 사용
@@ -255,7 +256,7 @@ checkoutPhoto2?: string
 
 diff = now - end_time
 diff <= 0 → 0
-else → ceil(diff / 1시간) \* (시간요금)
+else → ceil(min(diff, 1시간) / 1시간) \* (시간요금)
 
 성공 응답:
 {
