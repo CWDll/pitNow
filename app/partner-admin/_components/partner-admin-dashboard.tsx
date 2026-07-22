@@ -1,13 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  VEHICLE_TYPE_OPTIONS,
-  type VehicleType,
-} from "@/src/domain/vehicle";
+import { VEHICLE_TYPE_OPTIONS, type VehicleType } from "@/src/domain/vehicle";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { redirectToLogin } from "@/src/lib/client-auth";
 
@@ -1267,26 +1263,19 @@ export function PartnerAdminDashboard() {
     checkoutChecklistItems.filter(Boolean).length;
 
   return (
-    <section className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-200 pb-5">
+    <section id="overview" className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">
-            PitNow Partner
+          <p className="text-xs font-bold text-blue-700">
+            TODAY&apos;S OPERATIONS
           </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight">
-            정비소 운영 콘솔
+          <h1 className="mt-2 text-3xl font-bold text-slate-950">
+            현장 운영 현황
           </h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            본인 업장의 예약과 현장 증적만 조회합니다.
+          <p className="mt-2 text-sm text-slate-500">
+            예약, 베이 상태와 현장 이슈를 한 화면에서 관리합니다.
           </p>
         </div>
-
-        <Link
-          href="/"
-          className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700"
-        >
-          사용자 홈
-        </Link>
       </header>
 
       {error ? (
@@ -1311,7 +1300,7 @@ export function PartnerAdminDashboard() {
         </div>
       ) : (
         <>
-          <section className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1fr_220px]">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 Partner
@@ -1361,7 +1350,10 @@ export function PartnerAdminDashboard() {
             ))}
           </section>
 
-          <section className="rounded-lg border border-zinc-200 bg-white">
+          <section
+            id="bays"
+            className="scroll-mt-24 rounded-lg border border-zinc-200 bg-white"
+          >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
               <div>
                 <h2 className="text-base font-semibold">베이 관리</h2>
@@ -1397,25 +1389,27 @@ export function PartnerAdminDashboard() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                        <p className="font-semibold">{bay.name}</p>
-                        <p
-                          className={`mt-1 text-xs font-semibold ${
-                            bay.isActive ? "text-emerald-700" : "text-zinc-500"
-                          }`}
-                        >
-                          {bay.isActive ? "예약 가능" : "예약 중지"}
-                        </p>
-                        <p
-                          className={`mt-1 text-xs ${
-                            hasActiveReservations
-                              ? "font-semibold text-amber-700"
-                              : "text-zinc-500"
-                          }`}
-                        >
-                          {hasActiveReservations
-                            ? `진행/예정 예약 ${bay.activeReservationCount}건`
-                            : "진행/예정 예약 없음"}
-                        </p>
+                          <p className="font-semibold">{bay.name}</p>
+                          <p
+                            className={`mt-1 text-xs font-semibold ${
+                              bay.isActive
+                                ? "text-emerald-700"
+                                : "text-zinc-500"
+                            }`}
+                          >
+                            {bay.isActive ? "예약 가능" : "예약 중지"}
+                          </p>
+                          <p
+                            className={`mt-1 text-xs ${
+                              hasActiveReservations
+                                ? "font-semibold text-amber-700"
+                                : "text-zinc-500"
+                            }`}
+                          >
+                            {hasActiveReservations
+                              ? `진행/예정 예약 ${bay.activeReservationCount}건`
+                              : "진행/예정 예약 없음"}
+                          </p>
                         </div>
                         <span className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-600">
                           {bay.maxVehicleWeightKg === null
@@ -1424,7 +1418,8 @@ export function PartnerAdminDashboard() {
                         </span>
                       </div>
                       <p className="mt-3 line-clamp-2 text-xs leading-5 text-zinc-600">
-                        허용 차종: {bay.allowedVehicleTypes.length === 0
+                        허용 차종:{" "}
+                        {bay.allowedVehicleTypes.length === 0
                           ? "전체"
                           : bay.allowedVehicleTypes.join(", ")}
                       </p>
@@ -1470,7 +1465,10 @@ export function PartnerAdminDashboard() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-zinc-200 bg-white">
+          <section
+            id="packages"
+            className="scroll-mt-24 rounded-lg border border-zinc-200 bg-white"
+          >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
               <div>
                 <h2 className="text-base font-semibold">패키지/가격 확인</h2>
@@ -1602,7 +1600,10 @@ export function PartnerAdminDashboard() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-zinc-200 bg-white">
+          <section
+            id="availability"
+            className="scroll-mt-24 rounded-lg border border-zinc-200 bg-white"
+          >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
               <div>
                 <h2 className="text-base font-semibold">예약 차단 시간</h2>
@@ -1797,7 +1798,10 @@ export function PartnerAdminDashboard() {
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+          <section
+            id="reservations"
+            className="scroll-mt-24 overflow-hidden rounded-lg border border-zinc-200 bg-white"
+          >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
               <div>
                 <h2 className="text-base font-semibold">

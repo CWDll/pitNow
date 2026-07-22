@@ -216,6 +216,8 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 16 | 가격 변경 요청 | 희망 가격 + 사유 제출 | request 생성, `/admin/packages`에 표시 | 대기 |  |
 | 17 | bay 이용 조건 설정 | 기존 bay에서 허용 차종 복수 선택 + 최대 중량 저장 | 목록 요약 갱신, 새로고침 후 유지, `BAY_COMPATIBILITY_UPDATED` audit 기록 | 대기 |  |
 | 18 | bay 조건 서버 재검증 | 조건에 맞지 않는 차량으로 결제 준비 시도 | 예약 생성 없이 차종/중량별 오류 코드 반환 | 대기 |  |
+| 19 | 데스크톱 dashboard shell | 1440px 이상에서 `/partner-admin` 확인 | 고정 사이드바와 상단 바가 겹치지 않고 모바일 bottom nav가 표시되지 않음 | 대기 |  |
+| 20 | 섹션 내비게이션 | 베이/패키지·가격/예약 차단/예약 현황 메뉴 선택 | 해당 섹션으로 이동하고 선택 메뉴가 강조됨 | 대기 |  |
 
 ### 7.6 Admin QA
 
@@ -235,6 +237,8 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 12 | change request approve | pending request 승인 | 가격 반영, request approved, audit log 생성 | 대기 |  |
 | 13 | change request reject | pending request 거절 | 가격 미변경, request rejected | 대기 |  |
 | 14 | audit logs | `/admin/packages` 최근 이력 | approval/update 이력이 표시됨 | 대기 |  |
+| 15 | 데스크톱 dashboard shell | 1440px 이상에서 전체 Admin 메뉴 순회 | 고정 사이드바·상단 바·본문이 겹치지 않고 현재 메뉴가 강조됨 | 대기 |  |
+| 16 | 운영 화면 밀도 | Overview와 목록/상세 화면 비교 | 지표·필터·표가 과도하게 크지 않고 가로 스크롤 없이 읽힘 | 대기 |  |
 
 ### 7.7 Toss Sandbox QA
 

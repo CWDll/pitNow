@@ -406,9 +406,11 @@ test.describe("admin smoke", () => {
   test("protected admin pages render with admin cookie", async ({ page }) => {
     await page.goto("/admin");
     await expect(
-      page.getByRole("heading", { name: "Garage Loop Monitor" }),
+      page.getByRole("heading", { name: "서비스 운영 현황" }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Payments" })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "결제 관리", exact: true }),
+    ).toBeVisible();
 
     await page.goto("/admin/reservations");
     await expect(

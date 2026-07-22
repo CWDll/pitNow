@@ -2063,3 +2063,22 @@ DB 선행 작업:
 - `npm run e2e:ui` 성공, 9 passed.
 - Partner-admin API E2E에서 차종 불일치, 중량 초과, 중량 미등록, 비권한 조건 변경 차단 통과.
 - Partner-admin API E2E에서 `BAY_COMPATIBILITY_UPDATED` audit 저장 확인, 전체 통과.
+
+## 61. 2026-07-22 Admin/Partner-admin 데스크톱 대시보드 개편
+
+- Admin과 Partner-admin이 공유하는 데스크톱 전용 `DashboardShell`을 추가했다.
+- 240px 고정 사이드바, 현재 메뉴 강조, 상단 운영 상태 바, 사용자 앱 바로가기를 공통으로 사용한다.
+- Admin 홈은 큰 랜딩형 제목과 카드를 줄이고 운영 지표와 업무 바로가기 중심의 compact dashboard로 정리했다.
+- Partner-admin은 운영 현황, 베이 관리, 패키지·가격, 예약 차단, 예약 현황으로 바로 이동하는 앵커 내비게이션을 추가했다.
+- 기존 예약 조회, 베이 설정, availability block, 현장 메모, 패키지 변경 요청과 Admin 승인 로직은 유지했다.
+- Admin 전체 화면의 큰 곡률과 제목 크기를 공통 셸에서 제한해 하위 라우트의 시각 밀도를 통일했다.
+
+현재 검증:
+
+- 1440x900 브라우저에서 사이드바/상단 바/본문 폭과 수평 오버플로를 확인했다.
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+- `npm run verify:admin` 성공, 5 passed.
+- `npm run e2e:partner-admin` 성공.
+- `npm run e2e:ui` 성공, 9 passed.
