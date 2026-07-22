@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CarFront,
+  ChevronDown,
   CirclePlus,
   LoaderCircle,
   LogIn,
@@ -14,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 
-import { Card, Pill, Screen, StatePanel } from "../_components/mobile-ui";
+import { Card, Screen, StatePanel } from "../_components/mobile-ui";
 import type { CarItem, MaintenanceHistoryItem } from "../_data/mock-cars";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { supabase } from "@/src/lib/supabase";
@@ -25,6 +26,21 @@ interface CarFormState {
   year: string;
   typeLabel: string;
 }
+
+const VEHICLE_TYPE_OPTIONS = [
+  { value: "경차", label: "경차" },
+  { value: "세단", label: "세단" },
+  { value: "SUV", label: "SUV" },
+  { value: "해치백", label: "해치백" },
+  { value: "왜건", label: "왜건" },
+  { value: "쿠페", label: "쿠페" },
+  { value: "컨버터블", label: "컨버터블" },
+  { value: "미니밴/MPV", label: "미니밴 / MPV" },
+  { value: "승합차", label: "승합차" },
+  { value: "픽업트럭", label: "픽업트럭" },
+  { value: "소형 화물차", label: "소형 화물차 (포터 등)" },
+  { value: "기타", label: "기타" },
+] as const;
 
 interface VehicleRow {
   id: string;
@@ -447,12 +463,8 @@ export default function MyCarPage() {
         ) : null}
 
         <Card className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center">
             <h2 className="text-lg font-black text-slate-950">대표 차량</h2>
-            {/* <Pill
-              label={selectedCar.isActive ? "대표 차량" : "선택 차량"}
-              tone="accent"
-            /> */}
           </div>
 
           <div className="flex items-center gap-3 rounded-xl bg-blue-50 p-4">
@@ -674,37 +686,37 @@ function AddCarModal({
             }
             className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
           />
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="number"
-              placeholder="연식"
-              value={newCar.year}
+          <input
+            type="number"
+            inputMode="numeric"
+            placeholder="연식 (예: 2024)"
+            value={newCar.year}
+            onChange={(event) =>
+              onChange((prev) => ({ ...prev, year: event.target.value }))
+            }
+            className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
+          />
+          <label className="relative block">
+            <span className="sr-only">차량 종류</span>
+            <select
+              aria-label="차량 종류"
+              value={newCar.typeLabel}
               onChange={(event) =>
-                onChange((prev) => ({ ...prev, year: event.target.value }))
+                onChange((prev) => ({
+                  ...prev,
+                  typeLabel: event.target.value,
+                }))
               }
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:bg-white"
-            />
-            <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
-              {["세단", "SUV", "해치백"].map((typeLabel) => {
-                const selected = newCar.typeLabel === typeLabel;
-
-                return (
-                  <button
-                    key={typeLabel}
-                    type="button"
-                    onClick={() => onChange((prev) => ({ ...prev, typeLabel }))}
-                    className={`rounded-lg px-2 py-2 text-xs font-medium ${
-                      selected
-                        ? "bg-blue-600 text-white"
-                        : "bg-white text-slate-700"
-                    }`}
-                  >
-                    {typeLabel}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+              className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 pr-10 text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white"
+            >
+              {VEHICLE_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+          </label>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">

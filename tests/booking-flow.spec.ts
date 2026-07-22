@@ -593,6 +593,12 @@ test.describe("booking flow smoke", () => {
       await expect(page.getByRole("heading", { name: "정비 이력" })).toBeVisible();
       await expect(page.getByText(seed.partnerName).first()).toBeVisible();
       await expect(page.getByText(seed.taskTitle).first()).toBeVisible();
+      await page.getByRole("button", { name: "차량 추가" }).click();
+      const vehicleTypeSelect = page.getByLabel("차량 종류");
+      await expect(vehicleTypeSelect).toBeVisible();
+      await vehicleTypeSelect.selectOption({ label: "소형 화물차 (포터 등)" });
+      await expect(vehicleTypeSelect).toHaveValue("소형 화물차");
+      await page.getByRole("button", { name: "차량 추가 닫기" }).click();
 
       await page.goto("/reservation");
       await page.getByRole("button", { name: /지난 이용/ }).click();
