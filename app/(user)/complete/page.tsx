@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 
 import type {
   CreateReviewPayload,
@@ -112,6 +113,7 @@ function CompletePageContent() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId") ?? "";
+  const isReservationHistoryEntry = searchParams.get("from") === "reservation";
   const fallbackWorkTitle = searchParams.get("workTitle") ?? "엔진오일 교환";
   const [detail, setDetail] = useState<ReservationDetail>(() => ({
     id: reservationId,
@@ -405,6 +407,15 @@ function CompletePageContent() {
 
   return (
     <section className="pb-24 pt-6">
+      {isReservationHistoryEntry ? (
+        <Link
+          href="/reservation"
+          aria-label="예약 내역으로 돌아가기"
+          className="mb-4 inline-flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm"
+        >
+          <ArrowLeft className="size-5" />
+        </Link>
+      ) : null}
       <div className="mb-4 text-center">
         <p className="text-6xl text-emerald-600">✓</p>
         <h1 className="text-4xl font-semibold text-zinc-900">이용 완료</h1>

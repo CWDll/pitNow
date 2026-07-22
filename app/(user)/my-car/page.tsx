@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 
 import { Card, Pill, Screen, StatePanel } from "../_components/mobile-ui";
-import type { CarItem } from "../_data/mock-cars";
+import type { CarItem, MaintenanceHistoryItem } from "../_data/mock-cars";
+import { authFetch } from "@/src/lib/auth-fetch";
 import { supabase } from "@/src/lib/supabase";
 
 interface CarFormState {
@@ -36,11 +37,19 @@ interface VehicleRow {
   created_at: string;
 }
 
+interface MaintenanceHistoryResponse {
+  success: boolean;
+  histories?: Array<MaintenanceHistoryItem & { vehicleId: string }>;
+}
+
 function formatPrice(value: number): string {
   return `${value.toLocaleString("ko-KR")}원`;
 }
 
-function mapVehicleToCar(row: VehicleRow): CarItem {
+function mapVehicleToCar(
+  row: VehicleRow,
+  historyByVehicle: Map<string, MaintenanceHistoryItem[]> = new Map(),
+): CarItem {
   return {
     id: row.id,
     number: row.plate_number,
@@ -48,7 +57,7 @@ function mapVehicleToCar(row: VehicleRow): CarItem {
     year: row.year,
     typeLabel: row.type_label,
     isActive: row.is_active,
-    history: [],
+    history: historyByVehicle.get(row.id) ?? [],
   };
 }
 
@@ -122,28 +131,62 @@ export default function MyCarPage() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("vehicles")
-        .select("id,user_id,plate_number,model,year,type_label,is_active,created_at")
-        .order("is_active", { ascending: false })
-        .order("created_at", { ascending: false });
+      try {
+        const [vehicleResult, historyResponse] = await Promise.all([
+          supabase
+            .from("vehicles")
+            .select("id,user_id,plate_number,model,year,type_label,is_active,created_at")
+            .order("is_active", { ascending: false })
+            .order("created_at", { ascending: false }),
+          authFetch("/api/vehicles/maintenance-history", {
+            method: "GET",
+            cache: "no-store",
+          }),
+        ]);
 
-      if (isCancelled) {
-        return;
-      }
+        const { data, error } = vehicleResult;
+        const historyPayload = (await historyResponse.json()) as MaintenanceHistoryResponse;
 
-      if (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        if (error) {
+          setUserId(sessionUserId);
+          setMessage("차량 목록을 불러오지 못했습니다. Supabase SQL 적용 여부를 확인해 주세요.");
+          setIsLoading(false);
+          return;
+        }
+
+        const historyByVehicle = new Map<string, MaintenanceHistoryItem[]>();
+
+        if (historyResponse.ok && historyPayload.success) {
+          (historyPayload.histories ?? []).forEach(({ vehicleId, ...history }) => {
+            historyByVehicle.set(vehicleId, [
+              ...(historyByVehicle.get(vehicleId) ?? []),
+              history,
+            ]);
+          });
+        }
+
+        const nextCars = ((data ?? []) as VehicleRow[]).map((row) =>
+          mapVehicleToCar(row, historyByVehicle),
+        );
         setUserId(sessionUserId);
-        setMessage("차량 목록을 불러오지 못했습니다. Supabase SQL 적용 여부를 확인해 주세요.");
+        setCars(nextCars);
+        setSelectedCarId(getInitialSelectedCarId(nextCars));
+        if (!historyResponse.ok || !historyPayload.success) {
+          setMessage("차량은 불러왔지만 정비 이력을 불러오지 못했습니다.");
+        }
         setIsLoading(false);
-        return;
+      } catch (loadError) {
+        console.warn("VEHICLE DATA LOOKUP ERROR:", loadError);
+        if (!isCancelled) {
+          setUserId(sessionUserId);
+          setMessage("차량 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          setIsLoading(false);
+        }
       }
-
-      const nextCars = ((data ?? []) as VehicleRow[]).map(mapVehicleToCar);
-      setUserId(sessionUserId);
-      setCars(nextCars);
-      setSelectedCarId(getInitialSelectedCarId(nextCars));
-      setIsLoading(false);
     }
 
     void loadVehicles();

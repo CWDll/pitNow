@@ -164,6 +164,7 @@ function buildReservationHref(item: ReservationListItem): string {
     return buildSettlementPaymentHref(item);
   }
 
+  query.set("from", "reservation");
   return `/complete?${query.toString()}`;
 }
 

@@ -885,6 +885,37 @@ createdAt
 
 ⸻
 
+24. GET /api/vehicles/maintenance-history
+
+⸻
+
+기능:
+로그인 사용자의 차량별 완료 정비 이력 조회
+
+검증:
+• Supabase Auth session 필수
+• `reservations.user_id`가 요청 사용자와 같고 `status = COMPLETED`인 예약만 조회
+• `vehicle_id`가 없는 legacy 예약은 제외
+• Self Service는 예약 작업명, Shop Service는 결제 당시 package snapshot을 우선 사용
+• 표시 금액은 checkout `total_settlement`, checkout이 없으면 예약 `total_price` 사용
+
+성공 응답:
+{
+success: true,
+histories: [
+{
+id,
+vehicleId,
+dateLabel,
+garageName,
+workTitle,
+totalPrice
+}
+]
+}
+
+⸻
+
 상태 전환 규칙
 
 결제 상태:

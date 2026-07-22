@@ -540,6 +540,9 @@ test.describe("booking flow smoke", () => {
       await expect(page.getByRole("heading", { name: "이용 완료" })).toBeVisible();
       await expect(page.getByText("정비가 마무리되었습니다.")).toBeVisible();
       await expect(page.getByText("추가 정산 결제 완료")).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: "예약 내역으로 돌아가기" }),
+      ).toHaveCount(0);
 
       await page.getByLabel("5점 선택").click();
       await page
@@ -582,6 +585,33 @@ test.describe("booking flow smoke", () => {
         "href",
         `/partner/${seed.partnerId}`,
       );
+
+      await page.goto("/my-car");
+      await expect(page.getByText("차량 정보를 불러오는 중입니다.")).toBeHidden({
+        timeout: 15_000,
+      });
+      await expect(page.getByRole("heading", { name: "정비 이력" })).toBeVisible();
+      await expect(page.getByText(seed.partnerName).first()).toBeVisible();
+      await expect(page.getByText(seed.taskTitle).first()).toBeVisible();
+
+      await page.goto("/reservation");
+      await page.getByRole("button", { name: /지난 이용/ }).click();
+      const completedReservationLink = page.locator(
+        `a[href*="reservationId=${e2eReservationId}"]`,
+      );
+      await expect(completedReservationLink).toHaveCount(1);
+      await Promise.all([
+        page.waitForURL(/\/complete\?.*from=reservation/),
+        completedReservationLink.click(),
+      ]);
+      const reservationBackLink = page.getByRole("link", {
+        name: "예약 내역으로 돌아가기",
+      });
+      await expect(reservationBackLink).toBeVisible();
+      await Promise.all([
+        page.waitForURL((url) => url.pathname === "/reservation"),
+        reservationBackLink.click(),
+      ]);
 
       const { data: completedReservation, error: completedReservationError } =
         await db
