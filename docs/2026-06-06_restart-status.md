@@ -2056,10 +2056,10 @@ Partner-admin 직접 패키지 편집은 보류하고, 파트너가 가격 변�
 DB 선행 작업:
 
 - 원격 Supabase에 `db/migrations/20260722_bay_vehicle_compatibility.sql` 적용 완료, schema check 통과.
-- 감사 로그의 `BAY_COMPATIBILITY_UPDATED` 허용을 위해 `db/migrations/20260722_partner_admin_bay_compatibility_audit.sql` 적용 필요.
+- 감사 로그의 `BAY_COMPATIBILITY_UPDATED` 허용을 위한 `db/migrations/20260722_partner_admin_bay_compatibility_audit.sql` 적용 완료.
 
 현재 검증:
 
 - `npm run e2e:ui` 성공, 9 passed.
 - Partner-admin API E2E에서 차종 불일치, 중량 초과, 중량 미등록, 비권한 조건 변경 차단 통과.
-- 후속 audit constraint migration 적용 전이어서 `BAY_COMPATIBILITY_UPDATED` audit 확인만 대기 중.
+- Partner-admin API E2E에서 `BAY_COMPATIBILITY_UPDATED` audit 저장 확인, 전체 통과.
