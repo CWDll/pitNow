@@ -204,6 +204,22 @@ interface AdminPackageChangeRequestRow {
   service_packages: { name: string } | Array<{ name: string }> | null;
 }
 
+interface AdminPackageCreationRequestRow {
+  id: string;
+  partner_id: string;
+  requested_name: string;
+  requested_description: string | null;
+  requested_duration_minutes: number;
+  requested_labor_price: number | string;
+  reason: string | null;
+  status: "PENDING" | "FULFILLED" | "REJECTED";
+  requested_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  partners: { name: string } | Array<{ name: string }> | null;
+}
+
 export interface AdminReservationItem {
   id: string;
   partnerName: string;
@@ -317,9 +333,26 @@ export interface AdminPackageChangeRequestItem {
   createdAt: string;
 }
 
+export interface AdminPackageCreationRequestItem {
+  id: string;
+  partnerId: string;
+  partnerName: string;
+  requestedName: string;
+  requestedDescription: string;
+  requestedDurationMinutes: number;
+  requestedLaborPrice: number;
+  reason: string;
+  status: "PENDING" | "FULFILLED" | "REJECTED";
+  requestedBy: string | null;
+  reviewedAt: string | null;
+  reviewNote: string;
+  createdAt: string;
+}
+
 export interface AdminPackageManagerData {
   auditLogs: AdminPackageAuditItem[];
   changeRequests: AdminPackageChangeRequestItem[];
+  creationRequests: AdminPackageCreationRequestItem[];
   packages: AdminPackageItem[];
   partners: AdminPackagePartnerOption[];
   servicePackages: AdminServicePackageOption[];
@@ -1184,6 +1217,7 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
     return {
       auditLogs: [],
       changeRequests: [],
+      creationRequests: [],
       packages: [],
       partners: [],
       servicePackages: [],
@@ -1196,6 +1230,7 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
     servicePackagesResult,
     auditLogsResult,
     changeRequestsResult,
+    creationRequestsResult,
   ] = await Promise.all([
     getAdminPackages(),
     supabaseAdmin
@@ -1233,6 +1268,14 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
       .order("created_at", { ascending: false })
       .limit(20)
       .returns<AdminPackageChangeRequestRow[]>(),
+    supabaseAdmin
+      .from("partner_package_creation_requests")
+      .select(
+        "id, partner_id, requested_name, requested_description, requested_duration_minutes, requested_labor_price, reason, status, requested_by, reviewed_at, review_note, created_at, partners(name)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .returns<AdminPackageCreationRequestRow[]>(),
   ]);
 
   if (partnersResult.error) {
@@ -1254,6 +1297,13 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
     console.error(
       "ADMIN PACKAGE CHANGE REQUEST LOOKUP ERROR:",
       changeRequestsResult.error,
+    );
+  }
+
+  if (creationRequestsResult.error) {
+    console.error(
+      "ADMIN PACKAGE CREATION REQUEST LOOKUP ERROR:",
+      creationRequestsResult.error,
     );
   }
 
@@ -1287,6 +1337,25 @@ export async function getAdminPackageManagerData(): Promise<AdminPackageManagerD
         packageName: servicePackage?.name ?? "Unknown package",
         priceId: request.price_id,
         currentLaborPrice: toNumber(request.current_labor_price),
+        requestedLaborPrice: toNumber(request.requested_labor_price),
+        reason: request.reason ?? "",
+        status: request.status,
+        requestedBy: request.requested_by,
+        reviewedAt: request.reviewed_at,
+        reviewNote: request.review_note ?? "",
+        createdAt: request.created_at,
+      };
+    }),
+    creationRequests: (creationRequestsResult.data ?? []).map((request) => {
+      const partner = firstOrSelf(request.partners);
+
+      return {
+        id: request.id,
+        partnerId: request.partner_id,
+        partnerName: partner?.name ?? "Unknown partner",
+        requestedName: request.requested_name,
+        requestedDescription: request.requested_description ?? "",
+        requestedDurationMinutes: request.requested_duration_minutes,
         requestedLaborPrice: toNumber(request.requested_labor_price),
         reason: request.reason ?? "",
         status: request.status,

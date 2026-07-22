@@ -606,6 +606,15 @@ async function cleanup(admin, records) {
     );
   }
 
+  if (records.packageCreationRequestIds?.length) {
+    tasks.push(
+      admin
+        .from("partner_package_creation_requests")
+        .delete()
+        .in("id", records.packageCreationRequestIds),
+    );
+  }
+
   if (records.partnerAdminUserId && records.auditSince) {
     tasks.push(
       admin
@@ -722,6 +731,15 @@ async function hasPackageChangeRequestSchema(admin) {
   return !error;
 }
 
+async function hasPackageCreationRequestSchema(admin) {
+  const { error } = await admin
+    .from("partner_package_creation_requests")
+    .select("id")
+    .limit(1);
+
+  return !error;
+}
+
 async function main() {
   loadEnvFile(resolve(process.cwd(), ".env.local"));
 
@@ -733,6 +751,7 @@ async function main() {
   const records = {
     noteIds: [],
     packageChangeRequestIds: [],
+    packageCreationRequestIds: [],
   };
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -932,6 +951,52 @@ async function main() {
       );
     }
 
+    const hasPackageCreationSchema =
+      await hasPackageCreationRequestSchema(admin);
+
+    if (hasPackageCreationSchema) {
+      const packageCreationPayload = await apiRequest({
+        baseUrl,
+        token: adminToken,
+        path: "/api/partner-admin/package-creation-requests",
+        method: "POST",
+        body: {
+          partnerId: bay.partnerId,
+          requestedName: `E2E 신규 패키지 ${runId}`,
+          requestedDescription: "Partner-admin 신규 패키지 요청 검증",
+          requestedDurationMinutes: 60,
+          requestedLaborPrice: 50000,
+          reason: "자동 검증 요청",
+        },
+      });
+
+      if (!packageCreationPayload.request?.id) {
+        throw new Error(
+          "package creation request 응답에 request id가 없습니다.",
+        );
+      }
+      records.packageCreationRequestIds.push(packageCreationPayload.request.id);
+      formatStep("package creation request 생성 API 확인");
+
+      await apiRequest({
+        baseUrl,
+        token: outsiderToken,
+        path: "/api/partner-admin/package-creation-requests",
+        method: "POST",
+        body: {
+          partnerId: bay.partnerId,
+          requestedName: `E2E 비권한 패키지 ${runId}`,
+          requestedDurationMinutes: 60,
+          requestedLaborPrice: 50000,
+        },
+        expectedStatus: 403,
+        expectedErrorCode: "PARTNER_ADMIN_FORBIDDEN",
+      });
+      formatStep("비권한 유저 package creation request 403 확인");
+    } else {
+      formatStep("package creation request API 건너뜀", "schema 미적용");
+    }
+
     const reservationRows = await assertReservationListRelatedLookups({
       client: userClient,
       userId: partnerAdminUser.id,
@@ -1120,6 +1185,9 @@ async function main() {
     if (
       !reservedBayPayload ||
       reservedBayPayload.activeReservationCount < 1 ||
+      !reservedBayPayload.blockingReservations?.some(
+        (item) => item.id === reservation.id,
+      ) ||
       reservedBayPayload.canDeactivate !== false
     ) {
       throw new Error(
@@ -1163,6 +1231,11 @@ async function main() {
         "reservation detail API 응답 예약 ID가 일치하지 않습니다.",
       );
     }
+    if (!detailPayload.reservation?.customer?.email) {
+      throw new Error(
+        "reservation detail API 응답에 예약자 이메일이 없습니다.",
+      );
+    }
     formatStep("reservation detail API 확인");
 
     await apiRequest({
@@ -1180,6 +1253,22 @@ async function main() {
     });
     const blockStart = blockWindow.startsAt;
     const blockEnd = blockWindow.endsAt;
+    await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: "/api/partner-admin/availability-blocks",
+      method: "POST",
+      body: {
+        partnerId: bay.partnerId,
+        bayId: bay.id,
+        startsAt: new Date(blockStart.getTime() + 60_000).toISOString(),
+        endsAt: blockEnd.toISOString(),
+        reason: `partner admin api e2e minute unit ${runId}`,
+      },
+      expectedStatus: 400,
+      expectedErrorCode: "INVALID_INPUT",
+    });
+    formatStep("availability block 정각 단위 검증 확인");
     const blockPayload = await apiRequest({
       baseUrl,
       token: adminToken,

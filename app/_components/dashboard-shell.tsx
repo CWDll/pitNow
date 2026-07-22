@@ -15,9 +15,11 @@ import {
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+
+import { supabase } from "@/src/lib/supabase";
 
 type DashboardVariant = "admin" | "partner";
 
@@ -49,7 +51,9 @@ const partnerNavItems = [
 
 export function DashboardShell({ children, variant }: DashboardShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [hash, setHash] = useState("");
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const isAdmin = variant === "admin";
   const navItems = isAdmin ? adminNavItems : partnerNavItems;
 
@@ -80,98 +84,113 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
       .reverse()
       .find((item) => pathname.startsWith(item.href.split("#")[0]));
 
+  async function signOutPartner() {
+    setIsSigningOut(true);
+    await supabase.auth.signOut();
+    router.replace("/login?next=/partner-admin");
+    router.refresh();
+  }
+
   return (
-    <div className="min-h-dvh overflow-x-auto bg-slate-100 text-slate-950">
-      <div className="mx-auto flex min-h-dvh min-w-[1180px] max-w-[1720px]">
-        <aside className="sticky top-0 flex h-dvh w-60 shrink-0 flex-col border-r border-slate-200 bg-white px-4 py-5">
-          <Link
-            href={isAdmin ? "/admin" : "/partner-admin"}
-            className="px-3 py-2"
-          >
-            <span className="flex items-center gap-2">
-              <span className="grid size-9 place-items-center rounded-lg bg-blue-600 text-sm font-black text-white">
-                P
+    <div className="min-h-dvh min-w-[1180px] bg-slate-100 text-slate-950">
+      <aside className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-slate-200 bg-white px-4 py-5">
+        <Link
+          href={isAdmin ? "/admin" : "/partner-admin"}
+          className="px-3 py-2"
+        >
+          <span className="flex items-center gap-2">
+            <span className="grid size-9 place-items-center rounded-lg bg-blue-600 text-sm font-black text-white">
+              P
+            </span>
+            <span>
+              <span className="block text-lg font-black text-slate-950">
+                PitNow
               </span>
-              <span>
-                <span className="block text-lg font-black text-slate-950">
-                  PitNow
-                </span>
-                <span className="block text-xs font-semibold text-slate-500">
-                  {isAdmin ? "Admin Console" : "Partner Console"}
-                </span>
+              <span className="block text-xs font-semibold text-slate-500">
+                {isAdmin ? "Admin Console" : "Partner Console"}
               </span>
             </span>
+          </span>
+        </Link>
+
+        <nav className="mt-7 space-y-1" aria-label="대시보드 메뉴">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => {
+                  const nextHash = item.href.includes("#")
+                    ? `#${item.href.split("#")[1]}`
+                    : "";
+                  setHash(nextHash);
+                }}
+                className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
+                  active
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                }`}
+              >
+                <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto space-y-1 border-t border-slate-200 pt-4">
+          <Link
+            href="/"
+            className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          >
+            <ExternalLink size={17} />
+            사용자 앱 열기
           </Link>
-
-          <nav className="mt-7 space-y-1" aria-label="대시보드 메뉴">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.href);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => {
-                    const nextHash = item.href.includes("#")
-                      ? `#${item.href.split("#")[1]}`
-                      : "";
-                    setHash(nextHash);
-                  }}
-                  className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
-                    active
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                  }`}
-                >
-                  <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="mt-auto space-y-1 border-t border-slate-200 pt-4">
+          {isAdmin ? (
             <Link
-              href="/"
+              href="/admin/logout"
+              prefetch={false}
               className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
             >
-              <ExternalLink size={17} />
-              사용자 앱 열기
+              <LogOut size={17} />
+              로그아웃
             </Link>
-            {isAdmin ? (
-              <Link
-                href="/admin/logout"
-                prefetch={false}
-                className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-              >
-                <LogOut size={17} />
-                로그아웃
-              </Link>
-            ) : null}
-          </div>
-        </aside>
-
-        <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-7 backdrop-blur">
-            <div>
-              <p className="text-sm font-bold text-slate-900">
-                {currentItem?.label ?? "운영 콘솔"}
-              </p>
-              <p className="text-xs text-slate-500">
-                {isAdmin ? "PitNow 전체 서비스 운영" : "정비소 현장 운영"}
-              </p>
-            </div>
-            <span className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              운영 중
-            </span>
-          </header>
-
-          <main className="dashboard-content min-w-0 p-7 [&_.rounded-3xl]:rounded-lg [&_.text-4xl]:text-3xl [&_.text-5xl]:text-3xl">
-            {children}
-          </main>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void signOutPartner()}
+              disabled={isSigningOut}
+              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950 disabled:opacity-50"
+            >
+              <LogOut size={17} />
+              {isSigningOut ? "로그아웃 중" : "로그아웃"}
+            </button>
+          )}
         </div>
+      </aside>
+
+      <div className="min-h-dvh min-w-0 pl-60">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-7 backdrop-blur">
+          <div>
+            <p className="text-sm font-bold text-slate-900">
+              {currentItem?.label ?? "운영 콘솔"}
+            </p>
+            <p className="text-xs text-slate-500">
+              {isAdmin ? "PitNow 전체 서비스 운영" : "정비소 현장 운영"}
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            운영 중
+          </span>
+        </header>
+
+        <main className="dashboard-content min-w-0 p-7 [&_.rounded-3xl]:rounded-lg [&_.text-4xl]:text-3xl [&_.text-5xl]:text-3xl">
+          {children}
+        </main>
       </div>
     </div>
   );

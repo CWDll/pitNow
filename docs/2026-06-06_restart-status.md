@@ -2082,3 +2082,28 @@ DB 선행 작업:
 - `npm run verify:admin` 성공, 5 passed.
 - `npm run e2e:partner-admin` 성공.
 - `npm run e2e:ui` 성공, 9 passed.
+
+## 62. 2026-07-22 Partner-admin 배포 QA 후속 개선
+
+- 예약 조회 날짜 선택을 예약 목록 헤더로 이동하고 각 예약 row에 날짜를 추가했다.
+- 베이 비활성화를 막는 실제 예약의 날짜, 시간, 상태를 베이 카드에 표시한다.
+- 과거 `CONFIRMED`는 기존처럼 베이 잠금에서 제외하고 `CHECKED_IN`, `IN_USE`는 날짜와 무관하게 보호한다.
+- 예약 상세에 예약자 이메일/메타데이터를 추가하고 체크인 4장과 체크아웃 2장을 즉시 표시한다.
+- 예약 상세 모달은 바깥 배경을 선택해 닫을 수 있다.
+- availability block 입력을 날짜 + 정시 드롭다운으로 바꾸고 API도 정각 외 요청을 거부한다.
+- dashboard sidebar를 viewport fixed로 변경하고 Partner 로그아웃을 추가했다.
+- 신규 패키지 생성 요청을 가격 변경 요청과 분리해 Partner 제출 및 Admin 검토 화면을 추가했다.
+
+DB 적용:
+
+- `db/migrations/20260722_partner_package_creation_requests.sql` 원격 적용 완료.
+- `node scripts/check-supabase-schema.mjs`에서 신규 요청 테이블을 포함한 schema check 통과.
+
+현재 검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+- `npm run e2e:ui` 성공, 9 passed.
+- `npm run verify:admin` 성공, 5 passed.
+- `npm run e2e:partner-admin` 성공. 신규 package creation request 생성과 비권한 사용자 403을 원격 DB에서 확인.

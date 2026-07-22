@@ -83,15 +83,25 @@ function parseDate(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function isWholeHour(date: Date): boolean {
+  return (
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  );
+}
+
 function parseBody(payload: unknown): CreateAvailabilityBlockBody | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
 
   const body = payload as Record<string, unknown>;
-  const partnerId = typeof body.partnerId === "string" ? body.partnerId.trim() : "";
+  const partnerId =
+    typeof body.partnerId === "string" ? body.partnerId.trim() : "";
   const rawBayId = typeof body.bayId === "string" ? body.bayId.trim() : "";
-  const startsAt = typeof body.startsAt === "string" ? body.startsAt.trim() : "";
+  const startsAt =
+    typeof body.startsAt === "string" ? body.startsAt.trim() : "";
   const endsAt = typeof body.endsAt === "string" ? body.endsAt.trim() : "";
   const rawReason = typeof body.reason === "string" ? body.reason.trim() : "";
 
@@ -102,7 +112,13 @@ function parseBody(payload: unknown): CreateAvailabilityBlockBody | null {
   const startDate = parseDate(startsAt);
   const endDate = parseDate(endsAt);
 
-  if (!startDate || !endDate || startDate >= endDate) {
+  if (
+    !startDate ||
+    !endDate ||
+    !isWholeHour(startDate) ||
+    !isWholeHour(endDate) ||
+    startDate >= endDate
+  ) {
     return null;
   }
 
@@ -163,7 +179,10 @@ async function assertPartnerAdmin(params: {
   );
 
   if (membership.error) {
-    console.error("PARTNER ADMIN AVAILABILITY MEMBERSHIP ERROR:", membership.error);
+    console.error(
+      "PARTNER ADMIN AVAILABILITY MEMBERSHIP ERROR:",
+      membership.error,
+    );
     return {
       ok: false as const,
       response: jsonError(
@@ -216,7 +235,11 @@ async function assertBayBelongsToPartner(params: {
   if (!data) {
     return {
       ok: false as const,
-      response: jsonError(400, "BAY_NOT_FOUND", "선택한 베이를 찾을 수 없습니다."),
+      response: jsonError(
+        400,
+        "BAY_NOT_FOUND",
+        "선택한 베이를 찾을 수 없습니다.",
+      ),
     };
   }
 
@@ -325,7 +348,11 @@ export async function POST(req: Request) {
   try {
     payload = await req.json();
   } catch {
-    return jsonError(400, "INVALID_JSON", "요청 본문(JSON)이 올바르지 않습니다.");
+    return jsonError(
+      400,
+      "INVALID_JSON",
+      "요청 본문(JSON)이 올바르지 않습니다.",
+    );
   }
 
   const body = parseBody(payload);
@@ -334,7 +361,7 @@ export async function POST(req: Request) {
     return jsonError(
       400,
       "INVALID_INPUT",
-      "partnerId, startsAt, endsAt 값과 시간 순서를 확인해 주세요.",
+      "예약 차단 시간은 정각 단위로 입력하고 시작·종료 순서를 확인해 주세요.",
     );
   }
 

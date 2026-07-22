@@ -29,7 +29,9 @@ interface BayRow {
 
 interface ActiveReservationRow {
   blocked_until: string | null;
+  end_time: string;
   id: string;
+  start_time: string;
   status: string;
 }
 
@@ -118,7 +120,11 @@ export async function PATCH(req: Request, context: Context) {
   try {
     payload = await req.json();
   } catch {
-    return jsonError(400, "INVALID_JSON", "요청 본문(JSON)이 올바르지 않습니다.");
+    return jsonError(
+      400,
+      "INVALID_JSON",
+      "요청 본문(JSON)이 올바르지 않습니다.",
+    );
   }
 
   const body = parseBody(payload);
@@ -156,7 +162,10 @@ export async function PATCH(req: Request, context: Context) {
   );
 
   if (membership.error) {
-    console.error("PARTNER ADMIN BAY UPDATE MEMBERSHIP ERROR:", membership.error);
+    console.error(
+      "PARTNER ADMIN BAY UPDATE MEMBERSHIP ERROR:",
+      membership.error,
+    );
     return jsonError(
       500,
       "DB_ERROR",
@@ -175,7 +184,7 @@ export async function PATCH(req: Request, context: Context) {
   if (bay.is_active && body.isActive === false) {
     const { data: activeReservations, error: activeReservationError } = await db
       .from("reservations")
-      .select("id,status,blocked_until")
+      .select("id,status,start_time,end_time,blocked_until")
       .eq("bay_id", bay.id)
       .in("status", BAY_BLOCKING_RESERVATION_STATUSES)
       .returns<ActiveReservationRow[]>();
@@ -263,9 +272,10 @@ export async function PATCH(req: Request, context: Context) {
     },
   });
 
-  const { data: activeReservations, error: activeReservationCountError } = await db
+  const { data: activeReservations, error: activeReservationCountError } =
+    await db
       .from("reservations")
-      .select("id,status,blocked_until")
+      .select("id,status,start_time,end_time,blocked_until")
       .eq("bay_id", updatedBay.id)
       .in("status", BAY_BLOCKING_RESERVATION_STATUSES)
       .returns<ActiveReservationRow[]>();
@@ -283,19 +293,26 @@ export async function PATCH(req: Request, context: Context) {
   }
 
   const now = new Date();
-  const activeReservationCount = (activeReservations ?? []).filter(
+  const blockingReservations = (activeReservations ?? []).filter(
     (reservation) =>
       isBayBlockingReservation({
         blockedUntil: reservation.blocked_until,
         now,
         status: reservation.status,
       }),
-  ).length;
+  );
+  const activeReservationCount = blockingReservations.length;
 
   return NextResponse.json({
     success: true,
     bay: {
       activeReservationCount,
+      blockingReservations: blockingReservations.map((reservation) => ({
+        id: reservation.id,
+        startTime: reservation.start_time,
+        endTime: reservation.end_time,
+        status: reservation.status,
+      })),
       canDeactivate: activeReservationCount === 0,
       id: updatedBay.id,
       partnerId: updatedBay.partner_id,

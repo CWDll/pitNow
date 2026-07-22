@@ -15,6 +15,7 @@ interface Context {
 
 interface ReservationRow {
   id: string;
+  user_id: string;
   partner_id: string;
   bay_id: string | null;
   vehicle_id: string | null;
@@ -123,25 +124,36 @@ export async function GET(req: Request, context: Context) {
   const reservationId = id.trim();
 
   if (!reservationId) {
-    return jsonError(400, "INVALID_RESERVATION_ID", "reservation id가 필요합니다.");
+    return jsonError(
+      400,
+      "INVALID_RESERVATION_ID",
+      "reservation id가 필요합니다.",
+    );
   }
 
   const db = supabaseAdmin ?? authResult.auth.client;
   const { data: reservation, error: reservationError } = await db
     .from("reservations")
     .select(
-      "id,partner_id,bay_id,vehicle_id,reservation_type,start_time,end_time,blocked_until,status,total_price,helper_verify_requested,helper_verify_fee,created_at",
+      "id,user_id,partner_id,bay_id,vehicle_id,reservation_type,start_time,end_time,blocked_until,status,total_price,helper_verify_requested,helper_verify_fee,created_at",
     )
     .eq("id", reservationId)
     .maybeSingle<ReservationRow>();
 
   if (reservationError) {
-    console.error("PARTNER ADMIN RESERVATION DETAIL LOOKUP ERROR:", reservationError);
+    console.error(
+      "PARTNER ADMIN RESERVATION DETAIL LOOKUP ERROR:",
+      reservationError,
+    );
     return jsonError(500, "DB_ERROR", "예약 상세 조회 중 오류가 발생했습니다.");
   }
 
   if (!reservation) {
-    return jsonError(404, "RESERVATION_NOT_FOUND", "예약 정보를 찾을 수 없습니다.");
+    return jsonError(
+      404,
+      "RESERVATION_NOT_FOUND",
+      "예약 정보를 찾을 수 없습니다.",
+    );
   }
 
   const membership = await hasPartnerAdminMembership(
@@ -177,6 +189,7 @@ export async function GET(req: Request, context: Context) {
     checkinResult,
     checkoutResult,
     statusLogsResult,
+    reservationUserResult,
   ] = await Promise.all([
     db
       .from("partners")
@@ -219,6 +232,9 @@ export async function GET(req: Request, context: Context) {
       .eq("reservation_id", reservation.id)
       .order("created_at", { ascending: true })
       .returns<StatusLogRow[]>(),
+    supabaseAdmin
+      ? supabaseAdmin.auth.admin.getUserById(reservation.user_id)
+      : Promise.resolve({ data: { user: null }, error: null }),
   ]);
 
   if (
@@ -246,6 +262,8 @@ export async function GET(req: Request, context: Context) {
 
   const checkin = checkinResult.data;
   const checkout = checkoutResult.data;
+  const reservationUser = reservationUserResult.data.user;
+  const userMetadata = reservationUser?.user_metadata ?? {};
 
   return NextResponse.json({
     success: true,
@@ -265,6 +283,18 @@ export async function GET(req: Request, context: Context) {
       helperVerifyRequested: reservation.helper_verify_requested,
       helperVerifyFee: toNumber(reservation.helper_verify_fee),
       createdAt: reservation.created_at,
+      customer: {
+        userId: reservation.user_id,
+        email: reservationUser?.email ?? null,
+        name:
+          typeof userMetadata.full_name === "string"
+            ? userMetadata.full_name
+            : typeof userMetadata.name === "string"
+              ? userMetadata.name
+              : null,
+        phone:
+          typeof userMetadata.phone === "string" ? userMetadata.phone : null,
+      },
     },
     checkin: checkin
       ? {

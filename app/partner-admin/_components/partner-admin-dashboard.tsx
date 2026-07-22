@@ -47,6 +47,12 @@ interface PartnerAdminReservation {
 
 interface PartnerBay {
   activeReservationCount: number;
+  blockingReservations: Array<{
+    id: string;
+    startTime: string;
+    endTime: string;
+    status: ReservationStatus;
+  }>;
   canDeactivate: boolean;
   id: string;
   partnerId: string;
@@ -103,6 +109,12 @@ interface PartnerAdminReservationDetail {
     helperVerifyRequested: boolean;
     helperVerifyFee: number;
     createdAt: string;
+    customer: {
+      userId: string;
+      email: string | null;
+      name: string | null;
+      phone: string | null;
+    };
   };
   checkin: {
     frontImg: string;
@@ -179,6 +191,56 @@ function toDateTimeLocalFromIso(value: string): string {
   return toDateTimeLocalValue(date);
 }
 
+function toKstIsoFromDateTimeLocal(value: string): string {
+  return new Date(`${value}:00+09:00`).toISOString();
+}
+
+const HOUR_OPTIONS = Array.from(
+  { length: 24 },
+  (_, hour) => `${String(hour).padStart(2, "0")}:00`,
+);
+
+function HourDateTimeInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [dateValue = "", timeValue = "00:00"] = value.split("T");
+
+  return (
+    <fieldset>
+      <legend className="text-xs font-semibold text-zinc-500">{label}</legend>
+      <div className="mt-1 grid grid-cols-[1fr_92px] gap-2">
+        <input
+          type="date"
+          required
+          value={dateValue}
+          onChange={(event) =>
+            onChange(`${event.target.value}T${timeValue || "00:00"}`)
+          }
+          className="h-10 min-w-0 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
+        />
+        <select
+          value={timeValue}
+          onChange={(event) => onChange(`${dateValue}T${event.target.value}`)}
+          className="h-10 rounded-lg border border-zinc-300 bg-white px-2 text-sm font-semibold outline-none ring-blue-200 focus:ring-4"
+          aria-label={`${label} 시각`}
+        >
+          {HOUR_OPTIONS.map((hour) => (
+            <option key={hour} value={hour}>
+              {hour}
+            </option>
+          ))}
+        </select>
+      </div>
+    </fieldset>
+  );
+}
+
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
@@ -218,6 +280,27 @@ function formatDate(value: string | null): string {
 
 function formatPrice(value: number): string {
   return `${value.toLocaleString("ko-KR")}원`;
+}
+
+function EvidenceImage({ label, src }: { label: string; src: string }) {
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noreferrer"
+      className="group overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={`${label} 증적 사진`}
+        className="aspect-video w-full bg-zinc-100 object-cover transition group-hover:scale-[1.02]"
+      />
+      <span className="block border-t border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700">
+        {label}
+      </span>
+    </a>
+  );
 }
 
 function statusLabel(status: ReservationStatus): string {
@@ -379,6 +462,14 @@ export function PartnerAdminDashboard() {
     Record<string, string>
   >({});
   const [packageRequestMessage, setPackageRequestMessage] = useState("");
+  const [newPackageRequest, setNewPackageRequest] = useState({
+    name: "",
+    description: "",
+    durationMinutes: "60",
+    laborPrice: "",
+    reason: "",
+  });
+  const [isRequestingNewPackage, setIsRequestingNewPackage] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState("");
   const [editBlockStartsAt, setEditBlockStartsAt] = useState("");
   const [editBlockEndsAt, setEditBlockEndsAt] = useState("");
@@ -730,6 +821,13 @@ export function PartnerAdminDashboard() {
     setIsLoadingNotes(false);
   }
 
+  function closeReservationDetail() {
+    setSelectedReservationId("");
+    setDetail(null);
+    setNotes([]);
+    setSelectedOperationalAction(null);
+  }
+
   async function createReservationNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1035,8 +1133,8 @@ export function PartnerAdminDashboard() {
       body: JSON.stringify({
         partnerId: selectedPartnerId,
         bayId: blockBayId || undefined,
-        startsAt: new Date(blockStartsAt).toISOString(),
-        endsAt: new Date(blockEndsAt).toISOString(),
+        startsAt: toKstIsoFromDateTimeLocal(blockStartsAt),
+        endsAt: toKstIsoFromDateTimeLocal(blockEndsAt),
         reason: blockReason,
       }),
     });
@@ -1132,8 +1230,8 @@ export function PartnerAdminDashboard() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          startsAt: new Date(editBlockStartsAt).toISOString(),
-          endsAt: new Date(editBlockEndsAt).toISOString(),
+          startsAt: toKstIsoFromDateTimeLocal(editBlockStartsAt),
+          endsAt: toKstIsoFromDateTimeLocal(editBlockEndsAt),
           reason: editBlockReason,
         }),
       },
@@ -1221,6 +1319,58 @@ export function PartnerAdminDashboard() {
     setRequestingPackageId("");
   }
 
+  async function createPackageCreationRequest(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!selectedPartnerId) {
+      return;
+    }
+
+    setIsRequestingNewPackage(true);
+    setError("");
+    setPackageRequestMessage("");
+
+    const response = await authFetch(
+      "/api/partner-admin/package-creation-requests",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partnerId: selectedPartnerId,
+          requestedName: newPackageRequest.name,
+          requestedDescription: newPackageRequest.description,
+          requestedDurationMinutes: Number(newPackageRequest.durationMinutes),
+          requestedLaborPrice: Number(newPackageRequest.laborPrice),
+          reason: newPackageRequest.reason,
+        }),
+      },
+    );
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ??
+          "신규 패키지 요청을 저장하지 못했습니다.",
+      );
+      setIsRequestingNewPackage(false);
+      return;
+    }
+
+    setNewPackageRequest({
+      name: "",
+      description: "",
+      durationMinutes: "60",
+      laborPrice: "",
+      reason: "",
+    });
+    setPackageRequestMessage(
+      "신규 패키지 생성 요청을 Admin 검토 대기 상태로 저장했습니다.",
+    );
+    setIsRequestingNewPackage(false);
+  }
+
   const confirmedCount = reservations.filter(
     (reservation) => reservation.status === "CONFIRMED",
   ).length;
@@ -1300,7 +1450,7 @@ export function PartnerAdminDashboard() {
         </div>
       ) : (
         <>
-          <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1fr_220px]">
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 Partner
@@ -1316,18 +1466,6 @@ export function PartnerAdminDashboard() {
                   </option>
                 ))}
               </select>
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                Date
-              </span>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
-                className="mt-2 h-11 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold outline-none ring-blue-200 focus:ring-4"
-              />
             </label>
           </section>
 
@@ -1423,6 +1561,33 @@ export function PartnerAdminDashboard() {
                           ? "전체"
                           : bay.allowedVehicleTypes.join(", ")}
                       </p>
+                      {bay.blockingReservations.length > 0 ? (
+                        <div className="mt-3 space-y-1 rounded-md border border-amber-200 bg-amber-50 p-2">
+                          {bay.blockingReservations.map((reservation) => (
+                            <button
+                              key={reservation.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedDate(
+                                  new Intl.DateTimeFormat("en-CA", {
+                                    timeZone: "Asia/Seoul",
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                  }).format(new Date(reservation.startTime)),
+                                );
+                                window.location.hash = "reservations";
+                              }}
+                              className="block w-full rounded px-1 py-1 text-left text-xs text-amber-900 hover:bg-amber-100"
+                            >
+                              {formatDate(reservation.startTime)} ·{" "}
+                              {formatTime(reservation.startTime)}-
+                              {formatTime(reservation.endTime)} ·{" "}
+                              {statusLabel(reservation.status)}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         <button
                           type="button"
@@ -1495,6 +1660,104 @@ export function PartnerAdminDashboard() {
                   {packageRequestMessage}
                 </p>
               ) : null}
+              <form
+                onSubmit={createPackageCreationRequest}
+                className="rounded-lg border border-blue-200 bg-blue-50/60 p-4 md:col-span-2 xl:col-span-3"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-blue-950">
+                      신규 패키지 생성 요청
+                    </h3>
+                    <p className="mt-1 text-xs text-blue-700">
+                      아직 카탈로그에 없는 작업을 Admin에게 제안합니다.
+                    </p>
+                  </div>
+                  <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-blue-700">
+                    Admin 검토
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_110px_140px_1.2fr]">
+                  <input
+                    required
+                    value={newPackageRequest.name}
+                    onChange={(event) =>
+                      setNewPackageRequest((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
+                    placeholder="패키지명"
+                    aria-label="신규 패키지명"
+                  />
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    step="5"
+                    value={newPackageRequest.durationMinutes}
+                    onChange={(event) =>
+                      setNewPackageRequest((current) => ({
+                        ...current,
+                        durationMinutes: event.target.value,
+                      }))
+                    }
+                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
+                    placeholder="소요 분"
+                    aria-label="신규 패키지 소요시간"
+                  />
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={newPackageRequest.laborPrice}
+                    onChange={(event) =>
+                      setNewPackageRequest((current) => ({
+                        ...current,
+                        laborPrice: event.target.value,
+                      }))
+                    }
+                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
+                    placeholder="희망 공임"
+                    aria-label="신규 패키지 희망 공임"
+                  />
+                  <input
+                    value={newPackageRequest.description}
+                    onChange={(event) =>
+                      setNewPackageRequest((current) => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
+                    }
+                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
+                    placeholder="사용자에게 보일 설명"
+                    aria-label="신규 패키지 설명"
+                  />
+                </div>
+                <div className="mt-2 grid gap-2 lg:grid-cols-[1fr_auto]">
+                  <input
+                    value={newPackageRequest.reason}
+                    onChange={(event) =>
+                      setNewPackageRequest((current) => ({
+                        ...current,
+                        reason: event.target.value,
+                      }))
+                    }
+                    className="h-10 rounded-lg border border-blue-200 bg-white px-3 text-sm outline-none ring-blue-200 focus:ring-4"
+                    placeholder="필요 사유, 적용 희망일 등"
+                    aria-label="신규 패키지 요청 사유"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isRequestingNewPackage}
+                    className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                  >
+                    {isRequestingNewPackage ? "요청 중" : "생성 요청 보내기"}
+                  </button>
+                </div>
+              </form>
               {packages.length === 0 ? (
                 <p className="text-sm text-zinc-500">
                   등록된 Shop Service 패키지가 없습니다.
@@ -1640,31 +1903,17 @@ export function PartnerAdminDashboard() {
                 </select>
               </label>
 
-              <label className="block">
-                <span className="text-xs font-semibold text-zinc-500">
-                  시작
-                </span>
-                <input
-                  type="datetime-local"
-                  required
-                  value={blockStartsAt}
-                  onChange={(event) => setBlockStartsAt(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
-                />
-              </label>
+              <HourDateTimeInput
+                label="시작"
+                value={blockStartsAt}
+                onChange={setBlockStartsAt}
+              />
 
-              <label className="block">
-                <span className="text-xs font-semibold text-zinc-500">
-                  종료
-                </span>
-                <input
-                  type="datetime-local"
-                  required
-                  value={blockEndsAt}
-                  onChange={(event) => setBlockEndsAt(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
-                />
-              </label>
+              <HourDateTimeInput
+                label="종료"
+                value={blockEndsAt}
+                onChange={setBlockEndsAt}
+              />
 
               <label className="block">
                 <span className="text-xs font-semibold text-zinc-500">
@@ -1700,34 +1949,16 @@ export function PartnerAdminDashboard() {
                       onSubmit={updateAvailabilityBlock}
                       className="grid gap-3 px-4 py-3 lg:grid-cols-[1fr_1fr_1fr_auto]"
                     >
-                      <label className="block">
-                        <span className="text-xs font-semibold text-zinc-500">
-                          시작
-                        </span>
-                        <input
-                          type="datetime-local"
-                          required
-                          value={editBlockStartsAt}
-                          onChange={(event) =>
-                            setEditBlockStartsAt(event.target.value)
-                          }
-                          className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs font-semibold text-zinc-500">
-                          종료
-                        </span>
-                        <input
-                          type="datetime-local"
-                          required
-                          value={editBlockEndsAt}
-                          onChange={(event) =>
-                            setEditBlockEndsAt(event.target.value)
-                          }
-                          className="mt-1 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium outline-none ring-blue-200 focus:ring-4"
-                        />
-                      </label>
+                      <HourDateTimeInput
+                        label="시작"
+                        value={editBlockStartsAt}
+                        onChange={setEditBlockStartsAt}
+                      />
+                      <HourDateTimeInput
+                        label="종료"
+                        value={editBlockEndsAt}
+                        onChange={setEditBlockEndsAt}
+                      />
                       <label className="block">
                         <span className="text-xs font-semibold text-zinc-500">
                           사유
@@ -1802,20 +2033,32 @@ export function PartnerAdminDashboard() {
             id="reservations"
             className="scroll-mt-24 overflow-hidden rounded-lg border border-zinc-200 bg-white"
           >
-            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+            <div className="flex items-center justify-between gap-4 border-b border-zinc-200 px-4 py-3">
               <div>
                 <h2 className="text-base font-semibold">
-                  {selectedPartner?.partnerName ?? "정비소"} 예약
+                  {selectedPartner?.partnerName ?? "정비소"} 예약 ·{" "}
+                  {formatDate(`${selectedDate}T00:00:00+09:00`)}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
                   선택 날짜 기준 예약 시작 시간으로 조회합니다.
                 </p>
               </div>
-              {isLoadingReservations ? (
-                <span className="text-xs font-medium text-zinc-500">
-                  불러오는 중
+              <label className="flex shrink-0 items-center gap-2">
+                <span className="text-xs font-semibold text-zinc-500">
+                  조회일
                 </span>
-              ) : null}
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className="h-10 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-semibold outline-none ring-blue-200 focus:ring-4"
+                />
+                {isLoadingReservations ? (
+                  <span className="text-xs font-medium text-zinc-500">
+                    불러오는 중
+                  </span>
+                ) : null}
+              </label>
             </div>
 
             <div className="divide-y divide-zinc-100">
@@ -1842,6 +2085,9 @@ export function PartnerAdminDashboard() {
                       <p className="mt-1 text-sm font-bold text-zinc-950">
                         {formatTime(reservation.startTime)} -{" "}
                         {formatTime(reservation.endTime)}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {formatDate(reservation.startTime)}
                       </p>
                     </div>
                     <div>
@@ -1905,6 +2151,11 @@ export function PartnerAdminDashboard() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="partner-reservation-detail-title"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  closeReservationDetail();
+                }
+              }}
             >
               <aside className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-t-lg border border-zinc-200 bg-white p-4 shadow-2xl sm:rounded-lg sm:p-5">
                 <div className="flex items-start justify-between gap-4">
@@ -1921,11 +2172,7 @@ export function PartnerAdminDashboard() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedReservationId("");
-                      setDetail(null);
-                      setNotes([]);
-                    }}
+                    onClick={closeReservationDetail}
                     className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100"
                   >
                     닫기
@@ -1945,6 +2192,20 @@ export function PartnerAdminDashboard() {
                     <dl className="space-y-2 text-sm">
                       {[
                         ["예약 ID", detail.reservation.id],
+                        [
+                          "예약자",
+                          detail.reservation.customer.name ??
+                            detail.reservation.customer.email ??
+                            detail.reservation.customer.userId,
+                        ],
+                        [
+                          "예약자 이메일",
+                          detail.reservation.customer.email ?? "-",
+                        ],
+                        [
+                          "예약자 연락처",
+                          detail.reservation.customer.phone ?? "미등록",
+                        ],
                         ["차량", detail.reservation.vehicleLabel],
                         ["베이", detail.reservation.bayLabel],
                         [
@@ -2044,15 +2305,11 @@ export function PartnerAdminDashboard() {
                             ["좌측", detail.checkin.leftImg],
                             ["우측", detail.checkin.rightImg],
                           ].map(([label, src]) => (
-                            <a
+                            <EvidenceImage
                               key={label}
-                              href={src}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-700"
-                            >
-                              {label} 보기
-                            </a>
+                              label={label}
+                              src={src}
+                            />
                           ))}
                         </div>
                       ) : (
@@ -2065,50 +2322,71 @@ export function PartnerAdminDashboard() {
                     <section>
                       <h3 className="text-sm font-semibold">체크아웃 검수</h3>
                       {detail.checkout ? (
-                        <dl className="mt-2 space-y-2 text-sm">
-                          {[
-                            [
-                              "공구 확인",
-                              checklistValue(
-                                detail.checkout.toolCheckCompleted,
-                              ),
-                            ],
-                            [
-                              "청소 확인",
-                              checklistValue(detail.checkout.cleaningCompleted),
-                            ],
-                            [
-                              "폐기물 확인",
-                              checklistValue(
-                                detail.checkout.wasteDisposalCompleted,
-                              ),
-                            ],
-                            [
-                              "체크리스트",
-                              `${checkoutChecklistCompletedCount}/${checkoutChecklistItems.length}`,
-                            ],
-                            [
-                              "추가 요금",
-                              formatPrice(detail.checkout.extraFee),
-                            ],
-                            [
-                              "검수 요금",
-                              formatPrice(detail.checkout.helperVerifyFee),
-                            ],
-                            [
-                              "총 정산",
-                              formatPrice(detail.checkout.totalSettlement),
-                            ],
-                          ].map(([label, value]) => (
-                            <div
-                              key={label}
-                              className="flex justify-between gap-4"
-                            >
-                              <dt className="text-zinc-500">{label}</dt>
-                              <dd className="font-medium">{value}</dd>
+                        <div className="mt-2 space-y-3">
+                          {detail.checkout.checkoutPhoto1 &&
+                          detail.checkout.checkoutPhoto2 ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              <EvidenceImage
+                                label="체크아웃 사진 1"
+                                src={detail.checkout.checkoutPhoto1}
+                              />
+                              <EvidenceImage
+                                label="체크아웃 사진 2"
+                                src={detail.checkout.checkoutPhoto2}
+                              />
                             </div>
-                          ))}
-                        </dl>
+                          ) : (
+                            <p className="text-sm text-zinc-500">
+                              저장된 체크아웃 사진이 없습니다.
+                            </p>
+                          )}
+                          <dl className="space-y-2 text-sm">
+                            {[
+                              [
+                                "공구 확인",
+                                checklistValue(
+                                  detail.checkout.toolCheckCompleted,
+                                ),
+                              ],
+                              [
+                                "청소 확인",
+                                checklistValue(
+                                  detail.checkout.cleaningCompleted,
+                                ),
+                              ],
+                              [
+                                "폐기물 확인",
+                                checklistValue(
+                                  detail.checkout.wasteDisposalCompleted,
+                                ),
+                              ],
+                              [
+                                "체크리스트",
+                                `${checkoutChecklistCompletedCount}/${checkoutChecklistItems.length}`,
+                              ],
+                              [
+                                "추가 요금",
+                                formatPrice(detail.checkout.extraFee),
+                              ],
+                              [
+                                "검수 요금",
+                                formatPrice(detail.checkout.helperVerifyFee),
+                              ],
+                              [
+                                "총 정산",
+                                formatPrice(detail.checkout.totalSettlement),
+                              ],
+                            ].map(([label, value]) => (
+                              <div
+                                key={label}
+                                className="flex justify-between gap-4"
+                              >
+                                <dt className="text-zinc-500">{label}</dt>
+                                <dd className="font-medium">{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
                       ) : (
                         <p className="mt-2 text-sm text-zinc-500">
                           체크아웃 정보가 아직 없습니다.

@@ -123,6 +123,7 @@ Rules:
 
 - `bay_id = null` means the entire partner location is blocked.
 - `bay_id` must belong to the same `partner_id`.
+- `starts_at` and `ends_at` must be on an exact hour (`HH:00`).
 - Active blocks cannot overlap when they affect the same bay or when either block is whole-partner.
 - Partner-admin can select/insert/update/delete blocks only for their own partner.
 - Reservation prepare must reject any requested bay/time window overlapping an active block for that bay or the whole partner.
@@ -130,6 +131,33 @@ Rules:
 Migration:
 
 - `db/migrations/20260624_partner_admin_foundation.sql`
+
+---
+
+## partner_package_creation_requests
+
+Partner proposal for a Shop Service package that does not yet exist in the
+global catalog.
+
+Key fields:
+
+- `partner_id`
+- `requested_name`, `requested_description`
+- `requested_duration_minutes`, `requested_labor_price`
+- `reason`
+- `status`: `PENDING`, `FULFILLED`, `REJECTED`
+- `requested_by`, `reviewed_at`, `review_note`
+
+Rules:
+
+- Partner-admin may create and read requests only for an active membership.
+- This table does not create a global package automatically.
+- Admin creates the global catalog row and partner price, then marks the request fulfilled with a review note.
+- Existing package price changes continue to use `partner_package_change_requests`.
+
+Migration:
+
+- `db/migrations/20260722_partner_package_creation_requests.sql`
 
 ---
 

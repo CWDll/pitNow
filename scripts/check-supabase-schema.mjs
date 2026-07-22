@@ -356,6 +356,25 @@ const checks = [
       "updated_at",
     ],
   },
+  {
+    label: "20260722 partner package creation requests",
+    table: "partner_package_creation_requests",
+    columns: [
+      "id",
+      "partner_id",
+      "requested_name",
+      "requested_description",
+      "requested_duration_minutes",
+      "requested_labor_price",
+      "reason",
+      "status",
+      "requested_by",
+      "reviewed_at",
+      "review_note",
+      "created_at",
+      "updated_at",
+    ],
+  },
 ];
 
 async function main() {

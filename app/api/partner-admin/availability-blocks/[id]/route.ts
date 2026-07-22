@@ -81,6 +81,14 @@ function parseDate(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function isWholeHour(date: Date): boolean {
+  return (
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  );
+}
+
 function parseBody(payload: unknown): UpdateAvailabilityBlockBody | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -90,19 +98,25 @@ function parseBody(payload: unknown): UpdateAvailabilityBlockBody | null {
   const result: UpdateAvailabilityBlockBody = {};
 
   if (typeof body.startsAt !== "undefined") {
-    if (typeof body.startsAt !== "string" || !parseDate(body.startsAt)) {
+    const startsAt =
+      typeof body.startsAt === "string" ? parseDate(body.startsAt) : null;
+
+    if (!startsAt || !isWholeHour(startsAt)) {
       return null;
     }
 
-    result.startsAt = parseDate(body.startsAt)!.toISOString();
+    result.startsAt = startsAt.toISOString();
   }
 
   if (typeof body.endsAt !== "undefined") {
-    if (typeof body.endsAt !== "string" || !parseDate(body.endsAt)) {
+    const endsAt =
+      typeof body.endsAt === "string" ? parseDate(body.endsAt) : null;
+
+    if (!endsAt || !isWholeHour(endsAt)) {
       return null;
     }
 
-    result.endsAt = parseDate(body.endsAt)!.toISOString();
+    result.endsAt = endsAt.toISOString();
   }
 
   if (typeof body.reason !== "undefined") {
@@ -187,7 +201,11 @@ export async function PATCH(req: Request, context: Context) {
   try {
     payload = await req.json();
   } catch {
-    return jsonError(400, "INVALID_JSON", "요청 본문(JSON)이 올바르지 않습니다.");
+    return jsonError(
+      400,
+      "INVALID_JSON",
+      "요청 본문(JSON)이 올바르지 않습니다.",
+    );
   }
 
   const body = parseBody(payload);
@@ -196,7 +214,7 @@ export async function PATCH(req: Request, context: Context) {
     return jsonError(
       400,
       "INVALID_INPUT",
-      "수정할 startsAt, endsAt, reason, isActive 값을 확인해 주세요.",
+      "차단 시간은 정각 단위로 입력하고 수정 값을 확인해 주세요.",
     );
   }
 
@@ -209,7 +227,10 @@ export async function PATCH(req: Request, context: Context) {
     .maybeSingle<AvailabilityBlockRow>();
 
   if (currentError) {
-    console.error("PARTNER ADMIN AVAILABILITY DETAIL LOOKUP ERROR:", currentError);
+    console.error(
+      "PARTNER ADMIN AVAILABILITY DETAIL LOOKUP ERROR:",
+      currentError,
+    );
     return jsonError(
       500,
       "DB_ERROR",

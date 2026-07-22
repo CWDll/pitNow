@@ -198,26 +198,28 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 
 | 순서 | 확인 항목 | 경로 / 행동 | 기대 결과 | 상태 | 비고 / 증상 / 후속 작업 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 로그인 | `/partner-admin` | partner-admin 계정으로 접근 가능 | 대기 |  |
-| 2 | partner scope | partner dropdown 확인 | 허용된 정비소만 표시 | 대기 |  |
-| 3 | 예약 목록 | 오늘/예정 예약 조회 | 본인 정비소 예약만 표시 | 대기 |  |
-| 4 | 예약 상세 modal | 예약 row 클릭 | 체크인/체크아웃 증적과 상태 로그가 읽기 좋게 표시 | 대기 |  |
-| 5 | bay 비활성화 | 예약 없는 active bay 비활성화 | 상태 변경 성공, audit 기록 | 대기 |  |
-| 6 | 예약 있는 bay 차단 | active/upcoming 예약 있는 bay 비활성화 시도 | 버튼 disabled 또는 `BAY_HAS_ACTIVE_RESERVATION` | 대기 |  |
-| 7 | availability block 생성 | 특정 bay 또는 업장 전체 block 생성 | 생성 성공, 사용자 schedule slot disabled | 대기 |  |
-| 8 | availability block 수정 | 시간/사유 수정 | 수정 성공, audit 기록 | 대기 |  |
-| 9 | availability block 해제 | active block 비활성화 | 해제 성공, 사용자 schedule slot 재활성화 | 대기 |  |
-| 10 | field note 생성 | `NOTE` 작성 | detail/admin에 표시 | 대기 |  |
-| 11 | issue note 생성 | `ISSUE` 작성 | unresolved issue count 반영 | 대기 |  |
-| 12 | delay/no-show note | `DELAY`, `NO_SHOW` 작성 | note type별 저장/표시 | 대기 |  |
-| 13 | note 해결 | issue resolve | resolved 상태와 resolved metadata 반영 | 대기 |  |
-| 14 | note 재오픈 | resolved note reopen | unresolved 상태로 복귀 | 대기 |  |
-| 15 | package/price 읽기 | 패키지 섹션 확인 | 직접 수정 UI 없이 현재 가격 표시 | 대기 |  |
-| 16 | 가격 변경 요청 | 희망 가격 + 사유 제출 | request 생성, `/admin/packages`에 표시 | 대기 |  |
-| 17 | bay 이용 조건 설정 | 기존 bay에서 허용 차종 복수 선택 + 최대 중량 저장 | 목록 요약 갱신, 새로고침 후 유지, `BAY_COMPATIBILITY_UPDATED` audit 기록 | 대기 |  |
-| 18 | bay 조건 서버 재검증 | 조건에 맞지 않는 차량으로 결제 준비 시도 | 예약 생성 없이 차종/중량별 오류 코드 반환 | 대기 |  |
-| 19 | 데스크톱 dashboard shell | 1440px 이상에서 `/partner-admin` 확인 | 고정 사이드바와 상단 바가 겹치지 않고 모바일 bottom nav가 표시되지 않음 | 대기 |  |
-| 20 | 섹션 내비게이션 | 베이/패키지·가격/예약 차단/예약 현황 메뉴 선택 | 해당 섹션으로 이동하고 선택 메뉴가 강조됨 | 대기 |  |
+| 1 | 로그인 | `/partner-admin` | partner-admin 계정으로 접근 가능 | 성공 | 강남 셀프정비소 OWNER 확인, 비로그인은 login next로 이동 |
+| 2 | partner scope | partner dropdown 확인 | 허용된 정비소만 표시 | 성공 | 강남 셀프정비소만 표시 |
+| 3 | 예약 목록 | 오늘/예정 예약 조회 | 본인 정비소 예약만 표시 | 수정 후 재확인 | 조회 날짜를 목록 헤더로 이동하고 각 row에 날짜 추가 |
+| 4 | 예약 상세 modal | 예약 row 클릭 | 예약자와 체크인 4장/체크아웃 2장 및 상태 로그 표시 | 수정 후 재확인 | 배경 클릭 닫기와 증적 이미지 즉시 표시 추가 |
+| 5 | bay 비활성화 | 예약 없는 active bay 비활성화 | 상태 변경 성공, audit 기록 | 수정 후 재확인 | 잠금을 유발하는 예약 날짜/시간/상태를 bay 카드에 표시 |
+| 6 | 예약 있는 bay 차단 | active/upcoming 예약 있는 bay 비활성화 시도 | 버튼 disabled 또는 `BAY_HAS_ACTIVE_RESERVATION` | 성공 | disabled 확인 |
+| 7 | availability block 생성 | 특정 bay 또는 업장 전체 block 생성 | 생성 성공, 사용자 schedule slot disabled | 성공 | 배포 URL 확인 |
+| 8 | availability block 수정 | 시간/사유 수정 | 수정 성공, audit 기록 | 수정 후 재확인 | 날짜 + 정시 선택으로 변경, API도 정각 외 요청 거부 |
+| 9 | availability block 해제 | active block 비활성화 | 해제 성공, 사용자 schedule slot 재활성화 | 성공 | 배포 URL 확인 |
+| 10 | field note 생성 | `NOTE` 작성 | detail/admin에 표시 | 성공 | 생성 확인 |
+| 11 | issue note 생성 | `ISSUE` 작성 | unresolved issue count 반영 | 성공 | 미해결 이슈 1 확인 |
+| 12 | delay/no-show note | `DELAY`, `NO_SHOW` 작성 | note type별 저장/표시 | 성공 | 유형별 생성과 미해결 수 반영 확인 |
+| 13 | note 해결 | issue resolve | resolved 상태와 resolved metadata 반영 | 성공 | 미해결 수 제거 확인 |
+| 14 | note 재오픈 | resolved note reopen | unresolved 상태로 복귀 | 성공 | 재오픈 확인 |
+| 15 | package/price 읽기 | 패키지 섹션 확인 | 직접 수정 UI 없이 현재 가격 표시 | 성공 | 가격 및 노출 상태 확인 |
+| 16 | 가격 변경 요청 | 희망 가격 + 사유 제출 | request 생성, `/admin/packages`에 표시 | 성공 | Admin 검토 대기 문구 확인 |
+| 17 | bay 이용 조건 설정 | 기존 bay에서 허용 차종 복수 선택 + 최대 중량 저장 | 목록 요약 갱신, 새로고침 후 유지, `BAY_COMPATIBILITY_UPDATED` audit 기록 | 성공 | Partner/User 화면 반영 확인 |
+| 18 | bay 조건 서버 재검증 | 조건에 맞지 않는 차량으로 결제 준비 시도 | 예약 생성 없이 차종/중량별 오류 코드 반환 | 성공 | 사용자 화면 `차종 미지원` 확인 및 API E2E 통과 |
+| 19 | 데스크톱 dashboard shell | 1440px 이상에서 `/partner-admin` 확인 | 고정 사이드바와 상단 바가 겹치지 않고 모바일 bottom nav가 표시되지 않음 | 성공 | 배포 URL 확인 |
+| 20 | 섹션 내비게이션 | 베이/패키지·가격/예약 차단/예약 현황 메뉴 선택 | 고정 사이드바에서 해당 섹션 이동 및 선택 메뉴 강조 | 수정 후 재확인 | sidebar를 viewport fixed로 변경 |
+| 21 | 신규 패키지 생성 요청 | 패키지 섹션에서 이름/시간/가격/사유 제출 | `/admin/packages` 신규 생성 요청에 표시 | 수정 후 재확인 | SQL 적용 및 생성/비권한 403 API E2E 통과, 배포 UI 확인 필요 |
+| 22 | Partner 로그아웃 | sidebar 하단 `로그아웃` | session 제거 후 `/login?next=/partner-admin` 이동 | 수정 후 재확인 |  |
 
 ### 7.6 Admin QA
 

@@ -697,7 +697,9 @@ test.describe("admin smoke", () => {
       await expect(
         page.getByRole("link", { name: `Reservation ${reservationId}` }),
       ).toHaveCount(2);
-      await expect(page.getByText('"noteType": "ISSUE"')).toHaveCount(2);
+      await expect(
+        currentReservationAuditRows.getByText('"noteType": "ISSUE"'),
+      ).toHaveCount(2);
 
       await page.getByRole("link", { name: /^Notes \(/ }).click();
       await expect(page).toHaveURL(/\/admin\/partner-audit\?filter=notes/);

@@ -955,3 +955,22 @@ Rules:
 
 Reason:
 기존 Admin은 활성 메뉴가 없고 큰 랜딩형 카드가 운영 정보 밀도를 낮췄으며, Partner-admin은 긴 단일 화면을 빠르게 이동하기 어려웠다. 사용자 앱과 운영 도구의 레이아웃 책임을 분리하면서 공통 데스크톱 셸을 사용하면 기능 흐름을 유지한 채 반복 업무의 탐색성과 일관성을 높일 수 있다.
+
+---
+
+## 2026-07-22
+
+Decision:
+Partner availability block은 정각 단위로만 저장하고, 신규 패키지 생성 요청은 기존 가격 변경 요청과 분리한다.
+
+Rules:
+
+- availability block 시작·종료는 KST 기준 `HH:00`만 허용한다.
+- Partner-admin은 날짜와 00:00~23:00 정시 선택 UI를 사용한다.
+- API는 정각이 아닌 생성·수정 요청을 `INVALID_INPUT`으로 거부한다.
+- 기존 패키지 가격 변경은 `partner_package_change_requests`를 계속 사용한다.
+- 카탈로그에 없는 패키지 제안은 `partner_package_creation_requests`에 이름, 설명, 소요시간, 희망 공임과 사유를 저장한다.
+- Admin은 전역 패키지와 업장 가격을 직접 생성한 뒤 신규 요청을 `FULFILLED`로 처리하거나 `REJECTED`로 거절한다.
+
+Reason:
+1분 단위 차단은 시간 단위 예약 모델과 맞지 않고 19:01 종료처럼 운영자가 해석하기 어려운 경계를 만든다. 또한 존재하지 않는 패키지 요청을 가격 변경 row에 섞으면 필수 package FK와 감사 의미가 훼손되므로 요청 목적별 데이터 모델을 분리해야 한다.

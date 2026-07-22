@@ -23,8 +23,11 @@ interface BayRow {
 }
 
 interface ReservationBayRow {
+  id: string;
   bay_id: string;
   blocked_until: string | null;
+  end_time: string;
+  start_time: string;
   status: string;
 }
 
@@ -99,14 +102,24 @@ export async function GET(req: Request) {
 
   const bayIds = (data ?? []).map((bay) => bay.id);
   const activeReservationCountByBay = new Map<string, number>();
+  const blockingReservationsByBay = new Map<
+    string,
+    Array<{
+      id: string;
+      startTime: string;
+      endTime: string;
+      status: string;
+    }>
+  >();
 
   if (bayIds.length > 0) {
-    const { data: activeReservations, error: activeReservationsError } = await db
-      .from("reservations")
-      .select("bay_id,status,blocked_until")
-      .in("bay_id", bayIds)
-      .in("status", BAY_BLOCKING_RESERVATION_STATUSES)
-      .returns<ReservationBayRow[]>();
+    const { data: activeReservations, error: activeReservationsError } =
+      await db
+        .from("reservations")
+        .select("id,bay_id,status,start_time,end_time,blocked_until")
+        .in("bay_id", bayIds)
+        .in("status", BAY_BLOCKING_RESERVATION_STATUSES)
+        .returns<ReservationBayRow[]>();
 
     if (activeReservationsError) {
       console.error(
@@ -137,6 +150,15 @@ export async function GET(req: Request) {
         reservation.bay_id,
         (activeReservationCountByBay.get(reservation.bay_id) ?? 0) + 1,
       );
+      blockingReservationsByBay.set(reservation.bay_id, [
+        ...(blockingReservationsByBay.get(reservation.bay_id) ?? []),
+        {
+          id: reservation.id,
+          startTime: reservation.start_time,
+          endTime: reservation.end_time,
+          status: reservation.status,
+        },
+      ]);
     }
   }
 
@@ -148,6 +170,13 @@ export async function GET(req: Request) {
 
       return {
         activeReservationCount,
+        blockingReservations: (
+          blockingReservationsByBay.get(bay.id) ?? []
+        ).sort(
+          (left, right) =>
+            new Date(left.startTime).getTime() -
+            new Date(right.startTime).getTime(),
+        ),
         canDeactivate: activeReservationCount === 0,
         id: bay.id,
         partnerId: bay.partner_id,

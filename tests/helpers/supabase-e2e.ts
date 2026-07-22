@@ -85,9 +85,7 @@ export function getE2ECredentials(
       env.PITNOW_E2E_USER_EMAIL ??
       "pitnow-e2e-ui@example.com",
     password:
-      overrides.password ??
-      env.PITNOW_E2E_USER_PASSWORD ??
-      "PitnowE2e!2026",
+      overrides.password ?? env.PITNOW_E2E_USER_PASSWORD ?? "PitnowE2e!2026",
   };
 }
 
@@ -284,7 +282,9 @@ export async function getSelfReservationSeed(
     .select("id, name, hourly_price")
     .gt("hourly_price", 0)
     .order("name", { ascending: true })
-    .returns<Array<{ id: string; name: string; hourly_price: number | string }>>();
+    .returns<
+      Array<{ id: string; name: string; hourly_price: number | string }>
+    >();
 
   if (partnerError) {
     throw partnerError;
@@ -387,8 +387,6 @@ export async function cleanupConfirmedReservationForE2E(params: {
   db: SupabaseClient;
   reservationId: string;
 }) {
-  const now = new Date().toISOString();
-
   const { error: reviewError } = await params.db
     .from("reviews")
     .delete()
@@ -400,25 +398,8 @@ export async function cleanupConfirmedReservationForE2E(params: {
 
   const { error: paymentError } = await params.db
     .from("payments")
-    .update({
-      status: "REFUNDED",
-      refunded_at: now,
-      updated_at: now,
-      failure_code: "UI_E2E_CLEANUP",
-      failure_message: "UI E2E confirmed reservation cleanup.",
-      metadata: {
-        cleanup: {
-          reason: "UI_E2E_CLEANUP",
-        },
-      },
-    })
-    .eq("reservation_id", params.reservationId)
-    .in("status", [
-      "RESERVATION_CONFIRMED",
-      "SETTLEMENT_CONFIRMED",
-      "APPROVED",
-      "READY",
-    ]);
+    .delete()
+    .eq("reservation_id", params.reservationId);
 
   if (paymentError) {
     throw paymentError;
@@ -426,22 +407,10 @@ export async function cleanupConfirmedReservationForE2E(params: {
 
   const { error: reservationError } = await params.db
     .from("reservations")
-    .update({
-      status: "CANCELLED",
-    })
-    .eq("id", params.reservationId)
-    .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE", "COMPLETED"]);
+    .delete()
+    .eq("id", params.reservationId);
 
   if (reservationError) {
     throw reservationError;
-  }
-
-  const { error: checkinError } = await params.db
-    .from("checkins")
-    .delete()
-    .eq("reservation_id", params.reservationId);
-
-  if (checkinError) {
-    throw checkinError;
   }
 }

@@ -63,6 +63,7 @@
   - own partner `partner_reservation_notes.is_resolved`
 - Store-admin may insert:
   - own partner reservation field notes/issues
+  - own partner package price-change and new-package creation requests
 - Store-admin must not access:
   - other partners' reservations/evidence
   - internal admin pages
@@ -75,6 +76,7 @@
 
 - `bay_id = null` blocks the whole partner location.
 - `bay_id` set blocks only that bay.
+- Start and end times use exact one-hour boundaries; minute-level blocks are not accepted.
 - Reservation prepare must reject requested windows overlapping:
   - active whole-partner block for the partner
   - active bay-specific block for the selected bay

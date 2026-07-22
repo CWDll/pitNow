@@ -11,6 +11,30 @@
 - All status transitions must be explicit
 - Reservation conflicts must be rejected by the DB layer
 
+## Partner-admin package creation request
+
+`POST /api/partner-admin/package-creation-requests`
+
+Input:
+
+```json
+{
+  "partnerId": "uuid",
+  "requestedName": "브레이크 오일 교환",
+  "requestedDescription": "사용자 노출 설명",
+  "requestedDurationMinutes": 60,
+  "requestedLaborPrice": 50000,
+  "reason": "고객 요청 증가"
+}
+```
+
+Rules:
+
+- Requires authenticated active partner membership.
+- Name, positive duration, and non-negative integer labor price are required.
+- Creates a `PENDING` request for internal Admin review.
+- Does not mutate `service_packages` or `partner_package_prices` directly.
+
 ---
 
 ## 1. POST /api/reservations
