@@ -1,8 +1,10 @@
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { hasAdminAccess } from "@/src/lib/admin-auth";
 import { hasSupabaseServiceRoleEnv, supabaseAdmin } from "@/src/lib/supabase";
+import { AuditChangeList } from "../_components/audit-change-list";
 import {
   formatAdminCurrency,
   formatAdminDateTime,
@@ -17,7 +19,10 @@ import {
 interface AdminPackagesPageProps {
   searchParams?: Promise<{
     error?: string | string[];
+    partner?: string | string[];
+    requestView?: string | string[];
     status?: string | string[];
+    tab?: string | string[];
   }>;
 }
 
@@ -484,45 +489,160 @@ async function reviewPackageCreationRequestAction(formData: FormData) {
   }
 
   const requestId = parseTrimmedString(formData, "requestId");
-  const reviewNote = parseTrimmedString(formData, "reviewNote");
+  const packageCode = parseTrimmedString(formData, "packageCode");
+  const rejectionReason = parseTrimmedString(formData, "rejectionReason");
   const decision = parseTrimmedString(formData, "decision");
 
   if (
     !requestId ||
-    !reviewNote ||
-    (decision !== "FULFILLED" && decision !== "REJECTED")
+    (decision !== "FULFILLED" && decision !== "REJECTED") ||
+    (decision === "FULFILLED" && !/^[a-z0-9][a-z0-9-]*$/.test(packageCode)) ||
+    (decision === "REJECTED" && !rejectionReason)
   ) {
     packagesRedirect({ error: "invalid-package-creation-request" });
   }
 
   const { data: request, error: requestError } = await db
     .from("partner_package_creation_requests")
-    .select("id,status")
+    .select(
+      "id, partner_id, requested_name, requested_description, requested_duration_minutes, requested_labor_price, status",
+    )
     .eq("id", requestId)
-    .single<{ id: string; status: string }>();
+    .single<{
+      id: string;
+      partner_id: string;
+      requested_name: string;
+      requested_description: string | null;
+      requested_duration_minutes: number;
+      requested_labor_price: number | string;
+      status: string;
+    }>();
 
   if (requestError || !request) {
     console.error("ADMIN PACKAGE CREATION REQUEST LOOKUP ERROR:", requestError);
     packagesRedirect({ error: "package-creation-request-not-found" });
   }
 
-  if (request.status !== "PENDING") {
+  if (
+    request.status !== "PENDING" &&
+    !(request.status === "FULFILLED" && decision === "FULFILLED")
+  ) {
     packagesRedirect({ error: "package-creation-request-not-pending" });
   }
 
-  const { error } = await db
-    .from("partner_package_creation_requests")
-    .update({
-      review_note: reviewNote,
-      reviewed_at: new Date().toISOString(),
-      status: decision,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", request.id);
+  if (decision === "REJECTED") {
+    const { error } = await db
+      .from("partner_package_creation_requests")
+      .update({
+        review_note: rejectionReason,
+        reviewed_at: new Date().toISOString(),
+        status: "REJECTED",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", request.id);
 
-  if (error) {
-    console.error("ADMIN PACKAGE CREATION REQUEST REVIEW ERROR:", error);
-    packagesRedirect({ error: "package-creation-request-review-failed" });
+    if (error) {
+      console.error("ADMIN PACKAGE CREATION REQUEST REJECT ERROR:", error);
+      packagesRedirect({ error: "package-creation-request-review-failed" });
+    }
+  } else {
+    const durationMinutes = Number(request.requested_duration_minutes);
+    const laborPrice = Number(request.requested_labor_price);
+
+    if (
+      !Number.isInteger(durationMinutes) ||
+      durationMinutes <= 0 ||
+      !Number.isInteger(laborPrice) ||
+      laborPrice < 0
+    ) {
+      packagesRedirect({ error: "invalid-package-creation-request" });
+    }
+
+    const { data: existingPackage } = await db
+      .from("service_packages")
+      .select("id, code, name, description, duration_minutes, is_active")
+      .eq("code", packageCode)
+      .maybeSingle();
+
+    let servicePackage = existingPackage;
+    let createdPackage = false;
+
+    if (!servicePackage) {
+      const { data, error } = await db
+        .from("service_packages")
+        .insert({
+          code: packageCode,
+          description: request.requested_description,
+          duration_minutes: durationMinutes,
+          is_active: true,
+          name: request.requested_name,
+        })
+        .select("id, code, name, description, duration_minutes, is_active")
+        .single();
+
+      if (error || !data) {
+        console.error("ADMIN REQUESTED PACKAGE CREATE ERROR:", error);
+        packagesRedirect({ error: "service-package-create-failed" });
+      }
+
+      servicePackage = data;
+      createdPackage = true;
+    }
+
+    const { data: price, error: priceError } = await db
+      .from("partner_package_prices")
+      .upsert(
+        {
+          is_active: true,
+          labor_price: laborPrice,
+          package_id: servicePackage.id,
+          partner_id: request.partner_id,
+        },
+        { onConflict: "partner_id,package_id" },
+      )
+      .select("id, partner_id, package_id, labor_price, is_active")
+      .single();
+
+    if (priceError || !price) {
+      if (createdPackage) {
+        await db.from("service_packages").delete().eq("id", servicePackage.id);
+      }
+      console.error("ADMIN REQUESTED PACKAGE PRICE LINK ERROR:", priceError);
+      packagesRedirect({ error: "partner-package-upsert-failed" });
+    }
+
+    const { error: requestUpdateError } = await db
+      .from("partner_package_creation_requests")
+      .update({
+        review_note: packageCode,
+        reviewed_at: new Date().toISOString(),
+        status: "FULFILLED",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", request.id);
+
+    if (requestUpdateError) {
+      console.error(
+        "ADMIN PACKAGE CREATION REQUEST STATUS ERROR:",
+        requestUpdateError,
+      );
+      packagesRedirect({ error: "package-creation-request-review-failed" });
+    }
+
+    if (createdPackage) {
+      await logPackageAudit({
+        action: "SERVICE_PACKAGE_CREATED",
+        afterState: servicePackage,
+        packageId: servicePackage.id,
+      });
+    }
+    await logPackageAudit({
+      action: "PARTNER_PACKAGE_PRICE_UPSERTED",
+      afterState: price,
+      packageId: servicePackage.id,
+      partnerId: request.partner_id,
+      priceId: price.id,
+    });
   }
 
   revalidatePath("/admin/packages");
@@ -549,7 +669,7 @@ function statusMessage(status?: string) {
     case "package-request-rejected":
       return "파트너 패키지 변경 요청을 거절했습니다.";
     case "package-creation-request-fulfilled":
-      return "신규 패키지 생성 요청을 처리 완료했습니다.";
+      return "전역 패키지를 생성하고 요청 정비소의 판매 가격까지 연결했습니다.";
     case "package-creation-request-rejected":
       return "신규 패키지 생성 요청을 거절했습니다.";
     default:
@@ -580,7 +700,7 @@ function errorMessage(error?: string) {
     case "package-request-reject-failed":
       return "패키지 변경 요청 거절 처리에 실패했습니다.";
     case "invalid-package-creation-request":
-      return "신규 패키지 요청 처리 메모를 입력해 주세요.";
+      return "생성 시 영문 소문자 패키지 코드를, 거절 시 사유를 입력해 주세요.";
     case "package-creation-request-not-found":
       return "신규 패키지 요청을 찾지 못했습니다.";
     case "package-creation-request-not-pending":
@@ -631,10 +751,13 @@ function servicePackageOptionLabel(item: AdminServicePackageOption) {
 }
 
 function auditActionLabel(action: string) {
-  return action
-    .split("_")
-    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
-    .join(" ");
+  const labels: Record<string, string> = {
+    PARTNER_PACKAGE_PRICE_UPDATED: "업장 패키지 가격 수정",
+    PARTNER_PACKAGE_PRICE_UPSERTED: "업장 패키지 연결",
+    SERVICE_PACKAGE_CREATED: "전역 패키지 생성",
+    SERVICE_PACKAGE_UPDATED: "전역 패키지 수정",
+  };
+  return labels[action] ?? action;
 }
 
 function auditActionClass(action: string) {
@@ -643,10 +766,6 @@ function auditActionClass(action: string) {
   }
 
   return "bg-cyan-50 text-cyan-700 ring-cyan-200";
-}
-
-function hasObjectValues(value: Record<string, unknown>) {
-  return Object.keys(value).length > 0;
 }
 
 function PartnerPackageRow({ item }: { item: AdminPackageItem }) {
@@ -683,24 +802,24 @@ function PartnerPackageRow({ item }: { item: AdminPackageItem }) {
             name="laborPrice"
             type="number"
             min="0"
-            step="1000"
+            step="1"
             defaultValue={item.laborPrice}
             className={inputClassName("text-right")}
           />
-          <label className="flex items-center justify-end gap-2 text-xs font-medium text-slate-600">
-            <input
-              type="checkbox"
-              name="isActive"
-              defaultChecked={item.isActive}
-              className="size-4 accent-cyan-600"
-            />
-            신규 예약 노출
-          </label>
+          <input
+            type="hidden"
+            name="isActive"
+            value={item.isActive ? "off" : "on"}
+          />
           <button
             type="submit"
-            className="h-10 rounded-2xl bg-cyan-600 px-4 text-sm font-semibold text-white transition hover:bg-cyan-500"
+            className={`h-10 rounded-lg px-4 text-sm font-bold transition ${
+              item.isActive
+                ? "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
           >
-            저장
+            {item.isActive ? "신규 예약 노출 중지" : "신규 예약에 노출"}
           </button>
         </form>
       </td>
@@ -728,7 +847,7 @@ function PackageAuditCard({ item }: { item: AdminPackageAuditItem }) {
               {auditActionLabel(item.action)}
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-              Package
+              패키지
             </span>
           </div>
           <p className="mt-3 text-lg font-semibold text-slate-950">
@@ -736,7 +855,7 @@ function PackageAuditCard({ item }: { item: AdminPackageAuditItem }) {
           </p>
           <p className="mt-1 text-sm text-slate-600">{item.packageName}</p>
           <p className="mt-1 break-all font-mono text-xs text-slate-500">
-            Audit {item.id}
+            감사 로그 {item.id}
           </p>
         </div>
         <p className="text-xs text-slate-500">
@@ -746,40 +865,20 @@ function PackageAuditCard({ item }: { item: AdminPackageAuditItem }) {
 
       <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
         {item.partnerId ? (
-          <span className="break-all">Partner {item.partnerId}</span>
+          <span className="break-all">정비소 {item.partnerId}</span>
         ) : null}
         {item.packageId ? (
-          <span className="break-all">Package {item.packageId}</span>
+          <span className="break-all">패키지 {item.packageId}</span>
         ) : null}
         {item.priceId ? (
-          <span className="break-all">Price {item.priceId}</span>
+          <span className="break-all">가격 {item.priceId}</span>
         ) : null}
       </div>
 
-      {hasObjectValues(item.beforeState) || hasObjectValues(item.afterState) ? (
-        <div className="mt-4 grid gap-3 xl:grid-cols-2">
-          {hasObjectValues(item.beforeState) ? (
-            <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Before
-              </p>
-              <pre className="max-h-52 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
-                {JSON.stringify(item.beforeState, null, 2)}
-              </pre>
-            </div>
-          ) : null}
-          {hasObjectValues(item.afterState) ? (
-            <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                After
-              </p>
-              <pre className="max-h-52 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
-                {JSON.stringify(item.afterState, null, 2)}
-              </pre>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      <AuditChangeList
+        before={item.beforeState}
+        after={item.afterState}
+      />
     </article>
   );
 }
@@ -912,11 +1011,23 @@ function PackageChangeRequestCard({
 }
 
 function PackageCreationRequestCard({
+  existingPackageCodes,
   item,
 }: {
+  existingPackageCodes: Set<string>;
   item: AdminPackageCreationRequestItem;
 }) {
   const isPending = item.status === "PENDING";
+  const canRepair =
+    item.status === "FULFILLED" &&
+    Boolean(item.reviewNote) &&
+    !existingPackageCodes.has(item.reviewNote);
+  const statusLabel =
+    item.status === "FULFILLED"
+      ? "처리 완료"
+      : item.status === "REJECTED"
+        ? "거절"
+        : "처리 전";
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4">
@@ -932,7 +1043,7 @@ function PackageCreationRequestCard({
                     : "bg-amber-50 text-amber-700"
               }`}
             >
-              {item.status}
+              {statusLabel}
             </span>
             <span className="text-xs font-semibold text-slate-500">
               신규 생성 요청
@@ -973,41 +1084,92 @@ function PackageCreationRequestCard({
         </p>
       ) : null}
 
-      {isPending ? (
-        <form
-          action={reviewPackageCreationRequestAction}
-          className="mt-4 grid gap-2 md:grid-cols-[1fr_auto_auto]"
-        >
-          <input type="hidden" name="requestId" value={item.id} />
-          <input
-            required
-            name="reviewNote"
-            placeholder="생성한 package code 또는 거절 사유"
-            className={inputClassName()}
-          />
-          <button
-            type="submit"
-            name="decision"
-            value="FULFILLED"
-            className="h-11 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white"
+      {isPending || canRepair ? (
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          <form
+            action={reviewPackageCreationRequestAction}
+            className="grid gap-2"
           >
-            처리 완료
-          </button>
-          <button
-            type="submit"
-            name="decision"
-            value="REJECTED"
-            className="h-11 rounded-lg border border-rose-200 px-4 text-sm font-semibold text-rose-700"
-          >
-            거절
-          </button>
-        </form>
+            <input type="hidden" name="requestId" value={item.id} />
+            <label className="grid gap-2 text-sm font-semibold text-slate-700">
+              전역 패키지 코드
+              <input
+                required
+                name="packageCode"
+                defaultValue={canRepair ? item.reviewNote : ""}
+                pattern="[a-z0-9][a-z0-9-]*"
+                placeholder="pkg-interior-cleaning"
+                className={inputClassName()}
+              />
+            </label>
+            <button
+              type="submit"
+              name="decision"
+              value="FULFILLED"
+              className="h-11 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white"
+            >
+              {canRepair ? "누락된 패키지 생성 및 연결" : "승인하고 생성·연결"}
+            </button>
+          </form>
+          {isPending ? (
+            <form
+              action={reviewPackageCreationRequestAction}
+              className="grid gap-2"
+            >
+              <input type="hidden" name="requestId" value={item.id} />
+              <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                거절 사유
+                <input
+                  required
+                  name="rejectionReason"
+                  placeholder="거절 사유를 입력하세요"
+                  className={inputClassName()}
+                />
+              </label>
+              <button
+                type="submit"
+                name="decision"
+                value="REJECTED"
+                className="h-11 rounded-lg border border-rose-200 px-4 text-sm font-semibold text-rose-700"
+              >
+                거절
+              </button>
+            </form>
+          ) : null}
+        </div>
       ) : item.reviewNote ? (
         <p className="mt-3 text-sm text-slate-600">
           처리 메모: {item.reviewNote}
         </p>
       ) : null}
     </article>
+  );
+}
+
+function RequestViewTabs({
+  tab,
+  view,
+}: {
+  tab: "creation" | "requests";
+  view: "pending" | "history";
+}) {
+  return (
+    <nav className="mt-5 flex w-fit gap-1 rounded-lg bg-slate-100 p-1">
+      {[
+        ["pending", "처리 전"],
+        ["history", "처리 내역"],
+      ].map(([id, label]) => (
+        <Link
+          key={id}
+          href={`/admin/packages?tab=${tab}&requestView=${id}`}
+          className={`rounded-md px-4 py-2 text-sm font-bold ${
+            view === id ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"
+          }`}
+        >
+          {label}
+        </Link>
+      ))}
+    </nav>
   );
 }
 
@@ -1033,15 +1195,42 @@ export default async function AdminPackagesPage({
   );
   const status = statusMessage(firstParam(resolvedSearchParams?.status));
   const error = errorMessage(firstParam(resolvedSearchParams?.error));
+  const requestedTab = firstParam(resolvedSearchParams?.tab);
+  const activeTab = ["catalog", "partner", "creation", "requests", "audit"].includes(
+    requestedTab ?? "",
+  )
+    ? requestedTab
+    : "catalog";
+  const selectedPartnerId = firstParam(resolvedSearchParams?.partner) ?? "";
+  const requestView =
+    firstParam(resolvedSearchParams?.requestView) === "history"
+      ? "history"
+      : "pending";
+  const visiblePartnerPackages = selectedPartnerId
+    ? packages.filter((item) => item.partnerId === selectedPartnerId)
+    : packages;
+  const visibleCreationRequests = creationRequests.filter((item) =>
+    requestView === "pending"
+      ? item.status === "PENDING"
+      : item.status !== "PENDING",
+  );
+  const visibleChangeRequests = changeRequests.filter((item) =>
+    requestView === "pending"
+      ? item.status === "PENDING"
+      : item.status !== "PENDING",
+  );
+  const existingPackageCodes = new Set(
+    servicePackages.map((item) => item.code),
+  );
 
   return (
     <section className="space-y-6">
       <header>
         <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
-          Packages
+          패키지 관리
         </p>
         <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
-          Partner Package Pricing
+          패키지 및 업장 가격
         </h2>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
           Admin이 전역 Shop Service 패키지와 업장별 판매 가격을 관리합니다.
@@ -1061,19 +1250,41 @@ export default async function AdminPackagesPage({
         </p>
       ) : null}
 
+      <nav className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+        {[
+          ["catalog", "전역 카탈로그"],
+          ["partner", "업장별 판매"],
+          ["creation", `신규 생성 요청 ${pendingCreationRequests.length}`],
+          ["requests", `가격 변경 요청 ${pendingChangeRequests.length}`],
+          ["audit", "변경 이력"],
+        ].map(([id, label]) => (
+          <Link
+            key={id}
+            href={`/admin/packages?tab=${id}`}
+            className={`rounded-md px-4 py-2 text-sm font-bold ${
+              activeTab === id
+                ? "bg-slate-950 text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+
       <div className="grid gap-4 xl:grid-cols-4">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Partner rows
+            업장 판매 설정
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-950">
             {packages.length}
           </p>
-          <p className="mt-1 text-sm text-slate-600">업장별 가격 row</p>
+          <p className="mt-1 text-sm text-slate-600">업장별 가격 설정 수</p>
         </div>
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Active
+            노출 중
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-950">
             {activePartnerPrices.length}
@@ -1082,7 +1293,7 @@ export default async function AdminPackagesPage({
         </div>
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Inactive
+            노출 중지
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-950">
             {inactivePartnerPrices.length}
@@ -1091,7 +1302,7 @@ export default async function AdminPackagesPage({
         </div>
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Catalog
+            전역 카탈로그
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-950">
             {servicePackages.length}
@@ -1100,10 +1311,18 @@ export default async function AdminPackagesPage({
         </div>
       </div>
 
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section
+        className={`grid gap-4 ${
+          activeTab === "catalog" || activeTab === "partner"
+            ? "xl:grid-cols-1"
+            : "hidden"
+        }`}
+      >
         <form
           action={upsertPartnerPackagePriceAction}
-          className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+          className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm ${
+            activeTab === "partner" ? "" : "hidden"
+          }`}
         >
           <h3 className="text-xl font-semibold text-slate-950">
             업장 패키지 추가/갱신
@@ -1113,7 +1332,7 @@ export default async function AdminPackagesPage({
           </p>
           <div className="mt-5 grid gap-3">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Partner
+              정비소
               <select name="partnerId" required className={inputClassName()}>
                 <option value="">업장 선택</option>
                 {partners.map((partner) => (
@@ -1124,7 +1343,7 @@ export default async function AdminPackagesPage({
               </select>
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Package
+              패키지
               <select name="packageId" required className={inputClassName()}>
                 <option value="">패키지 선택</option>
                 {servicePackages.map((item) => (
@@ -1135,25 +1354,27 @@ export default async function AdminPackagesPage({
               </select>
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Labor price
+              공임 가격
               <input
                 name="laborPrice"
                 type="number"
                 min="0"
-                step="1000"
+                step="1"
                 required
                 placeholder="69000"
                 className={inputClassName()}
               />
             </label>
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-              <input
-                type="checkbox"
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              신규 예약 노출 상태
+              <select
                 name="isActive"
-                defaultChecked
-                className="size-4 accent-cyan-600"
-              />
-              신규 예약에 노출
+                defaultValue="on"
+                className={inputClassName()}
+              >
+                <option value="on">활성 · 신규 예약에 노출</option>
+                <option value="off">비활성 · 신규 예약에서 숨김</option>
+              </select>
             </label>
           </div>
           <button
@@ -1166,7 +1387,9 @@ export default async function AdminPackagesPage({
 
         <form
           action={createServicePackageAction}
-          className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+          className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm ${
+            activeTab === "catalog" ? "" : "hidden"
+          }`}
         >
           <h3 className="text-xl font-semibold text-slate-950">
             전역 패키지 추가
@@ -1176,7 +1399,7 @@ export default async function AdminPackagesPage({
           </p>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Code
+              패키지 코드
               <input
                 name="code"
                 required
@@ -1185,7 +1408,7 @@ export default async function AdminPackagesPage({
               />
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Name
+              패키지명
               <input
                 name="name"
                 required
@@ -1194,11 +1417,11 @@ export default async function AdminPackagesPage({
               />
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Duration
+              소요시간(분)
               <input
                 name="durationMinutes"
                 type="number"
-                min="1"
+                min="5"
                 step="5"
                 required
                 placeholder="90"
@@ -1215,7 +1438,7 @@ export default async function AdminPackagesPage({
               카탈로그 활성
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
-              Description
+              설명
               <textarea
                 name="description"
                 placeholder="사용자에게 보일 패키지 설명"
@@ -1232,7 +1455,11 @@ export default async function AdminPackagesPage({
         </form>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <section
+        className={`rounded-3xl border border-slate-200 bg-white shadow-sm ${
+          activeTab === "partner" ? "" : "hidden"
+        }`}
+      >
         <div className="border-b border-slate-200 p-5">
           <h3 className="text-xl font-semibold text-slate-950">
             업장별 판매 패키지
@@ -1241,6 +1468,27 @@ export default async function AdminPackagesPage({
             가격과 신규 예약 노출 여부만 이 row에서 수정합니다. 패키지명과
             소요시간은 전역 카탈로그 섹션에서 수정합니다.
           </p>
+          <form action="/admin/packages" className="mt-4 flex items-end gap-2">
+            <input type="hidden" name="tab" value="partner" />
+            <label className="grid min-w-80 gap-2 text-sm font-semibold text-slate-700">
+              조회할 정비소
+              <select
+                name="partner"
+                defaultValue={selectedPartnerId}
+                className={inputClassName()}
+              >
+                <option value="">전체 정비소</option>
+                {partners.map((partner) => (
+                  <option key={partner.id} value={partner.id}>
+                    {partner.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="h-11 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white">
+              조회
+            </button>
+          </form>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
@@ -1254,7 +1502,7 @@ export default async function AdminPackagesPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {packages.length === 0 ? (
+              {visiblePartnerPackages.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -1264,7 +1512,7 @@ export default async function AdminPackagesPage({
                   </td>
                 </tr>
               ) : (
-                packages.map((item) => (
+                visiblePartnerPackages.map((item) => (
                   <PartnerPackageRow key={item.id} item={item} />
                 ))
               )}
@@ -1273,7 +1521,11 @@ export default async function AdminPackagesPage({
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <section
+        className={`rounded-3xl border border-slate-200 bg-white shadow-sm ${
+          activeTab === "catalog" ? "" : "hidden"
+        }`}
+      >
         <div className="border-b border-slate-200 p-5">
           <h3 className="text-xl font-semibold text-slate-950">
             전역 패키지 카탈로그
@@ -1297,7 +1549,7 @@ export default async function AdminPackagesPage({
               >
                 <input type="hidden" name="packageId" value={item.id} />
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Code
+                  패키지 코드
                   <input
                     name="code"
                     required
@@ -1306,7 +1558,7 @@ export default async function AdminPackagesPage({
                   />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Name
+                  패키지명
                   <input
                     name="name"
                     required
@@ -1315,11 +1567,11 @@ export default async function AdminPackagesPage({
                   />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Duration
+                  소요시간(분)
                   <input
                     name="durationMinutes"
                     type="number"
-                    min="1"
+                    min="5"
                     step="5"
                     required
                     defaultValue={item.durationMinutes}
@@ -1327,7 +1579,7 @@ export default async function AdminPackagesPage({
                   />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Description
+                  설명
                   <textarea
                     name="description"
                     defaultValue={item.description}
@@ -1357,35 +1609,48 @@ export default async function AdminPackagesPage({
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section
+        className={`rounded-lg border border-slate-200 bg-white p-5 shadow-sm ${
+          activeTab === "creation" ? "" : "hidden"
+        }`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-xl font-semibold text-slate-950">
               신규 패키지 생성 요청
             </h3>
             <p className="mt-1 text-sm text-slate-600">
-              Partner-admin이 제안한 작업을 검토합니다. 반영할 경우 위 전역
-              패키지 추가와 업장 패키지 연결을 완료한 뒤 처리 메모를 남깁니다.
+              Partner-admin이 제안한 작업을 검토합니다. 승인하면 전역
+              카탈로그 생성과 요청 업장의 판매 가격 연결을 함께 처리합니다.
             </p>
           </div>
           <span className="rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-200">
-            {pendingCreationRequests.length} pending
+            처리 전 {pendingCreationRequests.length}건
           </span>
         </div>
+        <RequestViewTabs tab="creation" view={requestView} />
         <div className="mt-5 space-y-3">
-          {creationRequests.length === 0 ? (
+          {visibleCreationRequests.length === 0 ? (
             <p className="rounded-lg bg-slate-100 p-4 text-sm text-slate-600">
               아직 신규 패키지 생성 요청이 없습니다.
             </p>
           ) : (
-            creationRequests.map((item) => (
-              <PackageCreationRequestCard key={item.id} item={item} />
+            visibleCreationRequests.map((item) => (
+              <PackageCreationRequestCard
+                key={item.id}
+                item={item}
+                existingPackageCodes={existingPackageCodes}
+              />
             ))
           )}
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section
+        className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm ${
+          activeTab === "requests" ? "" : "hidden"
+        }`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-xl font-semibold text-slate-950">
@@ -1397,24 +1662,25 @@ export default async function AdminPackagesPage({
             </p>
           </div>
           <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-200">
-            {pendingChangeRequests.length} pending
+            처리 전 {pendingChangeRequests.length}건
           </span>
         </div>
 
+        <RequestViewTabs tab="requests" view={requestView} />
         <div className="mt-5 space-y-3">
-          {changeRequests.length === 0 ? (
+          {visibleChangeRequests.length === 0 ? (
             <p className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
               아직 패키지 변경 요청이 없습니다.
             </p>
           ) : (
-            changeRequests.map((item) => (
+            visibleChangeRequests.map((item) => (
               <PackageChangeRequestCard key={item.id} item={item} />
             ))
           )}
         </div>
       </section>
 
-      <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
+      <div className={`${activeTab === "catalog" ? "" : "hidden"} rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900`}>
         <p className="font-semibold">운영 원칙</p>
         <p className="mt-1">
           기존 예약은 생성 당시 `total_price`, `package_id`,
@@ -1424,7 +1690,11 @@ export default async function AdminPackagesPage({
         </p>
       </div>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section
+        className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm ${
+          activeTab === "audit" ? "" : "hidden"
+        }`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-xl font-semibold text-slate-950">
@@ -1436,7 +1706,7 @@ export default async function AdminPackagesPage({
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
-            {auditLogs.length} logs
+            최근 {auditLogs.length}건
           </span>
         </div>
 

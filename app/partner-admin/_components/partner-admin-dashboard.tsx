@@ -1870,7 +1870,7 @@ export function PartnerAdminDashboard() {
                       required
                       type="number"
                       min="0"
-                      step="1000"
+                      step="1"
                       value={newPackageRequest.laborPrice}
                       onChange={(event) =>
                         setNewPackageRequest((current) => ({
@@ -2029,7 +2029,7 @@ export function PartnerAdminDashboard() {
                         <input
                           type="number"
                           min="0"
-                          step="1000"
+                          step="1"
                           value={packageRequestPrices[item.packageId] ?? ""}
                           onChange={(event) =>
                             setPackageRequestPrices((current) => ({

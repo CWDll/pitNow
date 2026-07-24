@@ -90,20 +90,35 @@ function normalizeFilter(value: string | string[] | undefined): PaymentFilter {
 function filterLabel(filter: PaymentFilter): string {
   switch (filter) {
     case "ready":
-      return "READY";
+      return "승인 대기";
     case "stale-ready":
-      return "Stale READY";
+      return "만료 승인 대기";
     case "failed":
-      return "FAILED";
+      return "실패";
     case "cancelled":
-      return "CANCELLED";
+      return "취소";
     case "refunded":
-      return "REFUNDED";
+      return "환불 완료";
     case "refund-pending":
-      return "REFUND_PENDING";
+      return "환불 확인 필요";
     default:
-      return "All";
+      return "전체";
   }
+}
+
+function paymentStatusLabel(status: string, stale = false) {
+  if (stale) return "만료 승인 대기";
+  const labels: Record<string, string> = {
+    APPROVED: "승인",
+    CANCELLED: "취소",
+    FAILED: "실패",
+    READY: "승인 대기",
+    REFUNDED: "환불 완료",
+    REFUND_PENDING: "환불 확인 필요",
+    RESERVATION_CONFIRMED: "예약 결제 완료",
+    SETTLEMENT_CONFIRMED: "추가 정산 완료",
+  };
+  return labels[status] ?? status;
 }
 
 function filterHref(filter: PaymentFilter): string {
@@ -220,13 +235,13 @@ export default async function AdminPaymentsPage({
       <header className="flex items-start justify-between gap-6">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
-            Payments
+            결제 관리
           </p>
           <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
-            Payment Ledger
+            결제 거래 원장
           </h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            최근 200개 payment row를 기준으로 결제 대기, 실패, 취소, 환불 확인
+            최근 200개 결제 거래를 기준으로 결제 대기, 실패, 취소, 환불 확인
             필요 상태를 추적합니다.
           </p>
         </div>
@@ -235,31 +250,31 @@ export default async function AdminPaymentsPage({
             type="submit"
             className="rounded-full bg-cyan-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-cyan-500"
           >
-            만료 READY 정리
+            만료 승인 대기 정리
           </button>
         </form>
       </header>
 
       <div className="grid gap-4 xl:grid-cols-4">
         {metricCard(
-          "Stale READY",
+          "만료 승인 대기",
           String(staleReadyPayments.length),
           "30분 이상 승인 없이 남은 결제",
         )}
         {metricCard(
-          "Failed",
+          "결제 실패",
           String(filters.find((filter) => filter.id === "failed")?.count ?? 0),
           "결제 승인 실패",
         )}
         {metricCard(
-          "Cancelled",
+          "취소",
           String(
             filters.find((filter) => filter.id === "cancelled")?.count ?? 0,
           ),
           "사용자/운영 취소",
         )}
         {metricCard(
-          "Refund pending",
+          "환불 확인 필요",
           String(
             filters.find((filter) => filter.id === "refund-pending")?.count ??
               0,
@@ -302,14 +317,14 @@ export default async function AdminPaymentsPage({
         <table className="min-w-[1120px] w-full border-collapse text-left text-sm">
           <thead className="bg-slate-100 text-xs uppercase tracking-[0.18em] text-slate-500">
             <tr>
-              <th className="px-4 py-4">Purpose</th>
-              <th className="px-4 py-4">Provider</th>
-              <th className="px-4 py-4">Status</th>
-              <th className="px-4 py-4 text-right">Amount</th>
-              <th className="px-4 py-4">Created</th>
-              <th className="px-4 py-4">Updated</th>
-              <th className="px-4 py-4">Reservation</th>
-              <th className="px-4 py-4">Issue</th>
+              <th className="px-4 py-4">결제 구분</th>
+              <th className="px-4 py-4">결제사 / 수단</th>
+              <th className="px-4 py-4">상태</th>
+              <th className="px-4 py-4 text-right">금액</th>
+              <th className="px-4 py-4">생성</th>
+              <th className="px-4 py-4">최근 변경</th>
+              <th className="px-4 py-4">연결 예약</th>
+              <th className="px-4 py-4">확인 사항</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -319,7 +334,7 @@ export default async function AdminPaymentsPage({
                   colSpan={8}
                   className="px-4 py-10 text-center text-slate-600"
                 >
-                  현재 필터에 해당하는 payment row가 없습니다.
+                  현재 필터에 해당하는 결제 거래가 없습니다.
                 </td>
               </tr>
             ) : (
@@ -336,7 +351,11 @@ export default async function AdminPaymentsPage({
                     }`}
                   >
                     <td className="px-4 py-4">
-                      <p className="font-semibold">{payment.purpose}</p>
+                      <p className="font-semibold">
+                        {payment.purpose === "RESERVATION"
+                          ? "예약 결제"
+                          : "추가 정산 결제"}
+                      </p>
                       <p className="mt-1 font-mono text-xs text-slate-500">
                         {payment.id}
                       </p>
@@ -350,7 +369,7 @@ export default async function AdminPaymentsPage({
                           payment.status,
                         )}`}
                       >
-                        {stale ? "STALE_READY" : payment.status}
+                        {paymentStatusLabel(payment.status, stale)}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right font-semibold text-slate-950">
@@ -368,7 +387,7 @@ export default async function AdminPaymentsPage({
                           href={`/admin/reservations/${payment.reservationId}`}
                           className="text-cyan-700 hover:text-cyan-600"
                         >
-                          {payment.reservationId}
+                          예약 상세 보기
                         </Link>
                       ) : (
                         <span className="text-slate-500">-</span>

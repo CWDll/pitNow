@@ -8,6 +8,7 @@ export type AdminReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 
 export interface AdminReservationRow {
   id: string;
+  user_id: string;
   partner_id: string;
   bay_id: string | null;
   vehicle_id?: string | null;
@@ -275,6 +276,15 @@ export interface AdminPaymentItem {
   updatedAt: string;
 }
 
+export interface AdminOverviewMetrics {
+  activeReservations: number;
+  approvedPaymentCount: number;
+  approvedRevenue: number;
+  completedSettlements: number;
+  periodReservations: number;
+  refundedPayments: number;
+}
+
 export interface AdminPackageItem {
   id: string;
   partnerId: string;
@@ -398,6 +408,12 @@ export interface AdminPartnerOption {
 
 export interface AdminReservationDetail {
   reservation: AdminReservationItem;
+  customer: {
+    id: string;
+    email: string;
+    name: string;
+    phone: string;
+  };
   checkin: {
     frontImg: string;
     rearImg: string;
@@ -577,26 +593,42 @@ async function getVehicleMap() {
   );
 }
 
-export async function getAdminReservations(): Promise<AdminReservationItem[]> {
+export async function getAdminReservations(options?: {
+  endTimeExclusive?: string;
+  startTimeInclusive?: string;
+}): Promise<AdminReservationItem[]> {
   if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return [];
   }
 
-  const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all(
-    [
-      getPartnerMap(),
-      getBayMap(),
-      getVehicleMap(),
-      supabaseAdmin
-        .from("reservations")
-        .select(
-          "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
-        )
-        .order("created_at", { ascending: false })
-        .limit(100)
-        .returns<AdminReservationRow[]>(),
-    ],
-  );
+  let reservationQuery = supabaseAdmin
+    .from("reservations")
+    .select(
+      "id, user_id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
+    );
+
+  if (options?.startTimeInclusive) {
+    reservationQuery = reservationQuery.gte(
+      "start_time",
+      options.startTimeInclusive,
+    );
+  }
+  if (options?.endTimeExclusive) {
+    reservationQuery = reservationQuery.lt(
+      "start_time",
+      options.endTimeExclusive,
+    );
+  }
+
+  const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all([
+    getPartnerMap(),
+    getBayMap(),
+    getVehicleMap(),
+    reservationQuery
+      .order("created_at", { ascending: false })
+      .limit(options ? 1000 : 100)
+      .returns<AdminReservationRow[]>(),
+  ]);
 
   let reservationRows = reservationResult.data ?? [];
 
@@ -610,13 +642,25 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
       return [];
     }
 
-    const { data, error } = await supabaseAdmin
+    let fallbackQuery = supabaseAdmin
       .from("reservations")
       .select(
-        "id, partner_id, bay_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
-      )
+        "id, user_id, partner_id, bay_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
+      );
+
+    if (options?.startTimeInclusive) {
+      fallbackQuery = fallbackQuery.gte(
+        "start_time",
+        options.startTimeInclusive,
+      );
+    }
+    if (options?.endTimeExclusive) {
+      fallbackQuery = fallbackQuery.lt("start_time", options.endTimeExclusive);
+    }
+
+    const { data, error } = await fallbackQuery
       .order("created_at", { ascending: false })
-      .limit(100)
+      .limit(options ? 1000 : 100)
       .returns<AdminReservationRow[]>();
 
     if (error) {
@@ -736,6 +780,81 @@ export async function getAdminReservations(): Promise<AdminReservationItem[]> {
   });
 }
 
+export async function getAdminOverviewMetrics(
+  startedAt: string,
+): Promise<AdminOverviewMetrics> {
+  const emptyMetrics: AdminOverviewMetrics = {
+    activeReservations: 0,
+    approvedPaymentCount: 0,
+    approvedRevenue: 0,
+    completedSettlements: 0,
+    periodReservations: 0,
+    refundedPayments: 0,
+  };
+
+  if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
+    return emptyMetrics;
+  }
+
+  const [
+    activeReservationResult,
+    periodReservationResult,
+    completedSettlementResult,
+    approvedPaymentResult,
+    refundedPaymentResult,
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"]),
+    supabaseAdmin
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", startedAt),
+    supabaseAdmin
+      .from("checkouts")
+      .select("id", { count: "exact", head: true })
+      .gte("completed_at", startedAt),
+    supabaseAdmin
+      .from("payments")
+      .select("amount")
+      .in("status", ["RESERVATION_CONFIRMED", "SETTLEMENT_CONFIRMED"])
+      .gte("created_at", startedAt)
+      .returns<Array<{ amount: number | string }>>(),
+    supabaseAdmin
+      .from("payments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "REFUNDED")
+      .gte("updated_at", startedAt),
+  ]);
+
+  const errors = [
+    activeReservationResult.error,
+    periodReservationResult.error,
+    completedSettlementResult.error,
+    approvedPaymentResult.error,
+    refundedPaymentResult.error,
+  ].filter(Boolean);
+
+  if (errors.length > 0) {
+    console.error("ADMIN OVERVIEW METRICS LOOKUP ERROR:", errors);
+  }
+
+  const approvedPayments = approvedPaymentResult.data ?? [];
+
+  return {
+    activeReservations: activeReservationResult.count ?? 0,
+    approvedPaymentCount: approvedPayments.length,
+    approvedRevenue: approvedPayments.reduce(
+      (sum, payment) => sum + toNumber(payment.amount),
+      0,
+    ),
+    completedSettlements: completedSettlementResult.count ?? 0,
+    periodReservations: periodReservationResult.count ?? 0,
+    refundedPayments: refundedPaymentResult.count ?? 0,
+  };
+}
+
 export async function getAdminReservationDetail(
   reservationId: string,
 ): Promise<AdminReservationDetail | null> {
@@ -751,7 +870,7 @@ export async function getAdminReservationDetail(
       supabaseAdmin
         .from("reservations")
         .select(
-          "id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
+          "id, user_id, partner_id, bay_id, vehicle_id, reservation_type, package_id, start_time, end_time, blocked_until, status, total_price, helper_verify_requested, helper_verify_fee, created_at",
         )
         .eq("id", reservationId)
         .maybeSingle<AdminReservationRow>(),
@@ -771,6 +890,16 @@ export async function getAdminReservationDetail(
   if (!reservation) {
     return null;
   }
+
+  const { data: authUserResult, error: authUserError } =
+    await supabaseAdmin.auth.admin.getUserById(reservation.user_id);
+
+  if (authUserError) {
+    console.error("ADMIN RESERVATION CUSTOMER LOOKUP ERROR:", authUserError);
+  }
+
+  const authUser = authUserResult?.user;
+  const customerMetadata = authUser?.user_metadata ?? {};
 
   const [
     checkinResult,
@@ -961,6 +1090,20 @@ export async function getAdminReservationDetail(
         : (partnerNotesResult.data ?? []).filter((note) => !note.is_resolved)
             .length,
       createdAt: reservation.created_at,
+    },
+    customer: {
+      id: reservation.user_id,
+      email: authUser?.email ?? "-",
+      name:
+        String(
+          customerMetadata.name ??
+            customerMetadata.full_name ??
+            customerMetadata.nickname ??
+            "",
+        ).trim() || "이름 미등록",
+      phone:
+        authUser?.phone ??
+        String(customerMetadata.phone ?? customerMetadata.phone_number ?? "-"),
     },
     checkin,
     checkout,

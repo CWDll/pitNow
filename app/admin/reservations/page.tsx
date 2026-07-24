@@ -13,10 +13,11 @@ type ReservationSort = "created-desc" | "start-asc" | "start-desc";
 
 interface AdminReservationsPageProps {
   searchParams?: Promise<{
-    date?: string | string[];
+    endDate?: string | string[];
     filter?: string | string[];
     partner?: string | string[];
     sort?: string | string[];
+    startDate?: string | string[];
   }>;
 }
 
@@ -53,11 +54,25 @@ function formatKstDateValue(value: string): string {
   }).format(new Date(value));
 }
 
+function kstDateStartIso(value: string): string | undefined {
+  if (!value) return undefined;
+  const timestamp = new Date(`${value}T00:00:00+09:00`);
+  return Number.isNaN(timestamp.getTime()) ? undefined : timestamp.toISOString();
+}
+
+function kstDateEndExclusiveIso(value: string): string | undefined {
+  const start = kstDateStartIso(value);
+  return start
+    ? new Date(new Date(start).getTime() + 24 * 60 * 60 * 1000).toISOString()
+    : undefined;
+}
+
 function filterReservations(
   reservations: AdminReservationItem[],
   filter: ReservationFilter,
   partnerQuery: string,
-  dateQuery: string,
+  startDateQuery: string,
+  endDateQuery: string,
 ): AdminReservationItem[] {
   const normalizedPartnerQuery = partnerQuery.toLowerCase();
   const baseReservations = reservations.filter((reservation) => {
@@ -68,7 +83,12 @@ function filterReservations(
       return false;
     }
 
-    if (dateQuery && formatKstDateValue(reservation.startTime) !== dateQuery) {
+    const reservationDate = formatKstDateValue(reservation.startTime);
+    if (startDateQuery && reservationDate < startDateQuery) {
+      return false;
+    }
+
+    if (endDateQuery && reservationDate > endDateQuery) {
       return false;
     }
 
@@ -108,7 +128,12 @@ function sortReservations(
 
 function filterHref(
   filter: ReservationFilter,
-  params: { date: string; partner: string; sort: ReservationSort },
+  params: {
+    endDate: string;
+    partner: string;
+    sort: ReservationSort;
+    startDate: string;
+  },
 ): string {
   const query = new URLSearchParams();
 
@@ -120,8 +145,12 @@ function filterHref(
     query.set("partner", params.partner);
   }
 
-  if (params.date) {
-    query.set("date", params.date);
+  if (params.startDate) {
+    query.set("startDate", params.startDate);
+  }
+
+  if (params.endDate) {
+    query.set("endDate", params.endDate);
   }
 
   if (params.sort !== "created-desc") {
@@ -135,11 +164,11 @@ function filterHref(
 function filterLabel(filter: ReservationFilter): string {
   switch (filter) {
     case "open-issues":
-      return "Open issues";
+      return "미해결 이슈";
     case "clean":
-      return "No open issues";
+      return "이슈 없음";
     default:
-      return "All";
+      return "전체";
   }
 }
 
@@ -160,7 +189,7 @@ function statusClass(status: AdminReservationStatus): string {
 }
 
 function typeLabel(type: AdminReservationType): string {
-  return type === "SELF_SERVICE" ? "Self" : "Shop";
+  return type === "SELF_SERVICE" ? "셀프 정비" : "정비 맡기기";
 }
 
 function paymentClass(status: string | null): string {
@@ -190,8 +219,19 @@ export default async function AdminReservationsPage({
   const activeFilter = normalizeFilter(resolvedSearchParams?.filter);
   const activeSort = normalizeSort(resolvedSearchParams?.sort);
   const partnerQuery = normalizeStringParam(resolvedSearchParams?.partner);
-  const dateQuery = normalizeStringParam(resolvedSearchParams?.date);
-  const reservations = await getAdminReservations();
+  const startDateQuery = normalizeStringParam(resolvedSearchParams?.startDate);
+  const requestedEndDateQuery = normalizeStringParam(
+    resolvedSearchParams?.endDate,
+  );
+  const endDateQuery = requestedEndDateQuery || startDateQuery;
+  const reservations = await getAdminReservations(
+    startDateQuery || endDateQuery
+      ? {
+          startTimeInclusive: kstDateStartIso(startDateQuery),
+          endTimeExclusive: kstDateEndExclusiveIso(endDateQuery),
+        }
+      : undefined,
+  );
   const openIssueReservations = reservations.filter(
     (reservation) => reservation.openPartnerNoteCount > 0,
   );
@@ -199,13 +239,20 @@ export default async function AdminReservationsPage({
     (reservation) => reservation.openPartnerNoteCount === 0,
   );
   const visibleReservations = sortReservations(
-    filterReservations(reservations, activeFilter, partnerQuery, dateQuery),
+    filterReservations(
+      reservations,
+      activeFilter,
+      partnerQuery,
+      startDateQuery,
+      endDateQuery,
+    ),
     activeSort,
   );
   const filterParams = {
-    date: dateQuery,
+    endDate: requestedEndDateQuery,
     partner: partnerQuery,
     sort: activeSort,
+    startDate: startDateQuery,
   };
   const filters: Array<{ id: ReservationFilter; count: number }> = [
     { id: "all", count: reservations.length },
@@ -214,23 +261,23 @@ export default async function AdminReservationsPage({
   ];
 
   return (
-    <section className="space-y-6 rounded-3xl bg-slate-50 p-6 text-slate-950">
+    <section className="space-y-6 text-slate-950">
       <header>
         <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
-          Reservations
+          예약 관리
         </p>
         <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
-          Reservation Monitor
+          예약 현황
         </h2>
         <p className="mt-2 text-sm text-slate-600">
-          최근 100개 예약을 기준으로 상태, 베이, 버퍼 블로킹 시간을 확인합니다.
+          최근 100개 예약을 기준으로 상태, 정비소, 이용 시간을 확인합니다.
         </p>
       </header>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Total
+            조회 대상
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-950">
             {reservations.length}
@@ -239,7 +286,7 @@ export default async function AdminReservationsPage({
         </div>
         <div className="rounded-3xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">
-            Open issues
+            미해결 이슈
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-950">
             {openIssueReservations.length}
@@ -250,7 +297,7 @@ export default async function AdminReservationsPage({
         </div>
         <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
-            Visible
+            검색 결과
           </p>
           <p className="mt-3 text-3xl font-semibold text-slate-950">
             {visibleReservations.length}
@@ -283,14 +330,14 @@ export default async function AdminReservationsPage({
 
       <form
         action="/admin/reservations"
-        className="grid gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:grid-cols-[1fr_200px_220px_auto]"
+        className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm xl:grid-cols-[1fr_180px_180px_220px_auto]"
       >
         {activeFilter !== "all" ? (
           <input type="hidden" name="filter" value={activeFilter} />
         ) : null}
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Partner
+            정비소
           </span>
           <input
             name="partner"
@@ -301,18 +348,30 @@ export default async function AdminReservationsPage({
         </label>
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Date
+            시작일
           </span>
           <input
             type="date"
-            name="date"
-            defaultValue={dateQuery}
+            name="startDate"
+            defaultValue={startDateQuery}
             className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-900 outline-none ring-cyan-100 focus:ring-4"
           />
         </label>
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Sort
+            종료일
+          </span>
+          <input
+            type="date"
+            name="endDate"
+            min={startDateQuery || undefined}
+            defaultValue={requestedEndDateQuery}
+            className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-900 outline-none ring-cyan-100 focus:ring-4"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            정렬
           </span>
           <select
             name="sort"
@@ -329,38 +388,37 @@ export default async function AdminReservationsPage({
             type="submit"
             className="h-11 rounded-2xl bg-cyan-600 px-5 text-sm font-semibold text-white transition hover:bg-cyan-500"
           >
-            Filter
+            검색
           </button>
           <Link
             href="/admin/reservations"
             className="flex h-11 items-center rounded-2xl border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
           >
-            Reset
+            초기화
           </Link>
         </div>
       </form>
 
-      <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-[1320px] border-collapse text-left text-sm">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-[1180px] border-collapse text-left text-sm">
           <thead className="bg-slate-100 text-xs uppercase tracking-[0.16em] text-slate-500">
             <tr>
-              <th className="px-4 py-4">Status</th>
-              <th className="px-4 py-4">Type</th>
-              <th className="px-4 py-4">Partner</th>
-              <th className="px-4 py-4">Bay</th>
-              <th className="px-4 py-4">Vehicle</th>
-              <th className="px-4 py-4">Time</th>
-              <th className="px-4 py-4">Blocked</th>
-              <th className="px-4 py-4 text-right">Price</th>
-              <th className="px-4 py-4">Payment</th>
-              <th className="px-4 py-4">Issues</th>
-              <th className="px-4 py-4">Reservation ID</th>
+              <th className="px-4 py-4">상태</th>
+              <th className="px-4 py-4">방식</th>
+              <th className="px-4 py-4">정비소</th>
+              <th className="px-4 py-4">베이</th>
+              <th className="px-4 py-4">차량</th>
+              <th className="px-4 py-4">이용 시간</th>
+              <th className="px-4 py-4 text-right">예약 금액</th>
+              <th className="px-4 py-4">결제</th>
+              <th className="px-4 py-4">이슈</th>
+              <th className="px-4 py-4">예약 ID</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {visibleReservations.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
                   조건에 맞는 예약 데이터가 없습니다.
                 </td>
               </tr>
@@ -384,9 +442,6 @@ export default async function AdminReservationsPage({
                     {formatAdminDateTime(reservation.startTime)} -{" "}
                     {formatAdminDateTime(reservation.endTime)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-4">
-                    {formatAdminDateTime(reservation.blockedUntil)}
-                  </td>
                   <td className="whitespace-nowrap px-4 py-4 text-right">
                     {formatAdminCurrency(reservation.totalPrice)}
                   </td>
@@ -396,7 +451,7 @@ export default async function AdminReservationsPage({
                         reservation.reservationPaymentStatus,
                       )}`}
                     >
-                      {reservation.reservationPaymentStatus ?? "No payment"}
+                      {reservation.reservationPaymentStatus ?? "결제 없음"}
                     </span>
                     {reservation.reservationRefundedAt ? (
                       <p className="mt-1 text-xs text-slate-500">
@@ -407,7 +462,7 @@ export default async function AdminReservationsPage({
                   <td className="whitespace-nowrap px-4 py-4">
                     {reservation.openPartnerNoteCount > 0 ? (
                       <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
-                        Open {reservation.openPartnerNoteCount}
+                        미해결 {reservation.openPartnerNoteCount}
                       </span>
                     ) : (
                       <span className="text-xs text-slate-400">-</span>

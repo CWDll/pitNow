@@ -225,22 +225,23 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 
 | 순서 | 확인 항목 | 경로 / 행동 | 기대 결과 | 상태 | 비고 / 증상 / 후속 작업 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Admin login | `/admin-login` | admin token으로 로그인 성공 | 대기 |  |
-| 2 | Overview | `/admin` | 주요 운영 요약 렌더 | 대기 |  |
-| 3 | 예약 목록 필터 | `/admin/reservations` status/partner/date/issue 필터 | 필터 결과가 일관됨 | 대기 |  |
-| 4 | 예약 상세 | `/admin/reservations/:id` | payment, evidence, partner notes, audit logs 표시 | 대기 |  |
-| 5 | Issues badge | unresolved partner note 있는 예약 | 목록 Issues 열에 `Open N` 표시 | 대기 |  |
-| 6 | Payments | `/admin/payments` | 필터와 cleanup/refunded 관련 UI 렌더 | 대기 |  |
-| 7 | Settlement | `/admin/settlement` | completed settlement rows 표시 | 대기 |  |
-| 8 | Partner audit | `/admin/partner-audit` | partner/action/range/search 필터 동작 | 대기 |  |
-| 9 | package price update | `/admin/packages`에서 partner package price 수정 | 가격 row 갱신, audit log 생성 | 대기 |  |
-| 10 | package exposure toggle | partner package 활성/비활성 변경 | 신규 예약 노출 상태 변경, hard delete 없음 | 대기 |  |
-| 11 | service package edit | catalog 필드 수정 | catalog 갱신, 기존 예약 snapshot 유지 | 대기 |  |
-| 12 | change request approve | pending request 승인 | 가격 반영, request approved, audit log 생성 | 대기 |  |
-| 13 | change request reject | pending request 거절 | 가격 미변경, request rejected | 대기 |  |
-| 14 | audit logs | `/admin/packages` 최근 이력 | approval/update 이력이 표시됨 | 대기 |  |
-| 15 | 데스크톱 dashboard shell | 1440px 이상에서 전체 Admin 메뉴 순회 | 고정 사이드바·상단 바·본문이 겹치지 않고 현재 메뉴가 강조됨 | 대기 |  |
-| 16 | 운영 화면 밀도 | Overview와 목록/상세 화면 비교 | 지표·필터·표가 과도하게 크지 않고 가로 스크롤 없이 읽힘 | 대기 |  |
+| 1 | Admin login | `/admin-login` | admin token으로 로그인 성공 | 성공 | 배포 URL 확인 |
+| 2 | Overview | `/admin` 기간 프리셋 변경 | 오늘/이번 주/이번 달/3개월/6개월/이번 년도별 예약·승인 매출·완료·환불 지표 표시 | 수정 후 재확인 | 한글 지표와 기간 프리셋 추가 |
+| 3 | 예약 목록 필터 | `/admin/reservations` 정비소/start date/end date/issue 필터 | 종료일 생략 시 시작일 하루로 조회, 검색 결과 건수 표시 | 수정 후 재확인 | `BLOCKED` 열 제거, 중복 본문 패딩 제거 |
+| 4 | 예약 상세 | `/admin/reservations/:id` | 예약자 이름·이메일·전화, payment, evidence, notes, audit 표시 | 수정 후 재확인 | 큰 Evidence 영역 제거, 누락 배지는 제목 아래 표시 |
+| 5 | Issues badge | unresolved partner note 있는 예약 | 목록 Issues 열에 `미해결 N` 표시 | 성공 | 이슈 필터 포함 확인 |
+| 6 | Payments | `/admin/payments` | 결제사 거래의 대기/실패/취소/환불 추적, 예약 상세 이동 | 수정 후 재확인 | 정산 화면과 역할 분리, 한글화 |
+| 7 | Settlement | `/admin/settlement` | 체크아웃 금액·추가 결제 미수·증적 완료 표시 | 수정 후 재확인 | 체크아웃 운영 정산 화면으로 한글화 |
+| 8 | Partner audit | `/admin/partner-audit` | partner/action/range/search 필터와 사람이 읽는 변경 전후 표시 | 수정 후 재확인 | raw JSON 제거, 한글화 |
+| 9 | package tabs/partner filter | `/admin/packages` 탭 및 업장별 판매 | 기능별 탭 전환, 선택 업장의 판매 패키지만 표시 | 수정 후 재확인 | 전역/업장/생성 요청/가격 요청/이력 탭 추가 |
+| 10 | package exposure toggle | partner package 노출 버튼 | 활성/비활성을 명확한 버튼으로 변경, hard delete 없음 | 수정 후 재확인 | checkbox 제거 |
+| 11 | service package edit | catalog duration `120`, 공임 `12345` 저장 | 브라우저 입력 유효성 오류 없이 원 단위 값을 보존 | 수정 후 재확인 | duration `min=5 step=5`, 가격 `step=1` |
+| 12 | change request approve/reject | 처리 전/처리 내역 탭 | 승인 시 가격·audit 반영, 거절 시 가격 미변경 | 수정 후 재확인 | 요청 상태 탭 추가, 승인 E2E 통과 |
+| 13 | change request reject | pending request 거절 | 가격 미변경, request rejected | Pass | 이번 수동 QA 제외 |
+| 14 | audit logs | `/admin/packages?tab=audit` | 필드별 변경 전 → 변경 후가 한글로 표시됨 | 수정 후 재확인 | raw JSON 제거 |
+| 15 | 데스크톱 dashboard shell | 1440px 이상에서 전체 Admin 메뉴 순회 | 고정 사이드바·상단 바·본문이 겹치지 않고 현재 메뉴가 강조됨 | 성공 | 배포 URL 확인 |
+| 16 | 운영 화면 밀도 | Overview와 목록/상세 화면 비교 | 지표·필터·표가 과도하게 크지 않고 일관된 본문 여백 사용 | 수정 후 재확인 | 예약 화면의 별도 `p-6` 제거 |
+| 17 | 신규 패키지 생성 승인 | `/admin/packages?tab=creation`에서 코드 입력 후 승인 | 전역 카탈로그 생성 + 요청 업장 판매 가격 연결 + audit 기록 | 자동 검증 성공 | `120분`, `12,345원` E2E 통과. 과거 FULFILLED 누락 건 복구 버튼 제공 |
 
 ### 7.7 Toss Sandbox QA
 

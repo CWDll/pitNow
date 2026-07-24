@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuditChangeList } from "../_components/audit-change-list";
 
 import {
   formatAdminDateTime,
@@ -237,31 +238,39 @@ function rangeLabel(range: AuditRange) {
 function filterLabel(filter: AuditFilter): string {
   switch (filter) {
     case "bay":
-      return "Bay";
+      return "베이";
     case "availability":
-      return "Availability";
+      return "예약 차단";
     case "notes":
-      return "Notes";
+      return "현장 메모";
     default:
-      return "All";
+      return "전체";
   }
 }
 
 function auditActionLabel(action: string) {
-  return action
-    .split("_")
-    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
-    .join(" ");
+  const labels: Record<string, string> = {
+    AVAILABILITY_BLOCK_CREATED: "예약 차단 생성",
+    AVAILABILITY_BLOCK_DEACTIVATED: "예약 차단 해제",
+    AVAILABILITY_BLOCK_REACTIVATED: "예약 차단 재활성화",
+    AVAILABILITY_BLOCK_UPDATED: "예약 차단 수정",
+    BAY_ACTIVE_UPDATED: "베이 운영 상태 변경",
+    BAY_COMPATIBILITY_UPDATED: "베이 이용 조건 변경",
+    RESERVATION_NOTE_CREATED: "현장 메모 생성",
+    RESERVATION_NOTE_REOPENED: "현장 메모 재오픈",
+    RESERVATION_NOTE_RESOLVED: "현장 메모 해결",
+  };
+  return labels[action] ?? action;
 }
 
 function targetTypeLabel(targetType: AdminPartnerAuditTargetType) {
   switch (targetType) {
     case "BAY":
-      return "Bay";
+      return "베이";
     case "AVAILABILITY_BLOCK":
-      return "Availability";
+      return "예약 차단";
     case "RESERVATION_NOTE":
-      return "Note";
+      return "현장 메모";
     default:
       return targetType;
   }
@@ -277,10 +286,6 @@ function auditActionClass(action: string) {
   }
 
   return "bg-cyan-50 text-cyan-700 ring-cyan-200";
-}
-
-function hasObjectValues(value: Record<string, unknown>) {
-  return Object.keys(value).length > 0;
 }
 
 function metricCard(label: string, value: string, description: string) {
@@ -336,10 +341,10 @@ export default async function AdminPartnerAuditPage({
     <section className="space-y-6">
       <header>
         <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
-          Partner Audit
+          파트너 감사
         </p>
         <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
-          Partner Admin Audit
+          파트너 운영 변경 이력
         </h2>
         <p className="mt-2 text-sm text-slate-600">
           정비소 운영자가 수행한 베이, 예약 차단, 현장 메모 변경 이력을 서버
@@ -349,18 +354,18 @@ export default async function AdminPartnerAuditPage({
 
       <div className="grid gap-4 xl:grid-cols-4">
         {metricCard(
-          "Total",
+          "전체 결과",
           String(auditResult.totalCount),
           "서버 필터 기준 전체 건수",
         )}
         {metricCard(
-          "Page",
+          "페이지",
           `${auditResult.page} / ${auditResult.totalPages}`,
           `${auditResult.limit}건씩 조회`,
         )}
-        {metricCard("Loaded", String(logs.length), "현재 페이지 로드 건수")}
+        {metricCard("현재 조회", String(logs.length), "현재 페이지 로드 건수")}
         {metricCard(
-          "Visible",
+          "화면 표시",
           String(visibleLogs.length),
           `${filterLabel(searchState.targetFilter)} / ${rangeLabel(
             searchState.range,
@@ -377,22 +382,22 @@ export default async function AdminPartnerAuditPage({
         ) : null}
         <input type="hidden" name="page" value="1" />
         <label className="space-y-2 text-sm font-medium text-slate-700">
-          <span>Search</span>
+          <span>검색어</span>
           <input
             name="q"
             defaultValue={searchState.query}
-            placeholder="예약 ID, target ID, metadata"
+            placeholder="예약 ID, 대상 ID, 변경 내용"
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-cyan-500"
           />
         </label>
         <label className="space-y-2 text-sm font-medium text-slate-700">
-          <span>Partner</span>
+          <span>정비소</span>
           <select
             name="partner"
             defaultValue={searchState.partnerId}
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-500"
           >
-            <option value="">All partners</option>
+            <option value="">전체 정비소</option>
             {partnerOptions.map((partner) => (
               <option key={partner.id} value={partner.id}>
                 {partner.name}
@@ -401,13 +406,13 @@ export default async function AdminPartnerAuditPage({
           </select>
         </label>
         <label className="space-y-2 text-sm font-medium text-slate-700">
-          <span>Action</span>
+          <span>작업</span>
           <select
             name="action"
             defaultValue={searchState.action}
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-500"
           >
-            <option value="all">All actions</option>
+            <option value="all">전체 작업</option>
             {auditActions.map((action) => (
               <option key={action} value={action}>
                 {auditActionLabel(action)}
@@ -416,28 +421,28 @@ export default async function AdminPartnerAuditPage({
           </select>
         </label>
         <label className="space-y-2 text-sm font-medium text-slate-700">
-          <span>Range</span>
+          <span>기간</span>
           <select
             name="range"
             defaultValue={searchState.range}
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-500"
           >
-            <option value="all">All time</option>
-            <option value="24h">Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
+            <option value="all">전체 기간</option>
+            <option value="24h">최근 24시간</option>
+            <option value="7d">최근 7일</option>
+            <option value="30d">최근 30일</option>
           </select>
         </label>
         <label className="space-y-2 text-sm font-medium text-slate-700">
-          <span>Limit</span>
+          <span>페이지당 표시</span>
           <select
             name="limit"
             defaultValue={searchState.limit}
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-cyan-500"
           >
-            <option value="25">25 rows</option>
-            <option value="50">50 rows</option>
-            <option value="100">100 rows</option>
+            <option value="25">25건</option>
+            <option value="50">50건</option>
+            <option value="100">100건</option>
           </select>
         </label>
         <div className="flex items-end gap-2">
@@ -445,13 +450,13 @@ export default async function AdminPartnerAuditPage({
             type="submit"
             className="rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-cyan-500"
           >
-            Filter
+            검색
           </button>
           <Link
             href="/admin/partner-audit"
             className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
           >
-            Reset
+            초기화
           </Link>
         </div>
       </form>
@@ -481,8 +486,8 @@ export default async function AdminPartnerAuditPage({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200 bg-white shadow-sm p-4 text-sm text-slate-600">
         <p>
-          Showing {visibleLogs.length} of {logs.length} loaded rows. Database
-          match {auditResult.totalCount} rows.
+          현재 {visibleLogs.length}건 표시 · 검색 조건 전체{" "}
+          {auditResult.totalCount}건
         </p>
         <div className="flex gap-2">
           <Link
@@ -496,7 +501,7 @@ export default async function AdminPartnerAuditPage({
                 : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100"
             }`}
           >
-            Previous
+            이전
           </Link>
           <Link
             href={buildAuditHref(searchState, {
@@ -509,7 +514,7 @@ export default async function AdminPartnerAuditPage({
                 : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100"
             }`}
           >
-            Next
+            다음
           </Link>
         </div>
       </div>
@@ -543,7 +548,7 @@ export default async function AdminPartnerAuditPage({
                     {log.partnerName}
                   </p>
                   <p className="mt-1 break-all font-mono text-xs text-slate-500">
-                    Target {log.targetId}
+                    대상 {log.targetId}
                   </p>
                 </div>
                 <p className="text-xs text-slate-500">
@@ -553,50 +558,24 @@ export default async function AdminPartnerAuditPage({
 
               <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
                 {log.actorUserId ? (
-                  <span className="break-all">Actor {log.actorUserId}</span>
+                  <span className="break-all">작업자 {log.actorUserId}</span>
                 ) : null}
                 {log.reservationId ? (
                   <Link
                     href={`/admin/reservations/${log.reservationId}`}
                     className="break-all text-cyan-700 hover:text-cyan-600"
                   >
-                    Reservation {log.reservationId}
+                    예약 {log.reservationId}
                   </Link>
                 ) : null}
-                <span className="break-all">Audit {log.id}</span>
+                <span className="break-all">감사 로그 {log.id}</span>
               </div>
 
-              {hasObjectValues(log.beforeState) ||
-              hasObjectValues(log.afterState) ? (
-                <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                  {hasObjectValues(log.beforeState) ? (
-                    <div>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        Before
-                      </p>
-                      <pre className="max-h-56 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
-                        {JSON.stringify(log.beforeState, null, 2)}
-                      </pre>
-                    </div>
-                  ) : null}
-                  {hasObjectValues(log.afterState) ? (
-                    <div>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        After
-                      </p>
-                      <pre className="max-h-56 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
-                        {JSON.stringify(log.afterState, null, 2)}
-                      </pre>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {hasObjectValues(log.metadata) ? (
-                <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-200">
-                  {JSON.stringify(log.metadata, null, 2)}
-                </pre>
-              ) : null}
+              <AuditChangeList
+                before={log.beforeState}
+                after={log.afterState}
+                metadata={log.metadata}
+              />
             </article>
           ))
         )}

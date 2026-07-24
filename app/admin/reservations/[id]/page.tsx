@@ -31,7 +31,7 @@ function statusClass(status: AdminReservationStatus): string {
 }
 
 function typeLabel(type: AdminReservationType): string {
-  return type === "SELF_SERVICE" ? "Self Service" : "Shop Service";
+  return type === "SELF_SERVICE" ? "셀프 정비" : "정비 맡기기";
 }
 
 function EvidenceImage(props: { label: string; url: string | null }) {
@@ -53,7 +53,7 @@ function EvidenceImage(props: { label: string; url: string | null }) {
         </a>
       ) : (
         <div className="flex h-36 items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-500 ring-1 ring-slate-200">
-          No evidence
+          증적 없음
         </div>
       )}
     </div>
@@ -89,13 +89,13 @@ function RatingStars({ rating }: { rating: number }) {
 function partnerNoteLabel(type: "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW") {
   switch (type) {
     case "ISSUE":
-      return "Issue";
+      return "이슈";
     case "DELAY":
-      return "Delay";
+      return "지연";
     case "NO_SHOW":
-      return "No-show";
+      return "노쇼";
     case "NOTE":
-      return "Note";
+      return "메모";
     default:
       return type;
   }
@@ -117,10 +117,12 @@ function partnerNoteClass(type: "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW") {
 }
 
 function auditActionLabel(action: string) {
-  return action
-    .split("_")
-    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
-    .join(" ");
+  const labels: Record<string, string> = {
+    RESERVATION_NOTE_CREATED: "현장 메모 생성",
+    RESERVATION_NOTE_REOPENED: "현장 메모 재오픈",
+    RESERVATION_NOTE_RESOLVED: "현장 메모 해결",
+  };
+  return labels[action] ?? action;
 }
 
 function auditActionClass(action: string) {
@@ -149,6 +151,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
 
   const {
     reservation,
+    customer,
     checkin,
     checkout,
     payments,
@@ -170,14 +173,30 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             href="/admin/reservations"
             className="text-sm font-semibold text-cyan-700 hover:text-cyan-600"
           >
-            ← Reservations
+            ← 예약 목록
           </Link>
           <p className="mt-5 text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
-            Reservation Detail
+            예약 상세
           </p>
           <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
-            Evidence Drill-down
+            예약 및 증적 확인
           </h2>
+          {evidenceIssues.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {evidenceIssues.map((issue) => (
+                <span
+                  key={issue}
+                  className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200"
+                >
+                  {issue}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="mt-3 inline-flex rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
+              증적 완료
+            </span>
+          )}
           <p className="mt-2 max-w-3xl break-all font-mono text-xs text-slate-500">
             {reservation.id}
           </p>
@@ -193,11 +212,11 @@ export default async function AdminReservationDetailPage(props: PageProps) {
 
       <div className="grid gap-4 xl:grid-cols-4">
         {[
-          ["Partner", reservation.partnerName],
-          ["Type", typeLabel(reservation.reservationType)],
-          ["Vehicle", reservation.vehicleLabel],
+          ["정비소", reservation.partnerName],
+          ["예약 방식", typeLabel(reservation.reservationType)],
+          ["차량", reservation.vehicleLabel],
           [
-            "Total",
+            "총 금액",
             formatAdminCurrency(
               checkout?.totalSettlement ?? reservation.totalPrice,
             ),
@@ -224,137 +243,103 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         </div>
       ) : null}
 
-      <section
-        className={`rounded-3xl border p-5 ${
-          evidenceIssues.length === 0
-            ? "border-emerald-200 bg-emerald-50"
-            : "border-amber-200 bg-amber-50"
-        }`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p
-              className={`text-sm font-semibold uppercase tracking-[0.2em] ${
-                evidenceIssues.length === 0
-                  ? "text-emerald-700"
-                  : "text-amber-700"
-              }`}
-            >
-              Evidence status
-            </p>
-            <h3 className="mt-2 text-2xl font-semibold text-slate-950">
-              {evidenceIssues.length === 0
-                ? "증적 완료"
-                : `검토 필요 ${evidenceIssues.length}건`}
-            </h3>
-          </div>
-          <span
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              evidenceIssues.length === 0
-                ? "bg-emerald-300 text-slate-950"
-                : "bg-amber-300 text-slate-950"
-            }`}
-          >
-            {evidenceIssues.length === 0 ? "Complete" : "Review"}
-          </span>
-        </div>
-        {evidenceIssues.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {evidenceIssues.map((issue) => (
-              <span
-                key={issue}
-                className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200"
-              >
-                {issue}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </section>
-
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-2xl font-semibold text-slate-950">Reservation</h3>
+          <h3 className="text-2xl font-semibold text-slate-950">예약 정보</h3>
           <dl className="mt-5 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
             <div>
-              <dt className="text-slate-500">Bay</dt>
+              <dt className="text-slate-500">베이</dt>
               <dd className="mt-1 text-slate-950">{reservation.bayName}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Created</dt>
+              <dt className="text-slate-500">예약 생성</dt>
               <dd className="mt-1 text-slate-950">
                 {formatAdminDateTime(reservation.createdAt)}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-500">Start</dt>
+              <dt className="text-slate-500">시작</dt>
               <dd className="mt-1 text-slate-950">
                 {formatAdminDateTime(reservation.startTime)}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-500">End</dt>
+              <dt className="text-slate-500">종료</dt>
               <dd className="mt-1 text-slate-950">
                 {formatAdminDateTime(reservation.endTime)}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-500">Blocked Until</dt>
+              <dt className="text-slate-500">예약 결제 금액</dt>
               <dd className="mt-1 text-slate-950">
-                {formatAdminDateTime(reservation.blockedUntil)}
+                {formatAdminCurrency(reservation.totalPrice)}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-500">Base Reservation Price</dt>
-              <dd className="mt-1 text-slate-950">
-                {formatAdminCurrency(reservation.totalPrice)}
+              <dt className="text-slate-500">예약자</dt>
+              <dd className="mt-1 text-slate-950">{customer.name}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">이메일</dt>
+              <dd className="mt-1 break-all text-slate-950">
+                {customer.email}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">연락처</dt>
+              <dd className="mt-1 text-slate-950">{customer.phone}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">사용자 ID</dt>
+              <dd className="mt-1 break-all font-mono text-xs text-slate-600">
+                {customer.id}
               </dd>
             </div>
           </dl>
         </section>
 
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-2xl font-semibold text-slate-950">Settlement</h3>
+          <h3 className="text-2xl font-semibold text-slate-950">정산 내역</h3>
           {checkout ? (
             <dl className="mt-5 space-y-3 text-sm text-slate-700">
               <div className="flex justify-between">
-                <dt>Base</dt>
+                <dt>기본 금액</dt>
                 <dd className="text-slate-950">
                   {formatAdminCurrency(checkout.basePrice)}
                 </dd>
               </div>
               <div className="flex justify-between">
-                <dt>Extra</dt>
+                <dt>추가 요금</dt>
                 <dd className="text-slate-950">
                   {formatAdminCurrency(checkout.extraFee)}
                 </dd>
               </div>
               <div className="flex justify-between">
-                <dt>Helper verify</dt>
+                <dt>카 마스터 검수</dt>
                 <dd className="text-slate-950">
                   {formatAdminCurrency(checkout.helperVerifyFee)}
                 </dd>
               </div>
               <div className="border-t border-slate-200 pt-3">
                 <div className="flex justify-between text-xl font-semibold">
-                  <dt className="text-slate-950">Total</dt>
+                  <dt className="text-slate-950">총 정산</dt>
                   <dd className="text-cyan-700">
                     {formatAdminCurrency(checkout.totalSettlement)}
                   </dd>
                 </div>
               </div>
               <div className="pt-2 text-xs text-slate-500">
-                Completed {formatAdminDateTime(checkout.completedAt)}
+                정산 완료 {formatAdminDateTime(checkout.completedAt)}
               </div>
               <div className="border-t border-slate-200 pt-3">
                 <div className="flex justify-between">
-                  <dt>Reservation paid</dt>
+                  <dt>예약 시 결제</dt>
                   <dd className="text-slate-950">
                     {formatAdminCurrency(reservation.totalPrice)}
                   </dd>
                 </div>
                 <div className="mt-2 flex justify-between">
-                  <dt>Settlement due</dt>
+                  <dt>추가 결제</dt>
                   <dd className="text-rose-700">
                     {formatAdminCurrency(
                       Math.max(
@@ -376,7 +361,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-2xl font-semibold text-slate-950">
-          Payment Ledger
+          결제 거래 내역
         </h3>
         <p className="mt-1 text-sm text-slate-500">
           예약 선결제와 체크아웃 사후정산 결제 상태를 함께 확인합니다.
@@ -390,12 +375,12 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-slate-100 text-xs uppercase tracking-[0.18em] text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Purpose</th>
-                  <th className="px-4 py-3">Provider</th>
-                  <th className="px-4 py-3">Method</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Amount</th>
-                  <th className="px-4 py-3">Approved</th>
+                  <th className="px-4 py-3">결제 구분</th>
+                  <th className="px-4 py-3">결제사</th>
+                  <th className="px-4 py-3">수단</th>
+                  <th className="px-4 py-3">상태</th>
+                  <th className="px-4 py-3 text-right">금액</th>
+                  <th className="px-4 py-3">승인 시각</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -403,7 +388,9 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                   <tr key={payment.id} className="text-slate-800">
                     <td className="px-4 py-3">
                       <p className="font-semibold text-slate-950">
-                        {payment.purpose}
+                        {payment.purpose === "RESERVATION"
+                          ? "예약 결제"
+                          : "추가 정산 결제"}
                       </p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">
                         {payment.id}
@@ -452,7 +439,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-2xl font-semibold text-slate-950">
-              Partner Field Notes
+              파트너 현장 메모
             </h3>
             <p className="mt-1 text-sm text-slate-500">
               정비소 운영자가 남긴 현장 메모, 이슈, 지연, 노쇼 기록입니다.
@@ -466,8 +453,8 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             }`}
           >
             {unresolvedPartnerNotes.length > 0
-              ? `Open ${unresolvedPartnerNotes.length}`
-              : "No open issues"}
+              ? `미해결 ${unresolvedPartnerNotes.length}`
+              : "미해결 이슈 없음"}
           </span>
         </div>
 
@@ -502,7 +489,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                           : "bg-rose-50 text-rose-700"
                       }`}
                     >
-                      {note.isResolved ? "Resolved" : "Open"}
+                      {note.isResolved ? "해결" : "미해결"}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500">
@@ -515,12 +502,12 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                 <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
                   {note.authorUserId ? (
                     <span className="break-all">
-                      Author {note.authorUserId}
+                      작성자 {note.authorUserId}
                     </span>
                   ) : null}
                   {note.resolvedAt ? (
                     <span>
-                      Resolved {formatAdminDateTime(note.resolvedAt)}
+                      해결 {formatAdminDateTime(note.resolvedAt)}
                       {note.resolvedBy ? ` · ${note.resolvedBy}` : ""}
                     </span>
                   ) : null}
@@ -535,14 +522,14 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-2xl font-semibold text-slate-950">
-              Partner Admin Audit
+              파트너 운영 변경 이력
             </h3>
             <p className="mt-1 text-sm text-slate-500">
               정비소 운영자가 이 예약과 연결해 수행한 운영 변경 이력입니다.
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200">
-            {partnerAuditLogs.length} logs
+            {partnerAuditLogs.length}건
           </span>
         </div>
 

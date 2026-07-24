@@ -9,9 +9,7 @@ import {
 
 import {
   formatAdminCurrency,
-  getAdminPayments,
-  getAdminReservations,
-  getAdminSettlements,
+  getAdminOverviewMetrics,
 } from "./_lib/admin-data";
 
 function metricCard(label: string, value: string, helper: string) {
@@ -24,29 +22,69 @@ function metricCard(label: string, value: string, helper: string) {
   );
 }
 
-export default async function AdminHomePage() {
-  const [reservations, settlements, payments] = await Promise.all([
-    getAdminReservations(),
-    getAdminSettlements(),
-    getAdminPayments(),
-  ]);
+type MetricRange = "today" | "week" | "month" | "3months" | "6months" | "year";
 
-  const activeReservations = reservations.filter((item) =>
-    ["CONFIRMED", "CHECKED_IN", "IN_USE"].includes(item.status),
+interface AdminHomePageProps {
+  searchParams?: Promise<{ range?: string | string[] }>;
+}
+
+const rangeOptions: Array<{ id: MetricRange; label: string }> = [
+  { id: "today", label: "오늘" },
+  { id: "week", label: "이번 주" },
+  { id: "month", label: "이번 달" },
+  { id: "3months", label: "3개월" },
+  { id: "6months", label: "6개월" },
+  { id: "year", label: "이번 년도" },
+];
+
+function normalizeRange(value: string | string[] | undefined): MetricRange {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return rangeOptions.some((option) => option.id === rawValue)
+    ? (rawValue as MetricRange)
+    : "month";
+}
+
+function rangeStart(range: MetricRange) {
+  const kstOffsetMs = 9 * 60 * 60 * 1000;
+  const kstNow = new Date(Date.now() + kstOffsetMs);
+  const start = new Date(
+    Date.UTC(
+      kstNow.getUTCFullYear(),
+      kstNow.getUTCMonth(),
+      kstNow.getUTCDate(),
+    ),
   );
-  const settlementTotal = settlements.reduce(
-    (sum, item) => sum + item.totalSettlement,
-    0,
-  );
-  const paymentAttention = payments.filter((item) =>
-    ["READY", "FAILED", "CANCELLED", "REFUND_PENDING"].includes(item.status),
+
+  if (range === "week") {
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+  } else if (range === "month") {
+    start.setUTCDate(1);
+  } else if (range === "3months" || range === "6months") {
+    start.setUTCMonth(
+      start.getUTCMonth() - (range === "3months" ? 3 : 6),
+    );
+  } else if (range === "year") {
+    start.setUTCMonth(0, 1);
+  }
+
+  return start.getTime() - kstOffsetMs;
+}
+
+export default async function AdminHomePage({
+  searchParams,
+}: AdminHomePageProps) {
+  const resolvedSearchParams = await searchParams;
+  const activeRange = normalizeRange(resolvedSearchParams?.range);
+  const startedAt = rangeStart(activeRange);
+  const metrics = await getAdminOverviewMetrics(
+    new Date(startedAt).toISOString(),
   );
 
   return (
     <section className="space-y-6">
       <header className="flex items-end justify-between gap-6 border-b border-slate-200 pb-5">
         <div>
-          <p className="text-xs font-bold text-blue-700">OPERATIONS OVERVIEW</p>
+          <p className="text-xs font-bold text-blue-700">운영 지표</p>
           <h2 className="mt-2 text-3xl font-bold text-slate-950">
             서비스 운영 현황
           </h2>
@@ -56,22 +94,42 @@ export default async function AdminHomePage() {
         </div>
       </header>
 
+      <nav className="flex w-fit gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+        {rangeOptions.map((option) => (
+          <Link
+            key={option.id}
+            href={`/admin?range=${option.id}`}
+            className={`rounded-md px-4 py-2 text-sm font-bold transition ${
+              activeRange === option.id
+                ? "bg-slate-950 text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {option.label}
+          </Link>
+        ))}
+      </nav>
+
       <div className="grid grid-cols-4 gap-3">
         {metricCard(
-          "Active",
-          String(activeReservations.length),
-          "CONFIRMED / CHECKED_IN / IN_USE",
-        )}
-        {metricCard("Completed", String(settlements.length), "Checkout rows")}
-        {metricCard(
-          "Settlement",
-          formatAdminCurrency(settlementTotal),
-          "Total completed settlement",
+          "현재 이용 예약",
+          String(metrics.activeReservations),
+          "예약 확정 · 체크인 · 이용 중",
         )}
         {metricCard(
-          "Payments",
-          String(paymentAttention.length),
-          "Need attention",
+          "기간 내 예약 등록",
+          String(metrics.periodReservations),
+          rangeOptions.find((option) => option.id === activeRange)?.label ?? "",
+        )}
+        {metricCard(
+          "승인 매출",
+          formatAdminCurrency(metrics.approvedRevenue),
+          `결제 승인 ${metrics.approvedPaymentCount}건`,
+        )}
+        {metricCard(
+          "완료 / 환불",
+          `${metrics.completedSettlements} / ${metrics.refundedPayments}`,
+          "정산 완료 건 / 환불 건",
         )}
       </div>
 

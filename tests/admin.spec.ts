@@ -414,52 +414,52 @@ test.describe("admin smoke", () => {
 
     await page.goto("/admin/reservations");
     await expect(
-      page.getByRole("heading", { name: "Reservation Monitor" }),
+      page.getByRole("heading", { name: "예약 현황" }),
     ).toBeVisible();
 
     await page.goto("/admin/settlement");
     await expect(
-      page.getByRole("heading", { name: "Checkout Settlement" }),
+      page.getByRole("heading", { name: "체크아웃 정산" }),
     ).toBeVisible();
 
     await page.goto("/admin/partner-audit");
     await expect(
-      page.getByRole("heading", { name: "Partner Admin Audit" }),
+      page.getByRole("heading", { name: "파트너 운영 변경 이력" }),
     ).toBeVisible();
 
     await page.goto("/admin/packages");
     await expect(
-      page.getByRole("heading", { name: "Partner Package Pricing" }),
+      page.getByRole("heading", { name: "패키지 및 업장 가격" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "업장 패키지 추가/갱신" }),
+      page.getByRole("heading", { name: "전역 패키지 추가" }),
     ).toBeVisible();
   });
 
   test("payment ledger filters and safety copy render", async ({ page }) => {
     await page.goto("/admin/payments");
     await expect(
-      page.getByRole("heading", { name: "Payment Ledger" }),
+      page.getByRole("heading", { name: "결제 거래 원장" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "만료 READY 정리" }),
+      page.getByRole("button", { name: "만료 승인 대기 정리" }),
     ).toBeVisible();
     await expect(page.getByText("실제 환불을 확인한 뒤에만")).toBeVisible();
 
     const filterNames = [
-      "READY",
-      "Stale READY",
-      "FAILED",
-      "CANCELLED",
-      "REFUNDED",
-      "REFUND_PENDING",
+      "승인 대기",
+      "만료 승인 대기",
+      "실패",
+      "취소",
+      "환불 완료",
+      "환불 확인 필요",
     ];
 
     for (const name of filterNames) {
       await page.getByRole("link", { name: new RegExp(`^${name}`) }).click();
       await expect(page).toHaveURL(new RegExp(`/admin/payments\\?filter=`));
       await expect(
-        page.getByRole("heading", { name: "Payment Ledger" }),
+        page.getByRole("heading", { name: "결제 거래 원장" }),
       ).toBeVisible();
     }
   });
@@ -576,14 +576,15 @@ test.describe("admin smoke", () => {
 
       await page.goto("/admin/payments?filter=refunded");
       await expect(
-        page.getByRole("heading", { name: "Payment Ledger" }),
+        page.getByRole("heading", { name: "결제 거래 원장" }),
       ).toBeVisible();
       const refundedPaymentRow = page.locator("tbody tr").filter({
         has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
       });
       await expect(refundedPaymentRow).toHaveCount(1);
-      await expect(refundedPaymentRow.getByText("REFUNDED")).toBeVisible();
-      await expect(refundedPaymentRow.getByText("환불 완료")).toBeVisible();
+      await expect(
+        refundedPaymentRow.getByText("환불 완료").first(),
+      ).toBeVisible();
 
       await page.goto("/admin/reservations");
       const cancelledReservationRow = page.locator("tbody tr").filter({
@@ -635,85 +636,86 @@ test.describe("admin smoke", () => {
 
       await page.goto("/admin/reservations");
       await expect(
-        page.getByRole("link", { name: /^Open issues \(/ }),
+        page.getByRole("link", { name: /^미해결 이슈 \(/ }),
       ).toBeVisible();
       await expect(
-        page.getByRole("link", { name: /^No open issues \(/ }),
+        page.getByRole("link", { name: /^이슈 없음 \(/ }),
       ).toBeVisible();
 
       const reservationRow = page.locator("tbody tr").filter({
         has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
       });
       await expect(reservationRow).toHaveCount(1);
-      await expect(reservationRow.getByText("Open 2")).toBeVisible();
+      await expect(reservationRow.getByText("미해결 2")).toBeVisible();
 
-      await page.getByRole("link", { name: /^Open issues \(/ }).click();
+      await page.getByRole("link", { name: /^미해결 이슈 \(/ }).click();
       await expect(page).toHaveURL(/\/admin\/reservations\?filter=open-issues/);
       await expect(reservationRow).toHaveCount(1);
-      await expect(reservationRow.getByText("Open 2")).toBeVisible();
+      await expect(reservationRow.getByText("미해결 2")).toBeVisible();
 
-      await page.getByRole("link", { name: /^No open issues \(/ }).click();
+      await page.getByRole("link", { name: /^이슈 없음 \(/ }).click();
       await expect(page).toHaveURL(/\/admin\/reservations\?filter=clean/);
       await expect(reservationRow).toHaveCount(0);
 
       await page.goto(`/admin/reservations/${reservationId}`);
       await expect(
-        page.getByRole("heading", { name: "Partner Field Notes" }),
+        page.getByRole("heading", { name: "파트너 현장 메모" }),
       ).toBeVisible();
-      await expect(page.getByText("Open 2")).toBeVisible();
+      await expect(page.getByText("미해결 2")).toBeVisible();
       await expect(
         page.getByText(notes.find((note) => !note.is_resolved)?.body ?? ""),
       ).toBeVisible();
       await expect(
         page.getByText(notes.find((note) => note.is_resolved)?.body ?? ""),
       ).toBeVisible();
-      await expect(page.getByText("Resolved", { exact: true })).toBeVisible();
+      await expect(page.getByText("해결", { exact: true })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Partner Admin Audit" }),
+        page.getByRole("heading", { name: "파트너 운영 변경 이력" }),
       ).toBeVisible();
-      await expect(page.getByText("2 logs")).toBeVisible();
-      await expect(page.getByText("Reservation Note Created")).toBeVisible();
-      await expect(page.getByText("Reservation Note Resolved")).toBeVisible();
+      await expect(page.getByText("2건")).toBeVisible();
+      await expect(page.getByText("현장 메모 생성")).toBeVisible();
+      await expect(page.getByText("현장 메모 해결")).toBeVisible();
       await expect(page.getByText('"noteType": "ISSUE"')).toHaveCount(2);
 
       await page.goto("/admin/partner-audit");
       await expect(
-        page.getByRole("heading", { name: "Partner Admin Audit" }),
+        page.getByRole("heading", { name: "파트너 운영 변경 이력" }),
       ).toBeVisible();
-      await expect(page.getByRole("link", { name: /^Notes \(/ })).toBeVisible();
+      const notesFilterLink = page.locator('a[href*="filter=notes"]').first();
+      await expect(notesFilterLink).toBeVisible();
       const currentReservationAuditRows = page.locator("article").filter({
-        has: page.getByRole("link", { name: `Reservation ${reservationId}` }),
+        has: page.getByRole("link", { name: `예약 ${reservationId}` }),
       });
       await expect(
         currentReservationAuditRows.filter({
-          hasText: "Reservation Note Created",
+          hasText: "현장 메모 생성",
         }),
       ).toBeVisible();
       await expect(
         currentReservationAuditRows.filter({
-          hasText: "Reservation Note Resolved",
+          hasText: "현장 메모 해결",
         }),
       ).toBeVisible();
       await expect(
-        page.getByRole("link", { name: `Reservation ${reservationId}` }),
+        page.getByRole("link", { name: `예약 ${reservationId}` }),
       ).toHaveCount(2);
       await expect(
-        currentReservationAuditRows.getByText('"noteType": "ISSUE"'),
+        currentReservationAuditRows.getByText("ISSUE"),
       ).toHaveCount(2);
 
-      await page.getByRole("link", { name: /^Notes \(/ }).click();
+      await notesFilterLink.click();
       await expect(page).toHaveURL(/\/admin\/partner-audit\?filter=notes/);
       const filteredReservationAuditRows = page.locator("article").filter({
-        has: page.getByRole("link", { name: `Reservation ${reservationId}` }),
+        has: page.getByRole("link", { name: `예약 ${reservationId}` }),
       });
       await expect(
         filteredReservationAuditRows.filter({
-          hasText: "Reservation Note Created",
+          hasText: "현장 메모 생성",
         }),
       ).toBeVisible();
       await expect(
         filteredReservationAuditRows.filter({
-          hasText: "Reservation Note Resolved",
+          hasText: "현장 메모 해결",
         }),
       ).toBeVisible();
 
@@ -721,22 +723,22 @@ test.describe("admin smoke", () => {
         `/admin/partner-audit?filter=notes&action=RESERVATION_NOTE_RESOLVED&q=${targetAuditNoteId}&limit=25`,
       );
       await expect(
-        page.getByRole("heading", { name: "Partner Admin Audit" }),
+        page.getByRole("heading", { name: "파트너 운영 변경 이력" }),
       ).toBeVisible();
       await expect(
         page
           .locator("article")
-          .filter({ hasText: "Reservation Note Resolved" }),
+          .filter({ hasText: "현장 메모 해결" }),
       ).toBeVisible();
       await expect(
-        page.locator("article").filter({ hasText: "Reservation Note Created" }),
+        page.locator("article").filter({ hasText: "현장 메모 생성" }),
       ).toHaveCount(0);
-      await expect(page.getByLabel("Search")).toHaveValue(targetAuditNoteId);
-      await expect(page.getByLabel("Action")).toHaveValue(
+      await expect(page.getByLabel("검색어")).toHaveValue(targetAuditNoteId);
+      await expect(page.getByLabel("작업")).toHaveValue(
         "RESERVATION_NOTE_RESOLVED",
       );
-      await expect(page.getByLabel("Limit")).toHaveValue("25");
-      await expect(page.getByText("Database match")).toBeVisible();
+      await expect(page.getByLabel("페이지당 표시")).toHaveValue("25");
+      await expect(page.getByText(/검색 조건 전체/)).toBeVisible();
     } finally {
       if (auditLogIds.length > 0) {
         const { error } = await db
@@ -787,7 +789,7 @@ test.describe("admin smoke", () => {
     try {
       created = await createPackageChangeRequestForAdminE2E(db);
 
-      await page.goto("/admin/packages");
+      await page.goto("/admin/packages?tab=requests");
       await expect(
         page.getByRole("heading", { name: "패키지 변경 요청" }),
       ).toBeVisible();
@@ -899,6 +901,96 @@ test.describe("admin smoke", () => {
         if (auditDeleteError) {
           throw auditDeleteError;
         }
+      }
+    }
+  });
+
+  test("admin package creation approval creates catalog and partner price", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    const db = requireAdminSupabaseForE2E();
+    const user = await ensureE2EUser(db, {
+      email: "pitnow-e2e-admin-package@example.com",
+      password: "PitnowAdminPackageE2e!2026",
+    });
+    const seed = await getSelfReservationSeed(db);
+    const suffix = Date.now().toString(36);
+    const packageCode = `pkg-e2e-${suffix}`;
+    const requestedName = `E2E 생성 패키지 ${suffix}`;
+    let requestId = "";
+    let packageId = "";
+    let priceId = "";
+
+    try {
+      const { data: request, error } = await db
+        .from("partner_package_creation_requests")
+        .insert({
+          partner_id: seed.partnerId,
+          requested_name: requestedName,
+          requested_description: "Admin creation workflow E2E",
+          requested_duration_minutes: 120,
+          requested_labor_price: 12345,
+          requested_by: user.id,
+          status: "PENDING",
+        })
+        .select("id")
+        .single<{ id: string }>();
+
+      if (error || !request) throw error ?? new Error("Request seed failed");
+      requestId = request.id;
+
+      await page.goto("/admin/packages?tab=creation");
+      const requestCard = page.locator("article").filter({
+        hasText: requestedName,
+      });
+      await requestCard.getByLabel("전역 패키지 코드").fill(packageCode);
+      await requestCard
+        .getByRole("button", { name: "승인하고 생성·연결" })
+        .click();
+      await expect(
+        page.getByText(
+          "전역 패키지를 생성하고 요청 정비소의 판매 가격까지 연결했습니다.",
+        ),
+      ).toBeVisible();
+
+      const { data: servicePackage, error: packageError } = await db
+        .from("service_packages")
+        .select("id, duration_minutes")
+        .eq("code", packageCode)
+        .single<{ id: string; duration_minutes: number }>();
+      if (packageError || !servicePackage) throw packageError;
+      packageId = servicePackage.id;
+      expect(servicePackage.duration_minutes).toBe(120);
+
+      const { data: price, error: priceError } = await db
+        .from("partner_package_prices")
+        .select("id, labor_price, is_active")
+        .eq("partner_id", seed.partnerId)
+        .eq("package_id", packageId)
+        .single<{ id: string; labor_price: number | string; is_active: boolean }>();
+      if (priceError || !price) throw priceError;
+      priceId = price.id;
+      expect(Number(price.labor_price)).toBe(12345);
+      expect(price.is_active).toBe(true);
+    } finally {
+      if (requestId) {
+        await db
+          .from("partner_package_creation_requests")
+          .delete()
+          .eq("id", requestId);
+      }
+      if (packageId) {
+        await db
+          .from("admin_package_audit_logs")
+          .delete()
+          .eq("package_id", packageId);
+      }
+      if (priceId) {
+        await db.from("partner_package_prices").delete().eq("id", priceId);
+      }
+      if (packageId) {
+        await db.from("service_packages").delete().eq("id", packageId);
       }
     }
   });

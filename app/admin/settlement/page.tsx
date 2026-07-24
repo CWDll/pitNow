@@ -84,13 +84,13 @@ function filterHref(filter: SettlementFilter): string {
 function filterLabel(filter: SettlementFilter): string {
   switch (filter) {
     case "due":
-      return "Due only";
+      return "추가 결제 있음";
     case "attention":
-      return "Payment attention";
+      return "결제 확인 필요";
     case "evidence":
-      return "Evidence review";
+      return "증적 검토 필요";
     default:
-      return "All";
+      return "전체";
   }
 }
 
@@ -140,10 +140,10 @@ export default async function AdminSettlementPage({
     <section className="space-y-6">
       <header>
         <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-700">
-          Settlement
+          정산 관리
         </p>
         <h2 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
-          Checkout Settlement
+          체크아웃 정산
         </h2>
         <p className="mt-2 text-sm text-slate-600">
           최근 100개 체크아웃의 기본요금, 초과요금, 검수비와 증적 완료 여부를
@@ -153,22 +153,22 @@ export default async function AdminSettlementPage({
 
       <div className="grid gap-4 xl:grid-cols-4">
         {metricCard(
-          "Open due",
+          "추가 결제 미수",
           formatAdminCurrency(totalDueAmount),
           `${dueSettlements.length}건의 추가 정산 미수`,
         )}
         {metricCard(
-          "Payment attention",
+          "결제 확인 필요",
           String(attentionSettlements.length),
           "결제 실패/취소/미완료 확인 필요",
         )}
         {metricCard(
-          "Evidence review",
+          "증적 검토 필요",
           String(evidenceReviewSettlements.length),
           "체크아웃 증적 미완료",
         )}
         {metricCard(
-          "Visible",
+          "검색 결과",
           String(visibleSettlements.length),
           `${filterLabel(activeFilter)} 필터 적용 중`,
         )}
@@ -198,17 +198,17 @@ export default async function AdminSettlementPage({
         <table className="min-w-[1120px] w-full border-collapse text-left text-sm">
           <thead className="bg-slate-100 text-xs uppercase tracking-[0.18em] text-slate-500">
             <tr>
-              <th className="px-4 py-4">Completed</th>
-              <th className="px-4 py-4">Partner</th>
-              <th className="px-4 py-4">Type</th>
-              <th className="px-4 py-4 text-right">Base</th>
-              <th className="px-4 py-4 text-right">Extra</th>
-              <th className="px-4 py-4 text-right">Verify</th>
-              <th className="px-4 py-4 text-right">Total</th>
-              <th className="px-4 py-4 text-right">Paid</th>
-              <th className="px-4 py-4 text-right">Due</th>
-              <th className="px-4 py-4">Payment</th>
-              <th className="px-4 py-4">Evidence</th>
+              <th className="px-4 py-4">완료 시각</th>
+              <th className="px-4 py-4">정비소</th>
+              <th className="px-4 py-4">방식</th>
+              <th className="px-4 py-4 text-right">기본 금액</th>
+              <th className="px-4 py-4 text-right">추가 요금</th>
+              <th className="px-4 py-4 text-right">검수비</th>
+              <th className="px-4 py-4 text-right">총 정산</th>
+              <th className="px-4 py-4 text-right">결제 완료</th>
+              <th className="px-4 py-4 text-right">미수 금액</th>
+              <th className="px-4 py-4">추가 결제</th>
+              <th className="px-4 py-4">체크아웃 증적</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -290,9 +290,9 @@ export default async function AdminSettlementPage({
                         }`}
                       >
                         {unpaidAmount <= 0
-                          ? "No due"
+                          ? "추가 결제 없음"
                           : (settlement.settlementPaymentStatus ??
-                            "Settlement due")}
+                            "추가 결제 필요")}
                       </span>
                     </td>
                     <td className="px-4 py-4">
@@ -304,7 +304,7 @@ export default async function AdminSettlementPage({
                             : "bg-amber-50 text-amber-700 ring-amber-200"
                         }`}
                       >
-                        {settlement.evidenceComplete ? "Complete" : "Review"}
+                        {settlement.evidenceComplete ? "완료" : "검토 필요"}
                       </Link>
                     </td>
                   </tr>
