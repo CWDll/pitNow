@@ -9,6 +9,7 @@ import {
   type AdminReservationType,
 } from "../../_lib/admin-data";
 import CancelReservationForm from "./cancel-reservation-form";
+import EvidenceImage from "./evidence-image";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -32,32 +33,6 @@ function statusClass(status: AdminReservationStatus): string {
 
 function typeLabel(type: AdminReservationType): string {
   return type === "SELF_SERVICE" ? "셀프 정비" : "정비 맡기기";
-}
-
-function EvidenceImage(props: { label: string; url: string | null }) {
-  const { label, url } = props;
-
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-        {label}
-      </p>
-      {url ? (
-        <a href={url} target="_blank" rel="noreferrer" className="block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={url}
-            alt={label}
-            className="h-36 w-full rounded-xl object-cover ring-1 ring-slate-200"
-          />
-        </a>
-      ) : (
-        <div className="flex h-36 items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-500 ring-1 ring-slate-200">
-          증적 없음
-        </div>
-      )}
-    </div>
-  );
 }
 
 function ChecklistItem(props: { label: string; checked: boolean }) {
@@ -610,24 +585,24 @@ export default async function AdminReservationDetailPage(props: PageProps) {
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-2xl font-semibold text-slate-950">
-          Check-in Evidence
+          체크인 사진
         </h3>
         <p className="mt-1 text-sm text-slate-500">
           {checkin
-            ? `Checked in ${formatAdminDateTime(checkin.checkedInAt)}`
+            ? `체크인 ${formatAdminDateTime(checkin.checkedInAt)}`
             : "체크인 증적이 아직 없습니다."}
         </p>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <EvidenceImage label="Front" url={checkin?.frontImg ?? null} />
-          <EvidenceImage label="Rear" url={checkin?.rearImg ?? null} />
-          <EvidenceImage label="Left" url={checkin?.leftImg ?? null} />
-          <EvidenceImage label="Right" url={checkin?.rightImg ?? null} />
+          <EvidenceImage label="전면" url={checkin?.frontImg ?? null} />
+          <EvidenceImage label="후면" url={checkin?.rearImg ?? null} />
+          <EvidenceImage label="좌측" url={checkin?.leftImg ?? null} />
+          <EvidenceImage label="우측" url={checkin?.rightImg ?? null} />
         </div>
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-2xl font-semibold text-slate-950">
-          Checkout Evidence
+          체크아웃 사진 및 체크리스트
         </h3>
         <div className="mt-5 grid gap-4 lg:grid-cols-[0.75fr_1fr]">
           <div className="space-y-3">
@@ -646,11 +621,11 @@ export default async function AdminReservationDetailPage(props: PageProps) {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <EvidenceImage
-              label="Checkout photo 1"
+              label="체크아웃 사진 1"
               url={checkout?.checkoutPhoto1 ?? null}
             />
             <EvidenceImage
-              label="Checkout photo 2"
+              label="체크아웃 사진 2"
               url={checkout?.checkoutPhoto2 ?? null}
             />
           </div>

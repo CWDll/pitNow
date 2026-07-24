@@ -616,6 +616,18 @@ test.describe("admin smoke", () => {
     try {
       const created = await createConfirmedReservationRowForAdminIssueE2E();
       reservationId = created.reservationId;
+      const { error: checkinError } = await db.from("checkins").insert({
+        reservation_id: reservationId,
+        front_img: "/images/checkin-photo-guide.jpg",
+        rear_img: "/images/checkin-photo-guide.jpg",
+        left_img: "/images/checkin-photo-guide.jpg",
+        right_img: "/images/checkin-photo-guide.jpg",
+      });
+
+      if (checkinError) {
+        throw checkinError;
+      }
+
       const notes = await createPartnerNotesForAdminE2E({
         reservationId,
         partnerId: created.partnerId,
@@ -676,6 +688,19 @@ test.describe("admin smoke", () => {
       await expect(page.getByText("현장 메모 생성")).toBeVisible();
       await expect(page.getByText("현장 메모 해결")).toBeVisible();
       await expect(page.getByText('"noteType": "ISSUE"')).toHaveCount(2);
+      await expect(
+        page.locator('a[href="/images/checkin-photo-guide.jpg"]'),
+      ).toHaveCount(0);
+      await page
+        .getByRole("button", { name: "전면 사진 확대" })
+        .click();
+      await expect(
+        page.getByRole("dialog", { name: "전면 사진 상세보기" }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "상세보기 닫기" }).click();
+      await expect(
+        page.getByRole("dialog", { name: "전면 사진 상세보기" }),
+      ).toHaveCount(0);
 
       await page.goto("/admin/partner-audit");
       await expect(
