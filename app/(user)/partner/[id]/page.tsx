@@ -11,20 +11,17 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { PartnerImageGallery } from "@/app/(user)/_components/partner-image-gallery";
+import { ReviewCard } from "@/app/(user)/_components/review-card";
 import { formatMinutesLabel } from "@/app/(user)/_data/mock-garages";
+import { getPartnerImages } from "@/src/lib/partner-images";
 import { getPartnerShopPackages } from "@/src/lib/partner-packages";
 import { getPartnerProfileById } from "@/src/lib/partners";
+import { getPublicReviews } from "@/src/lib/public-reviews";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 interface PartnerDetailPageProps {
   params: Promise<{ id: string }>;
-}
-
-interface ReviewRow {
-  id: string;
-  rating: number;
-  comment: string | null;
-  created_at: string;
 }
 
 interface SelfTaskRow {
@@ -35,25 +32,6 @@ interface SelfTaskRow {
 
 function formatPrice(price: number): string {
   return `${price.toLocaleString("ko-KR")}원`;
-}
-
-function renderStars(rating: number): string {
-  const safe = Math.max(0, Math.min(5, Math.round(rating)));
-  return "★".repeat(safe) + "☆".repeat(5 - safe);
-}
-
-function formatDate(iso: string): string {
-  const parsed = new Date(iso);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "날짜 정보 없음";
-  }
-
-  return parsed.toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
 }
 
 async function getSelfTasks(): Promise<SelfTaskRow[]> {
@@ -77,29 +55,6 @@ async function getSelfTasks(): Promise<SelfTaskRow[]> {
   return data ?? [];
 }
 
-async function getRecentReviewsByPartnerId(
-  partnerId: string,
-): Promise<ReviewRow[]> {
-  if (!hasSupabaseEnv) {
-    return [];
-  }
-
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("id, rating, comment, created_at")
-    .eq("partner_id", partnerId)
-    .order("created_at", { ascending: false })
-    .limit(3)
-    .returns<ReviewRow[]>();
-
-  if (error) {
-    console.error("REVIEW LOOKUP ERROR:", error);
-    return [];
-  }
-
-  return data ?? [];
-}
-
 export default async function PartnerDetailPage({
   params,
 }: PartnerDetailPageProps) {
@@ -110,9 +65,13 @@ export default async function PartnerDetailPage({
     notFound();
   }
 
-  const reviews = await getRecentReviewsByPartnerId(garage.id);
-  const selfTasks = await getSelfTasks();
-  const { packages } = await getPartnerShopPackages(garage.id);
+  const [reviews, selfTasks, packageResult, images] = await Promise.all([
+    getPublicReviews(garage.id),
+    getSelfTasks(),
+    getPartnerShopPackages(garage.id),
+    getPartnerImages(garage.id),
+  ]);
+  const { packages } = packageResult;
   const averageRating =
     reviews.length > 0
       ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
@@ -172,6 +131,24 @@ export default async function PartnerDetailPage({
           {garage.phone}
         </a>
       </header>
+
+      <section aria-labelledby="partner-gallery-title">
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <p className="text-xs font-bold text-blue-600">GARAGE PHOTOS</p>
+            <h2
+              id="partner-gallery-title"
+              className="mt-1 text-xl font-black text-slate-950"
+            >
+              시설과 장비
+            </h2>
+          </div>
+          <span className="text-xs font-bold text-slate-400">
+            파트너 제공
+          </span>
+        </div>
+        <PartnerImageGallery images={images} partnerName={garage.name} />
+      </section>
 
       <section aria-labelledby="self-service-title">
         <div className="mb-3 flex items-end justify-between">
@@ -301,18 +278,8 @@ export default async function PartnerDetailPage({
           </p>
         ) : (
           <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-            {reviews.map((review) => (
-              <article key={review.id} className="py-4">
-                <p className="text-sm text-amber-500">
-                  {renderStars(review.rating)}
-                </p>
-                <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                  {formatDate(review.created_at)}
-                </p>
-                <p className="mt-2 text-sm font-medium leading-6 text-slate-700">
-                  {review.comment || "코멘트 없음"}
-                </p>
-              </article>
+            {reviews.slice(0, 3).map((review) => (
+              <ReviewCard key={review.id} review={review} compact />
             ))}
           </div>
         )}

@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   CreditCard,
   ExternalLink,
+  Images,
   LayoutDashboard,
   LogOut,
   PackageSearch,
@@ -39,6 +40,7 @@ const adminNavItems = [
 
 const partnerNavItems = [
   { href: "/partner-admin", label: "운영 현황", icon: LayoutDashboard },
+  { href: "/partner-admin#images", label: "정비소 사진", icon: Images },
   { href: "/partner-admin#bays", label: "베이 관리", icon: Wrench },
   { href: "/partner-admin#packages", label: "패키지·가격", icon: Boxes },
   { href: "/partner-admin#availability", label: "예약 차단", icon: Ban },

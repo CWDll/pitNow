@@ -6,6 +6,9 @@ import {
   missingSupabaseEnvMessage,
   supabase,
 } from "@/src/lib/supabase";
+import { getPartnerImages } from "@/src/lib/partner-images";
+
+export const dynamic = "force-dynamic";
 
 interface PartnerRow {
   id: string;
@@ -45,9 +48,11 @@ interface HomePartnerCard {
   reviewCount: number;
   cheapestPackagePrice: number | null;
   hourlyPrice: number | null;
+  coverImageUrl: string | null;
 }
 
 async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
+  const partnerImagesPromise = getPartnerImages();
   const { data: partners, error: partnerError } = await supabase
     .from("partners")
     .select("id,name,address,hourly_price,lat,lng")
@@ -84,6 +89,14 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
 
   if (reviewError) {
     console.error("HOME REVIEW LOOKUP ERROR:", reviewError);
+  }
+
+  const partnerImages = await partnerImagesPromise;
+  const coverByPartner = new Map<string, string>();
+  for (const image of partnerImages) {
+    if (image.isCover || !coverByPartner.has(image.partnerId)) {
+      coverByPartner.set(image.partnerId, image.url);
+    }
   }
 
   const bayCountByPartner = new Map<string, number>();
@@ -146,6 +159,7 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
           : null,
       reviewCount: reviewStats?.count ?? 0,
       cheapestPackagePrice: cheapestPackageByPartner.get(partner.id) ?? null,
+      coverImageUrl: coverByPartner.get(partner.id) ?? null,
     };
   });
 }

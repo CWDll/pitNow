@@ -8,6 +8,7 @@ import {
   Navigation,
   ShieldCheck,
   Star,
+  Warehouse,
   Wrench,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ export interface HomePartnerExplorerItem extends PartnerMapItem {
   reviewCount: number;
   cheapestPackagePrice: number | null;
   hourlyPrice: number | null;
+  coverImageUrl: string | null;
 }
 
 interface GeoPoint {
@@ -312,6 +314,30 @@ export function HomePartnerExplorer({
                   : "border-slate-200"
               }`}
             >
+              <Link
+                href={`/partner/${partner.id}`}
+                aria-label={`${partner.name} 사진과 상세 정보 보기`}
+                className="mb-4 block overflow-hidden rounded-lg bg-slate-100"
+              >
+                {partner.coverImageUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={partner.coverImageUrl}
+                    alt={`${partner.name} 대표 사진`}
+                    className="aspect-[16/7] w-full object-cover"
+                  />
+                ) : (
+                  <span className="grid aspect-[16/7] place-items-center text-slate-400">
+                    <span className="text-center">
+                      <Warehouse className="mx-auto size-6" />
+                      <span className="mt-2 block text-xs font-bold">
+                        정비소 사진 준비 중
+                      </span>
+                    </span>
+                  </span>
+                )}
+              </Link>
+
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="truncate text-lg font-black text-slate-950">

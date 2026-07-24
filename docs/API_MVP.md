@@ -994,3 +994,50 @@ MVP 제외
 • 헬퍼 대행 작업 모드
 • 관리자 API
 • 노쇼 자동 취소
+
+⸻
+
+25. GET / PATCH `/api/profile`
+
+기능:
+로그인 사용자의 닉네임, 이름, 연락처 조회 및 수정
+
+검증:
+• Auth session 필수
+• 닉네임 2~20자, 대소문자 구분 없이 중복 불가
+• 이름 최대 50자, 연락처 8~20자
+• 리뷰 공개 화면에는 닉네임만 사용
+
+⸻
+
+26. GET / POST / PATCH / DELETE `/api/partner-admin/images`
+
+기능:
+Partner-admin이 소속 정비소 사진을 최대 8장 관리하고 대표 사진 지정
+
+검증:
+• active `partner_admins` membership 필수
+• JPEG/PNG/WebP, 파일당 최대 8MB
+• 첫 사진은 자동 대표 지정
+• 생성/대표 변경/삭제 audit 기록
+
+⸻
+
+27. POST / DELETE `/api/review-images`
+
+기능:
+완료된 본인 예약의 리뷰 사진 업로드 및 삭제
+
+검증:
+• Auth session과 본인 `COMPLETED` 예약 필수
+• 리뷰당 최종 연결 사진 최대 4장
+• JPEG/PNG/WebP, 파일당 최대 8MB
+
+⸻
+
+28. GET / POST / PATCH `/api/reviews`
+
+추가 규칙:
+• `GET ?mine=1`은 로그인 사용자가 작성한 리뷰와 정비소·사진을 반환
+• POST/PATCH `imagePaths`는 본인 사용자/예약 Storage 경로만 허용
+• 리뷰 수정에서 제외된 기존 사진은 Storage에서도 정리

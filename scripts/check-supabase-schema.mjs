@@ -375,6 +375,42 @@ const checks = [
       "updated_at",
     ],
   },
+  {
+    label: "20260724 user profiles",
+    table: "user_profiles",
+    columns: [
+      "user_id",
+      "nickname",
+      "full_name",
+      "phone",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  {
+    label: "20260724 partner images",
+    table: "partner_images",
+    columns: [
+      "id",
+      "partner_id",
+      "storage_path",
+      "sort_order",
+      "is_cover",
+      "created_by",
+      "created_at",
+    ],
+  },
+  {
+    label: "20260724 review images",
+    table: "review_images",
+    columns: [
+      "id",
+      "review_id",
+      "storage_path",
+      "sort_order",
+      "created_at",
+    ],
+  },
 ];
 
 async function main() {
@@ -400,6 +436,20 @@ async function main() {
       db,
       label: "20260609/20260621 storage bucket: reservation-photos",
       bucketId: "reservation-photos",
+    }),
+  );
+  results.push(
+    await checkStorageBucket({
+      db,
+      label: "20260724 storage bucket: partner-images",
+      bucketId: "partner-images",
+    }),
+  );
+  results.push(
+    await checkStorageBucket({
+      db,
+      label: "20260724 storage bucket: review-images",
+      bucketId: "review-images",
     }),
   );
   results.push(

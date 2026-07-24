@@ -641,3 +641,29 @@ create index idx_reservation_status_logs_reservation
 create index idx_reservation_status_logs_transition
   on reservation_status_logs(from_status, to_status);
 ```
+
+---
+
+## user_profiles / partner_images / review_images
+
+`user_profiles`는 Auth 계정과 1:1로 연결한다. `nickname`만 리뷰 작성자
+표시에 사용하며 `full_name`, `phone`은 예약 운영을 위한 비공개 정보다.
+`reviews.user_id`와는 별도 외래키를 추가하지 않는다. 기존 시드/레거시 리뷰에는
+삭제된 Auth 사용자 ID가 남을 수 있으므로 서버에서 선택적으로 프로필을 매칭하고,
+프로필이 없으면 비식별 기본 닉네임을 사용한다.
+
+`partner_images`는 정비소별 최대 8장의 공개 사진 메타데이터를 저장한다.
+정비소마다 `is_cover = true`인 row는 최대 1개이며 홈 목록은 해당 사진을
+대표 이미지로 사용한다.
+
+`review_images`는 리뷰별 최대 4장의 공개 사진 메타데이터를 순서대로 저장한다.
+실제 파일은 각각 public Storage bucket인 `partner-images`,
+`review-images`에 저장한다. 예약 증적용 private bucket과 혼용하지 않는다.
+
+RLS:
+
+- 사용자 프로필 조회/수정은 해당 Auth 사용자에게만 허용한다.
+- 정비소 사진과 리뷰 사진 row는 서비스 화면 표시를 위해 공개 읽기를 허용한다.
+- 사진 업로드/삭제와 메타데이터 쓰기는 권한을 검증하는 서버 API만 수행한다.
+- Partner 사진 변경은 `target_type = PARTNER_IMAGE`로
+  `partner_admin_audit_logs`에 기록한다.

@@ -87,19 +87,21 @@ async function verifyAdminDrillDownForE2E(params: {
 
     await adminPage.goto(`${params.baseUrl}${detailPath}`);
     await expect(
-      adminPage.getByRole("heading", { name: "Evidence Drill-down" }),
+      adminPage.getByRole("heading", { name: "예약 및 증적 확인" }),
     ).toBeVisible();
     await expect(adminPage.getByText(params.reservationId)).toBeVisible();
     await expect(adminPage.getByText("COMPLETED").first()).toBeVisible();
     await expect(adminPage.getByText("증적 완료")).toBeVisible();
     await expect(adminPage.getByText(params.partnerName).first()).toBeVisible();
-    await expect(adminPage.getByRole("heading", { name: "Payment Ledger" })).toBeVisible();
+    await expect(adminPage.getByRole("heading", { name: "결제 거래 내역" })).toBeVisible();
     await expect(adminPage.getByText("RESERVATION_CONFIRMED")).toBeVisible();
     await expect(adminPage.getByText("SETTLEMENT_CONFIRMED")).toBeVisible();
-    await expect(adminPage.getByRole("heading", { name: "Check-in Evidence" })).toBeVisible();
-    await expect(adminPage.getByRole("heading", { name: "Checkout Evidence" })).toBeVisible();
-    await expect(adminPage.getByText("Checkout photo 1")).toBeVisible();
-    await expect(adminPage.getByText("Checkout photo 2")).toBeVisible();
+    await expect(adminPage.getByRole("heading", { name: "체크인 사진" })).toBeVisible();
+    await expect(
+      adminPage.getByRole("heading", { name: "체크아웃 사진 및 체크리스트" }),
+    ).toBeVisible();
+    await expect(adminPage.getByText("체크아웃 사진 1")).toBeVisible();
+    await expect(adminPage.getByText("체크아웃 사진 2")).toBeVisible();
     await expect(adminPage.getByRole("heading", { name: "Customer Review" })).toBeVisible();
     await expect(adminPage.getByText("E2E 예약 루프 검증 후기입니다.")).toBeVisible();
     await expect(adminPage.getByRole("heading", { name: "Status Timeline" })).toBeVisible();
@@ -109,21 +111,23 @@ async function verifyAdminDrillDownForE2E(params: {
 
     await adminPage.goto(`${params.baseUrl}/admin/settlement`);
     await expect(
-      adminPage.getByRole("heading", { name: "Checkout Settlement" }),
+      adminPage.getByRole("heading", { name: "체크아웃 정산" }),
     ).toBeVisible();
     await expect(detailLink.first()).toBeVisible();
 
     await adminPage.goto(`${params.baseUrl}/admin/payments`);
-    await expect(adminPage.getByRole("heading", { name: "Payment Ledger" })).toBeVisible();
+    await expect(
+      adminPage.getByRole("heading", { name: "결제 거래 원장" }),
+    ).toBeVisible();
     const paymentRowsForReservation = adminPage.locator("tbody tr").filter({
       has: adminPage.locator(`a[href="${detailPath}"]`),
     });
     await expect(paymentRowsForReservation).toHaveCount(2);
     await expect(
-      paymentRowsForReservation.filter({ hasText: "RESERVATION" }),
+      paymentRowsForReservation.filter({ hasText: "예약 결제" }),
     ).toHaveCount(1);
     await expect(
-      paymentRowsForReservation.filter({ hasText: "CHECKOUT_SETTLEMENT" }),
+      paymentRowsForReservation.filter({ hasText: "추가 정산 결제" }),
     ).toHaveCount(1);
   } finally {
     await adminContext.close();
@@ -553,6 +557,20 @@ test.describe("booking flow smoke", () => {
       await expect(
         page.getByRole("link", { name: "예약 내역으로 돌아가기" }),
       ).toHaveCount(0);
+      await expect(page.getByText("사진", { exact: true })).toBeVisible();
+      await expect(page.getByText("0/4")).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "사진 추가" }),
+      ).toBeVisible();
+      await page
+        .locator('input[type="file"][accept*="image/jpeg"]')
+        .setInputFiles({
+          name: "pitnow-e2e-review.jpg",
+          mimeType: testImageFile.mimeType,
+          buffer: testImageFile.buffer,
+        });
+      await expect(page.getByText("저장 전")).toBeVisible();
+      await expect(page.getByText("1/4")).toBeVisible();
 
       await page.getByLabel("5점 선택").click();
       await page
@@ -577,6 +595,46 @@ test.describe("booking flow smoke", () => {
 
       expect(review.rating).toBe(5);
       expect(review.comment).toBe("E2E 예약 루프 검증 후기입니다.");
+
+      const { data: reviewImage, error: reviewImageError } = await db
+        .from("review_images")
+        .select("storage_path,sort_order")
+        .eq("review_id", review.id)
+        .single<{ storage_path: string; sort_order: number }>();
+
+      if (reviewImageError || !reviewImage) {
+        throw reviewImageError ?? new Error("Review image was not found");
+      }
+
+      expect(reviewImage.sort_order).toBe(0);
+      expect(reviewImage.storage_path).toContain(
+        `/${e2eReservationId}/`,
+      );
+      const reviewImagePublicUrl = db.storage
+        .from("review-images")
+        .getPublicUrl(reviewImage.storage_path).data.publicUrl;
+      const reviewImageResponse = await page.request.get(reviewImagePublicUrl);
+      expect(reviewImageResponse.ok()).toBe(true);
+
+      const publicReviewPage = await page.context().newPage();
+      await publicReviewPage.goto(`/partner/${seed.partnerId}/reviews`);
+      await expect(
+        publicReviewPage.getByText("E2E 예약 루프 검증 후기입니다."),
+      ).toBeVisible();
+      await expect(
+        publicReviewPage.getByRole("button", {
+          name: "리뷰 사진 1 크게 보기",
+        }),
+      ).toBeVisible();
+      await publicReviewPage.getByRole("button", {
+        name: "리뷰 사진 1 크게 보기",
+      }).click();
+      await expect(
+        publicReviewPage.getByRole("dialog", {
+          name: "리뷰 사진 상세보기",
+        }),
+      ).toBeVisible();
+      await publicReviewPage.close();
 
       await Promise.all([
         page.waitForURL(/\/receipt\?/),

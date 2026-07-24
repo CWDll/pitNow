@@ -169,6 +169,7 @@ export interface CreateReviewPayload {
   reservationId: string;
   rating: number;
   comment?: string;
+  imagePaths?: string[];
 }
 
 export type ApiSuccess<

@@ -1,72 +1,27 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
-import { getGarageById } from "../../../_data/mock-garages";
+import { ReviewCard } from "@/app/(user)/_components/review-card";
+import { getPartnerProfileById } from "@/src/lib/partners";
+import { getPublicReviews } from "@/src/lib/public-reviews";
 
 interface PartnerReviewListPageProps {
   params: Promise<{ id: string }>;
 }
 
-interface ReviewRow {
-  id: string;
-  rating: number;
-  comment: string | null;
-  created_at: string;
-}
-
-function renderStars(rating: number): string {
-  const safe = Math.max(0, Math.min(5, Math.round(rating)));
-  return "★".repeat(safe) + "☆".repeat(5 - safe);
-}
-
-function formatDate(iso: string): string {
-  const parsed = new Date(iso);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "날짜 정보 없음";
-  }
-
-  return parsed.toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-}
-
-async function fetchAllReviewsByPartnerId(partnerId: string): Promise<ReviewRow[]> {
-  if (!hasSupabaseEnv) {
-    return [];
-  }
-
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("id, rating, comment, created_at")
-    .eq("partner_id", partnerId)
-    .order("created_at", { ascending: false })
-    .returns<ReviewRow[]>();
-
-  if (error) {
-    console.error("REVIEW LIST LOOKUP ERROR:", error);
-    return [];
-  }
-
-  return data ?? [];
-}
-
 export default async function PartnerReviewListPage({ params }: PartnerReviewListPageProps) {
   const { id } = await params;
-  const garage = getGarageById(id);
+  const garage = await getPartnerProfileById(id);
 
   if (!garage) {
     notFound();
   }
 
-  const reviews = await fetchAllReviewsByPartnerId(garage.id);
+  const reviews = await getPublicReviews(garage.id);
   const average =
     reviews.length > 0
       ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
-      : garage.rating;
+      : 0;
 
   return (
     <section className="pb-24">
@@ -88,13 +43,7 @@ export default async function PartnerReviewListPage({ params }: PartnerReviewLis
             등록된 후기가 없습니다.
           </p>
         ) : (
-          reviews.map((review) => (
-            <article key={review.id} className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <p className="text-lg text-amber-500">{renderStars(review.rating)}</p>
-              <p className="mt-1 text-sm text-zinc-500">{formatDate(review.created_at)}</p>
-              <p className="mt-2 text-base text-zinc-700">{review.comment || "코멘트 없음"}</p>
-            </article>
-          ))
+          reviews.map((review) => <ReviewCard key={review.id} review={review} />)
         )}
       </div>
     </section>

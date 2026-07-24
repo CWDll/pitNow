@@ -98,3 +98,21 @@
 - Payment prepare and final reservation confirmation must reload and validate both bay and vehicle conditions.
 - Partner-admin may correct onboarding values for bays within their active partner membership, and changes are audit logged.
 - Lift type, dimensions, wheelbase, payload, loaded state, and manual approval remain out of MVP scope.
+
+## Public Profiles and Media
+
+- Reviews identify authors by a user-selected nickname, never by real name,
+  email, phone number, or vehicle plate.
+- Real name and phone are private account/operations data readable by the
+  account owner and authorized server-side operations only.
+- Existing and newly-created users receive a non-identifying default nickname
+  until they change it.
+- Partner images are public service content. An authorized Partner-admin may
+  upload up to 8 images and select one home cover image.
+- Review images are public user-generated content. A completed reservation
+  owner may attach up to 4 images to that reservation's review.
+- Partner/review images use separate public buckets. Check-in/checkout evidence
+  remains in the private reservation evidence flow.
+- HEIC/HEIF selected on iPhone is converted to JPEG before public upload.
+- User-generated image moderation/reporting is a production-launch policy gate;
+  the MVP upload feature does not imply unrestricted content acceptance.

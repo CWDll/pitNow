@@ -83,6 +83,11 @@ interface StatusLogRow {
   created_at: string;
 }
 
+interface UserProfileRow {
+  full_name: string | null;
+  phone: string | null;
+}
+
 function jsonError(status: number, code: string, message: string) {
   return NextResponse.json(
     {
@@ -190,6 +195,7 @@ export async function GET(req: Request, context: Context) {
     checkoutResult,
     statusLogsResult,
     reservationUserResult,
+    userProfileResult,
   ] = await Promise.all([
     db
       .from("partners")
@@ -235,6 +241,13 @@ export async function GET(req: Request, context: Context) {
     supabaseAdmin
       ? supabaseAdmin.auth.admin.getUserById(reservation.user_id)
       : Promise.resolve({ data: { user: null }, error: null }),
+    supabaseAdmin
+      ? supabaseAdmin
+          .from("user_profiles")
+          .select("full_name,phone")
+          .eq("user_id", reservation.user_id)
+          .maybeSingle<UserProfileRow>()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   if (
@@ -263,6 +276,7 @@ export async function GET(req: Request, context: Context) {
   const checkin = checkinResult.data;
   const checkout = checkoutResult.data;
   const reservationUser = reservationUserResult.data.user;
+  const userProfile = userProfileResult.data;
   const userMetadata = reservationUser?.user_metadata ?? {};
 
   return NextResponse.json({
@@ -287,13 +301,15 @@ export async function GET(req: Request, context: Context) {
         userId: reservation.user_id,
         email: reservationUser?.email ?? null,
         name:
-          typeof userMetadata.full_name === "string"
+          userProfile?.full_name ??
+          (typeof userMetadata.full_name === "string"
             ? userMetadata.full_name
             : typeof userMetadata.name === "string"
               ? userMetadata.name
-              : null,
+              : null),
         phone:
-          typeof userMetadata.phone === "string" ? userMetadata.phone : null,
+          userProfile?.phone ??
+          (typeof userMetadata.phone === "string" ? userMetadata.phone : null),
       },
     },
     checkin: checkin

@@ -10,6 +10,7 @@ import {
   convertHeicBlobToJpeg,
   looksLikeHeic,
 } from "@/src/lib/heic-image";
+import { PartnerImageManager } from "./partner-image-manager";
 
 // type, interface, API는 나중에 분리해야 함. 한번에 옮길 것.
 
@@ -1637,6 +1638,11 @@ export function PartnerAdminDashboard() {
               </div>
             ))}
           </section>
+
+          <PartnerImageManager
+            partnerId={selectedPartnerId}
+            partnerName={selectedPartner?.partnerName ?? "정비소"}
+          />
 
           <section
             id="bays"

@@ -387,6 +387,42 @@ export async function cleanupConfirmedReservationForE2E(params: {
   db: SupabaseClient;
   reservationId: string;
 }) {
+  const { data: reviewRows, error: reviewLookupError } = await params.db
+    .from("reviews")
+    .select("id")
+    .eq("reservation_id", params.reservationId)
+    .returns<Array<{ id: string }>>();
+
+  if (reviewLookupError) {
+    throw reviewLookupError;
+  }
+
+  const reviewIds = (reviewRows ?? []).map((review) => review.id);
+  if (reviewIds.length > 0) {
+    const { data: reviewImages, error: reviewImageLookupError } = await params.db
+      .from("review_images")
+      .select("storage_path")
+      .in("review_id", reviewIds)
+      .returns<Array<{ storage_path: string }>>();
+
+    if (reviewImageLookupError) {
+      throw reviewImageLookupError;
+    }
+
+    const storagePaths = (reviewImages ?? []).map(
+      (image) => image.storage_path,
+    );
+    if (storagePaths.length > 0) {
+      const { error: storageCleanupError } = await params.db.storage
+        .from("review-images")
+        .remove(storagePaths);
+
+      if (storageCleanupError) {
+        throw storageCleanupError;
+      }
+    }
+  }
+
   const { error: reviewError } = await params.db
     .from("reviews")
     .delete()

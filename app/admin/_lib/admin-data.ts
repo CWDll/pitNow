@@ -901,6 +901,23 @@ export async function getAdminReservationDetail(
 
   const authUser = authUserResult?.user;
   const customerMetadata = authUser?.user_metadata ?? {};
+  const { data: customerProfile, error: customerProfileError } =
+    await supabaseAdmin
+      .from("user_profiles")
+      .select("full_name,phone")
+      .eq("user_id", reservation.user_id)
+      .maybeSingle<{ full_name: string | null; phone: string | null }>();
+
+  if (
+    customerProfileError &&
+    customerProfileError.code !== "42P01" &&
+    customerProfileError.code !== "PGRST205"
+  ) {
+    console.error(
+      "ADMIN RESERVATION CUSTOMER PROFILE LOOKUP ERROR:",
+      customerProfileError,
+    );
+  }
 
   const [
     checkinResult,
@@ -1096,13 +1113,15 @@ export async function getAdminReservationDetail(
       id: reservation.user_id,
       email: authUser?.email ?? "-",
       name:
-        String(
+        customerProfile?.full_name ??
+        (String(
           customerMetadata.name ??
             customerMetadata.full_name ??
             customerMetadata.nickname ??
             "",
-        ).trim() || "이름 미등록",
+        ).trim() || "이름 미등록"),
       phone:
+        customerProfile?.phone ??
         authUser?.phone ??
         String(customerMetadata.phone ?? customerMetadata.phone_number ?? "-"),
     },

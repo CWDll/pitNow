@@ -8,11 +8,15 @@ import {
   CalendarDays,
   CarFront,
   ChevronRight,
+  ImageIcon,
   LogIn,
   LogOut,
+  Save,
+  Star,
   UserRound,
 } from "lucide-react";
 
+import { authFetch } from "@/src/lib/auth-fetch";
 import { supabase } from "@/src/lib/supabase";
 
 import { Card, Line, Screen, StatePanel } from "../_components/mobile-ui";
@@ -23,10 +27,46 @@ const menuItems = [
   { label: "이용 가이드", description: "체크인과 체크아웃 절차", href: "/guide", icon: BookOpen },
 ];
 
+interface UserProfile {
+  nickname: string;
+  full_name: string | null;
+  phone: string | null;
+}
+
+interface MyReview {
+  id: string;
+  reservationId: string;
+  partnerId: string;
+  partnerName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  images: Array<{ path: string; url: string }>;
+}
+
+function readApiError(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object" || !("error" in payload)) {
+    return fallback;
+  }
+
+  const error = (payload as { error?: string | { message?: string } }).error;
+  return typeof error === "string" ? error : error?.message ?? fallback;
+}
+
 export default function MyPage() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [nickname, setNickname] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [myReviews, setMyReviews] = useState<MyReview[]>([]);
+  const [isReviewsLoading, setIsReviewsLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -62,10 +102,101 @@ export default function MyPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMemberData() {
+      if (!user) {
+        setProfile(null);
+        setMyReviews([]);
+        return;
+      }
+
+      setIsProfileLoading(true);
+      setIsReviewsLoading(true);
+
+      const [profileResult, reviewResult] = await Promise.allSettled([
+        authFetch("/api/profile", { cache: "no-store" }),
+        authFetch("/api/reviews?mine=1", { cache: "no-store" }),
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (profileResult.status === "fulfilled") {
+        const payload = (await profileResult.value.json()) as {
+          profile?: UserProfile | null;
+        };
+        if (profileResult.value.ok && payload.profile) {
+          setProfile(payload.profile);
+          setNickname(payload.profile.nickname);
+          setFullName(payload.profile.full_name ?? "");
+          setPhone(payload.profile.phone ?? "");
+        } else {
+          setProfileError("사용자 정보를 불러오지 못했습니다.");
+        }
+      } else {
+        setProfileError("사용자 정보를 불러오지 못했습니다.");
+      }
+
+      if (reviewResult.status === "fulfilled") {
+        const payload = (await reviewResult.value.json()) as {
+          reviews?: MyReview[];
+        };
+        if (reviewResult.value.ok) {
+          setMyReviews(payload.reviews ?? []);
+        }
+      }
+
+      setIsProfileLoading(false);
+      setIsReviewsLoading(false);
+    }
+
+    void loadMemberData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   async function handleSignOut() {
     setIsSigningOut(true);
     await supabase.auth.signOut();
     setIsSigningOut(false);
+  }
+
+  async function handleProfileSave() {
+    setProfileError("");
+    setProfileMessage("");
+    setIsProfileSaving(true);
+
+    try {
+      const response = await authFetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname, fullName, phone }),
+      });
+      const payload = (await response.json()) as {
+        profile?: UserProfile;
+        error?: string | { message?: string };
+      };
+
+      if (!response.ok || !payload.profile) {
+        setProfileError(readApiError(payload, "사용자 정보를 저장하지 못했습니다."));
+        return;
+      }
+
+      setProfile(payload.profile);
+      setNickname(payload.profile.nickname);
+      setFullName(payload.profile.full_name ?? "");
+      setPhone(payload.profile.phone ?? "");
+      setProfileMessage("사용자 정보를 저장했습니다.");
+    } catch {
+      setProfileError("네트워크 오류로 사용자 정보를 저장하지 못했습니다.");
+    } finally {
+      setIsProfileSaving(false);
+    }
   }
 
   return (
@@ -76,18 +207,88 @@ export default function MyPage() {
           <Line widthClass="w-2/3" />
         </Card>
       ) : user ? (
-        <Card className="space-y-4">
+        <Card className="space-y-5">
           <div className="flex items-center gap-3">
             <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700">
               <UserRound className="size-6" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-bold text-blue-600">PITNOW MEMBER</p>
-              <p className="mt-1 truncate text-sm font-black text-slate-950">
+              <p className="mt-1 truncate text-lg font-black text-slate-950">
+                {profile?.nickname ?? "회원 정보 확인 중"}
+              </p>
+              <p className="mt-1 truncate text-xs font-semibold text-slate-500">
                 {user.email ?? "이메일 정보 없음"}
               </p>
             </div>
           </div>
+
+          <div className="grid gap-3">
+            <label className="grid gap-1.5">
+              <span className="text-xs font-bold text-slate-600">닉네임</span>
+              <input
+                value={nickname}
+                onChange={(event) => setNickname(event.target.value)}
+                disabled={isProfileLoading}
+                maxLength={20}
+                placeholder="리뷰에 표시할 닉네임"
+                className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-900 outline-none focus:border-blue-500"
+              />
+              <span className="text-[11px] font-semibold text-slate-500">
+                리뷰에는 이름이나 연락처 대신 닉네임만 공개됩니다.
+              </span>
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="grid min-w-0 gap-1.5">
+                <span className="text-xs font-bold text-slate-600">이름</span>
+                <input
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  disabled={isProfileLoading}
+                  maxLength={50}
+                  autoComplete="name"
+                  placeholder="예약자 이름"
+                  className="h-11 min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-900 outline-none focus:border-blue-500"
+                />
+              </label>
+              <label className="grid min-w-0 gap-1.5">
+                <span className="text-xs font-bold text-slate-600">연락처</span>
+                <input
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  disabled={isProfileLoading}
+                  maxLength={20}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="010-0000-0000"
+                  className="h-11 min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-900 outline-none focus:border-blue-500"
+                />
+              </label>
+            </div>
+          </div>
+
+          {profileError ? (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
+              {profileError}
+            </p>
+          ) : null}
+          {profileMessage ? (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+              {profileMessage}
+            </p>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => void handleProfileSave()}
+            disabled={isProfileSaving || isProfileLoading}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-sm font-black text-white disabled:bg-slate-200 disabled:text-slate-500"
+          >
+            <Save className="size-4" />
+            {isProfileSaving ? "저장 중..." : "사용자 정보 저장"}
+          </button>
+
           <button
             type="button"
             onClick={handleSignOut}
@@ -140,6 +341,108 @@ export default function MyPage() {
           })}
         </div>
       </section>
+
+      {user ? (
+        <section aria-labelledby="my-review-title">
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <h2 id="my-review-title" className="text-lg font-black text-slate-950">
+                내가 남긴 리뷰
+              </h2>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                작성한 평가와 사진을 정비소별로 확인하세요.
+              </p>
+            </div>
+            <span className="text-xs font-black text-blue-600">
+              {myReviews.length}개
+            </span>
+          </div>
+
+          {isReviewsLoading ? (
+            <Card className="space-y-3">
+              <Line widthClass="w-1/3" />
+              <Line widthClass="w-2/3" />
+            </Card>
+          ) : myReviews.length === 0 ? (
+            <Card className="py-8 text-center">
+              <Star className="mx-auto size-6 text-slate-400" />
+              <p className="mt-3 text-sm font-black text-slate-800">
+                아직 작성한 리뷰가 없습니다.
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                정비 이용을 완료하면 리뷰를 남길 수 있습니다.
+              </p>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {myReviews.map((review) => (
+                <article
+                  key={review.id}
+                  className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
+                >
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-slate-950">
+                          {review.partnerName}
+                        </p>
+                        <p className="mt-1 text-xs font-bold text-amber-500">
+                          {"★".repeat(review.rating)}
+                          <span className="text-slate-300">
+                            {"★".repeat(5 - review.rating)}
+                          </span>
+                        </p>
+                      </div>
+                      <time className="shrink-0 text-[11px] font-semibold text-slate-500">
+                        {new Intl.DateTimeFormat("ko-KR", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                        }).format(new Date(review.createdAt))}
+                      </time>
+                    </div>
+
+                    <p className="mt-3 whitespace-pre-wrap text-sm font-medium leading-6 text-slate-700">
+                      {review.comment || "별점으로 남긴 리뷰입니다."}
+                    </p>
+
+                    {review.images.length > 0 ? (
+                      <div className="mt-3 grid grid-cols-4 gap-1.5">
+                        {review.images.map((image, index) => (
+                          <div
+                            key={image.path}
+                            className="aspect-square overflow-hidden rounded-lg bg-slate-100"
+                          >
+                            {/* Public review media is intentionally rendered directly. */}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={image.url}
+                              alt={`${review.partnerName} 리뷰 사진 ${index + 1}`}
+                              className="size-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                        <ImageIcon className="size-3.5" />
+                        첨부 사진 없음
+                      </p>
+                    )}
+                  </div>
+                  <Link
+                    href={`/partner/${review.partnerId}/reviews`}
+                    className="flex h-10 items-center justify-center gap-1 border-t border-slate-100 text-xs font-black text-blue-600"
+                  >
+                    정비소 리뷰 보기
+                    <ChevronRight className="size-3.5" />
+                  </Link>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
     </Screen>
   );
 }

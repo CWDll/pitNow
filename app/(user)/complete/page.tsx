@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Camera, ImagePlus, LoaderCircle, X } from "lucide-react";
 
 import type {
   CreateReviewPayload,
@@ -13,6 +13,21 @@ import type {
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
+import {
+  deletePublicImage,
+  uploadPublicImage,
+} from "@/src/lib/public-image-upload";
+
+interface ReviewImage {
+  path: string;
+  url: string;
+}
+
+interface PendingReviewImage {
+  id: string;
+  file: File;
+  previewUrl: string;
+}
 
 interface ReviewApiError {
   error?: string | { message?: string };
@@ -160,6 +175,12 @@ function CompletePageContent() {
   const [reviewError, setReviewError] = useState("");
   const [hasExistingReview, setHasExistingReview] = useState(false);
   const [isLoadingReview, setIsLoadingReview] = useState(true);
+  const [reviewImages, setReviewImages] = useState<ReviewImage[]>([]);
+  const [pendingReviewImages, setPendingReviewImages] = useState<
+    PendingReviewImage[]
+  >([]);
+  const [deletingImagePath, setDeletingImagePath] = useState("");
+  const reviewImageInputRef = useRef<HTMLInputElement>(null);
 
   const basePrice = Number.isFinite(checkout.basePrice)
     ? checkout.basePrice
@@ -302,6 +323,8 @@ function CompletePageContent() {
     }
 
     setIsSubmittingReview(true);
+    const uploadedImages: ReviewImage[] = [];
+
     try {
       const hasSession = await requireClientSession();
 
@@ -309,10 +332,23 @@ function CompletePageContent() {
         return;
       }
 
+      for (const pendingImage of pendingReviewImages) {
+        const uploaded = await uploadPublicImage({
+          endpoint: "/api/review-images",
+          file: pendingImage.file,
+          fields: { reservationId },
+        });
+        uploadedImages.push(uploaded);
+      }
+
+      const imagePaths = [...reviewImages, ...uploadedImages].map(
+        (image) => image.path,
+      );
       const payload: CreateReviewPayload = {
         reservationId,
         rating,
         comment: reviewText.trim() || undefined,
+        imagePaths,
       };
 
       const response = await authFetch("/api/reviews", {
@@ -326,6 +362,14 @@ function CompletePageContent() {
       const data: unknown = await response.json();
 
       if (!response.ok) {
+        await Promise.allSettled(
+          uploadedImages.map((image) =>
+            deletePublicImage({
+              endpoint: "/api/review-images",
+              body: { path: image.path },
+            }),
+          ),
+        );
         setReviewError(
           extractErrorMessage(data) ?? "후기 저장에 실패했습니다.",
         );
@@ -333,10 +377,25 @@ function CompletePageContent() {
       }
 
       setHasExistingReview(true);
+      setReviewImages((current) => [...current, ...uploadedImages]);
+      setPendingReviewImages((current) => {
+        current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+        return [];
+      });
       setReviewSaved(true);
-    } catch {
+    } catch (error) {
+      await Promise.allSettled(
+        uploadedImages.map((image) =>
+          deletePublicImage({
+            endpoint: "/api/review-images",
+            body: { path: image.path },
+          }),
+        ),
+      );
       setReviewError(
-        "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+        error instanceof Error
+          ? error.message
+          : "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
       );
     } finally {
       setIsSubmittingReview(false);
@@ -373,7 +432,11 @@ function CompletePageContent() {
           data && typeof data === "object" && "review" in data
             ? (
                 data as {
-                  review?: { rating?: number; comment?: string | null } | null;
+                  review?: {
+                    rating?: number;
+                    comment?: string | null;
+                    images?: ReviewImage[];
+                  } | null;
                 }
               ).review
             : null;
@@ -387,6 +450,7 @@ function CompletePageContent() {
             setReviewText(review.comment);
           }
 
+          setReviewImages(Array.isArray(review.images) ? review.images : []);
           setHasExistingReview(true);
         }
       } catch {
@@ -404,6 +468,71 @@ function CompletePageContent() {
       isCancelled = true;
     };
   }, [reservationId]);
+
+  function handleReviewImageSelection(files: FileList | null) {
+    if (!files) {
+      return;
+    }
+
+    const availableSlots =
+      4 - reviewImages.length - pendingReviewImages.length;
+    const selected = Array.from(files).slice(0, Math.max(0, availableSlots));
+
+    if (selected.length === 0) {
+      setReviewError("리뷰 사진은 최대 4장까지 등록할 수 있습니다.");
+      return;
+    }
+
+    setReviewSaved(false);
+    setReviewError("");
+    setPendingReviewImages((current) => [
+      ...current,
+      ...selected.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+      })),
+    ]);
+
+    if (reviewImageInputRef.current) {
+      reviewImageInputRef.current.value = "";
+    }
+  }
+
+  function removePendingReviewImage(id: string) {
+    setPendingReviewImages((current) => {
+      const target = current.find((image) => image.id === id);
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return current.filter((image) => image.id !== id);
+    });
+    setReviewSaved(false);
+  }
+
+  async function removeSavedReviewImage(image: ReviewImage) {
+    setDeletingImagePath(image.path);
+    setReviewError("");
+
+    try {
+      await deletePublicImage({
+        endpoint: "/api/review-images",
+        body: { path: image.path },
+      });
+      setReviewImages((current) =>
+        current.filter((item) => item.path !== image.path),
+      );
+      setReviewSaved(false);
+    } catch (error) {
+      setReviewError(
+        error instanceof Error
+          ? error.message
+          : "리뷰 사진을 삭제하지 못했습니다.",
+      );
+    } finally {
+      setDeletingImagePath("");
+    }
+  }
 
   return (
     <section className="pb-24 pt-6">
@@ -519,6 +648,104 @@ function CompletePageContent() {
           value={reviewText}
           onChange={(event) => setReviewText(event.target.value)}
         />
+
+        <div className="mt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">사진</h3>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                정비 결과나 매장 이용 모습을 최대 4장까지 남길 수 있습니다.
+              </p>
+            </div>
+            <span className="text-xs font-bold text-slate-500">
+              {reviewImages.length + pendingReviewImages.length}/4
+            </span>
+          </div>
+
+          <input
+            ref={reviewImageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            multiple
+            className="sr-only"
+            onChange={(event) =>
+              handleReviewImageSelection(event.currentTarget.files)
+            }
+          />
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {reviewImages.map((image, index) => (
+              <div
+                key={image.path}
+                className="relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+              >
+                {/* Public review media is intentionally displayed as a direct image. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={image.url}
+                  alt={`등록된 리뷰 사진 ${index + 1}`}
+                  className="size-full object-cover"
+                />
+                <button
+                  type="button"
+                  aria-label={`등록된 리뷰 사진 ${index + 1} 삭제`}
+                  disabled={deletingImagePath === image.path}
+                  onClick={() => void removeSavedReviewImage(image)}
+                  className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-slate-950/80 text-white disabled:opacity-60"
+                >
+                  {deletingImagePath === image.path ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <X className="size-4" />
+                  )}
+                </button>
+              </div>
+            ))}
+
+            {pendingReviewImages.map((image, index) => (
+              <div
+                key={image.id}
+                className="relative aspect-square overflow-hidden rounded-lg border border-blue-200 bg-blue-50"
+              >
+                {/* Browser object URLs are local previews and cannot use next/image. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={image.previewUrl}
+                  alt={`추가할 리뷰 사진 ${index + 1}`}
+                  className="size-full object-cover"
+                />
+                <span className="absolute bottom-2 left-2 rounded-md bg-blue-600 px-2 py-1 text-[11px] font-bold text-white">
+                  저장 전
+                </span>
+                <button
+                  type="button"
+                  aria-label={`추가할 리뷰 사진 ${index + 1} 삭제`}
+                  onClick={() => removePendingReviewImage(image.id)}
+                  className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-slate-950/80 text-white"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ))}
+
+            {reviewImages.length + pendingReviewImages.length < 4 ? (
+              <button
+                type="button"
+                onClick={() => reviewImageInputRef.current?.click()}
+                className="flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700"
+              >
+                <span className="grid size-10 place-items-center rounded-xl bg-white">
+                  {reviewImages.length + pendingReviewImages.length === 0 ? (
+                    <Camera className="size-5" />
+                  ) : (
+                    <ImagePlus className="size-5" />
+                  )}
+                </span>
+                <span className="text-xs font-black">사진 추가</span>
+              </button>
+            ) : null}
+          </div>
+        </div>
 
         {isLoadingReview ? (
           <p className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500">

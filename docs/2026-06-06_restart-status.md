@@ -2170,3 +2170,41 @@ DB 적용:
 - Admin 예약 상세 E2E에서 다운로드 링크 미사용, 증적 확대 모달 열기/닫기 확인.
 - `npm run verify:admin`은 관련 테스트 포함 5개 성공 후 기존 패키지 가격 요청 테스트 1개가 60초 시간 초과했으며, 해당 테스트 단독 재실행은 성공.
 - 배포 URL의 기존 문제 예약에서 HEIC 증적 미리보기와 확대 보기를 수동 재확인했다.
+
+## 66. 2026-07-24 정비소 사진·사용자 프로필·사진 리뷰
+
+- Partner-admin에 정비소 사진 최대 8장 업로드, 대표 지정, 삭제 기능을 추가했다.
+- 홈 정비소 카드에는 대표 사진을 표시하고 정비소 상세에는 전체 사진 갤러리를 표시한다.
+- 사용자 프로필에 닉네임, 이름, 연락처를 추가하되 리뷰에는 닉네임만 공개한다.
+- 마이페이지에서 프로필 편집과 내가 작성한 리뷰·첨부 사진을 확인한다.
+- 완료 예약 리뷰에 최대 4장의 사진을 등록·수정할 수 있다.
+- 공개 정비소/리뷰 사진은 예약 증적과 분리된 Storage bucket을 사용한다.
+- iPhone HEIC/HEIF는 업로드 전에 JPEG로 변환한다.
+
+DB 적용 필요:
+
+- `db/migrations/20260724_partner_review_profile_media.sql`
+- 적용 후 `node scripts/check-supabase-schema.mjs`로 `user_profiles`,
+  `partner_images`, `review_images`, `partner-images`, `review-images`를 확인한다.
+
+현재 검증:
+
+- `npm run lint` 성공.
+- `npx tsc --noEmit` 성공.
+- `npm run build` 성공.
+- iPhone 14 Pro Max viewport에서 홈/정비소 상세 가로 넘침 없음 확인.
+- 모바일 public smoke 2 passed.
+- Partner-admin UI 1 passed, 정비소 사진 관리 섹션 확인.
+- `npm run e2e:ui:fake` 1 passed, 예약부터 리뷰·영수증·Admin 상세까지 확인.
+- 신규 migration 미적용 상태의 schema check는 기존 항목은 모두 성공하고 신규
+  테이블 3개와 bucket 2개만 예상대로 실패한다.
+
+DB 적용 및 실제 미디어 검증:
+
+- `20260724_partner_review_profile_media.sql` 원격 적용 완료.
+- schema check에서 신규 테이블 3개와 bucket 2개를 포함해 전체 성공.
+- Partner-admin 실제 이미지 2장 업로드, 대표 변경, 홈/상세 반영, 확대, 삭제,
+  기존 대표 복구 E2E 성공.
+- 완료 예약 실제 리뷰 이미지 업로드, DB 연결, public URL, 공개 리뷰 확대,
+  Storage cleanup E2E 성공.
+- 구현 구조와 운영 주의점은 `docs/Public_Media_Profile_Implementation.md`에 기록.
