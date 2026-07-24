@@ -228,7 +228,7 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 1 | Admin login | `/admin-login` | admin token으로 로그인 성공 | 성공 | 배포 URL 확인 |
 | 2 | Overview | `/admin` 기간 프리셋 변경 | 오늘/이번 주/이번 달/3개월/6개월/이번 년도별 예약·승인 매출·완료·환불 지표 표시 | 수정 후 재확인 | 한글 지표와 기간 프리셋 추가 |
 | 3 | 예약 목록 필터 | `/admin/reservations` 정비소/start date/end date/issue 필터 | 종료일 생략 시 시작일 하루로 조회, 검색 결과 건수 표시 | 수정 후 재확인 | `BLOCKED` 열 제거, 중복 본문 패딩 제거 |
-| 4 | 예약 상세 | `/admin/reservations/:id` | 예약자 이름·이메일·전화, payment, evidence, notes, audit 표시 | 수정 후 재확인 | 큰 Evidence 영역 제거, 누락 배지는 제목 아래 표시. 체크인/체크아웃 HEIC는 화면 내 미리보기와 확대 모달로 확인하며 다운로드 링크를 사용하지 않음 |
+| 4 | 예약 상세 | `/admin/reservations/:id` | 예약자 이름·이메일·전화, payment, evidence, notes, audit 표시 | 성공 | 배포 URL의 문제 예약에서 체크인/체크아웃 HEIC 미리보기와 확대 모달 확인. 다운로드 링크를 사용하지 않음 |
 | 5 | Issues badge | unresolved partner note 있는 예약 | 목록 Issues 열에 `미해결 N` 표시 | 성공 | 이슈 필터 포함 확인 |
 | 6 | Payments | `/admin/payments` | 결제사 거래의 대기/실패/취소/환불 추적, 예약 상세 이동 | 수정 후 재확인 | 정산 화면과 역할 분리, 한글화 |
 | 7 | Settlement | `/admin/settlement` | 체크아웃 금액·추가 결제 미수·증적 완료 표시 | 수정 후 재확인 | 체크아웃 운영 정산 화면으로 한글화 |
