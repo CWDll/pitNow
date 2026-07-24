@@ -112,7 +112,7 @@ export default async function AdminHomePage({
 
       <div className="grid grid-cols-4 gap-3">
         {metricCard(
-          "현재 이용 예약",
+          "진행·예정 예약",
           String(metrics.activeReservations),
           "예약 확정 · 체크인 · 이용 중",
         )}

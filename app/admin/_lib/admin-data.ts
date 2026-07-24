@@ -806,7 +806,8 @@ export async function getAdminOverviewMetrics(
     supabaseAdmin
       .from("reservations")
       .select("id", { count: "exact", head: true })
-      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"]),
+      .in("status", ["CONFIRMED", "CHECKED_IN", "IN_USE"])
+      .gt("blocked_until", new Date().toISOString()),
     supabaseAdmin
       .from("reservations")
       .select("id", { count: "exact", head: true })
