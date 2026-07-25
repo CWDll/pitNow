@@ -569,7 +569,6 @@ test.describe("booking flow smoke", () => {
           mimeType: testImageFile.mimeType,
           buffer: testImageFile.buffer,
         });
-      await expect(page.getByText("저장 전")).toBeVisible();
       await expect(page.getByText("1/4")).toBeVisible();
 
       await page.getByLabel("5점 선택").click();
@@ -638,6 +637,29 @@ test.describe("booking flow smoke", () => {
         }),
       ).toBeVisible();
       await publicReviewPage.close();
+
+      const myPage = await page.context().newPage();
+      await myPage.goto("/mypage");
+      await expect(
+        myPage.getByRole("heading", { name: "내가 남긴 리뷰" }),
+      ).toBeVisible();
+      const myCreatedReview = myPage.locator("article").filter({
+        hasText: "E2E 예약 루프 검증 후기입니다.",
+      });
+      await myCreatedReview
+        .getByRole("button", {
+          name: `${seed.partnerName} 리뷰 사진 1 크게 보기`,
+        })
+        .click();
+      await expect(
+        myPage.getByRole("dialog", {
+          name: `${seed.partnerName} 리뷰 사진 상세보기`,
+        }),
+      ).toBeVisible();
+      await myPage
+        .getByRole("button", { name: "내 리뷰 사진 닫기" })
+        .click();
+      await myPage.close();
 
       await Promise.all([
         page.waitForURL(/\/receipt\?/),

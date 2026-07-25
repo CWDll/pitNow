@@ -159,6 +159,12 @@ Safari/iPhone에서 선택할 수 있는 HEIC/HEIF는 브라우저와 Chromium �
   사용하지 않는다.
 - `ReviewCard`의 `feed` 변형을 추가해 정비소 상세의 compact 리뷰와 전체 리뷰
   화면이 같은 작성자·별점·사진 표시 로직을 공유한다.
+- 전체 리뷰, 정비소 갤러리, 최근 리뷰, 마이페이지 리뷰는 공통
+  `ImageLightbox`를 사용한다. 여러 장이면 좌우 버튼과 방향키로 순환하고
+  단일 사진이면 불필요한 이동 버튼을 숨긴다.
+- 정비소 상세 주소 복사는 server page 전체를 client component로 바꾸지 않고
+  `CopyAddressButton`만 client island로 삽입한다. Clipboard API 실패 시에는
+  브라우저 호환 fallback을 사용한다.
 
 예시 사진은 실제 업체나 사용자의 자산을 복제하지 않고 생성형 이미지로 제작했다.
 사람, 식별 가능한 차량번호, 상표, 워터마크가 나타나지 않도록 한 뒤 JPEG로

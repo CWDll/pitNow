@@ -75,6 +75,15 @@ test.describe("mobile public smoke", () => {
     await expect(
       page.getByRole("dialog", { name: "사진 후기 상세보기" }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "이전 이미지" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "다음 이미지" }).click();
+    await expect(
+      page
+        .getByRole("dialog", { name: "사진 후기 상세보기" })
+        .getByText("2 / 2", { exact: true }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "사진 후기 닫기" }).click();
     await expect(
       page.getByRole("dialog", { name: "사진 후기 상세보기" }),
@@ -85,5 +94,36 @@ test.describe("mobile public smoke", () => {
       clientWidth: document.documentElement.clientWidth,
     }));
     expect(viewport.scrollWidth).toBe(viewport.clientWidth);
+  });
+
+  test("partner detail copies its address and slides gallery images", async ({
+    page,
+  }) => {
+    await page.goto("/partner/11111111-1111-1111-1111-111111111111");
+
+    const copyButton = page.getByRole("button", { name: "주소 복사" });
+    await expect(copyButton).toBeVisible();
+    await copyButton.click();
+    await expect(
+      page.getByRole("button", { name: "주소 복사 완료" }),
+    ).toBeVisible();
+
+    await page
+      .getByRole("button", {
+        name: "강남 셀프정비소 사진 1 크게 보기",
+      })
+      .click();
+    const galleryDialog = page.getByRole("dialog", {
+      name: "강남 셀프정비소 사진 상세보기",
+    });
+    await expect(galleryDialog).toBeVisible();
+    await galleryDialog.getByRole("button", { name: "다음 이미지" }).click();
+    await expect(galleryDialog.getByText("2 / 3", { exact: true })).toBeVisible();
+    await galleryDialog.getByRole("button", { name: "이전 이미지" }).click();
+    await expect(galleryDialog.getByText("1 / 3", { exact: true })).toBeVisible();
+    await galleryDialog
+      .getByRole("button", { name: "정비소 사진 닫기" })
+      .click();
+    await expect(galleryDialog).toBeHidden();
   });
 });

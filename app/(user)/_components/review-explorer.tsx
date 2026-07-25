@@ -1,10 +1,11 @@
 "use client";
 
-import { Camera, ChevronDown, MessageSquareText, Star, X } from "lucide-react";
+import { Camera, ChevronDown, MessageSquareText, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { PublicReview } from "@/src/lib/public-reviews";
 
+import { ImageLightbox } from "./image-lightbox";
 import { ReviewCard } from "./review-card";
 
 type ReviewFilter = "ALL" | "PHOTO";
@@ -36,7 +37,7 @@ function RatingStars({ rating }: { rating: number }) {
 export function ReviewExplorer({ reviews }: { reviews: PublicReview[] }) {
   const [filter, setFilter] = useState<ReviewFilter>("ALL");
   const [sort, setSort] = useState<ReviewSort>("LATEST");
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   const average =
     reviews.length > 0
@@ -44,6 +45,10 @@ export function ReviewExplorer({ reviews }: { reviews: PublicReview[] }) {
       : 0;
   const photoReviews = reviews.filter((review) => review.imageUrls.length > 0);
   const photoUrls = reviews.flatMap((review) => review.imageUrls);
+  const photoLightboxImages = photoUrls.map((url, index) => ({
+    src: url,
+    alt: `사진 후기 ${index + 1} 상세보기`,
+  }));
   const distribution = Array.from({ length: 5 }, (_, index) => {
     const rating = 5 - index;
     const count = reviews.filter((review) => review.rating === rating).length;
@@ -141,7 +146,7 @@ export function ReviewExplorer({ reviews }: { reviews: PublicReview[] }) {
               <button
                 key={`${url}-${index}`}
                 type="button"
-                onClick={() => setPreviewUrl(url)}
+                onClick={() => setPreviewIndex(index)}
                 aria-label={`사진 후기 ${index + 1} 크게 보기`}
                 className="w-28 shrink-0 snap-start overflow-hidden rounded-lg bg-slate-100"
               >
@@ -226,36 +231,14 @@ export function ReviewExplorer({ reviews }: { reviews: PublicReview[] }) {
         )}
       </section>
 
-      {previewUrl ? (
-        <div
-          className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/90 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="사진 후기 상세보기"
-          onClick={() => setPreviewUrl("")}
-        >
-          <div
-            className="relative max-h-full max-w-3xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {/* Public review media is intentionally rendered directly. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="사진 후기 상세보기"
-              className="max-h-[85vh] max-w-full rounded-lg bg-white object-contain"
-            />
-            <button
-              type="button"
-              onClick={() => setPreviewUrl("")}
-              aria-label="사진 후기 닫기"
-              className="absolute right-3 top-3 grid size-10 place-items-center rounded-md bg-slate-950/80 text-white"
-            >
-              <X className="size-5" />
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <ImageLightbox
+        images={photoLightboxImages}
+        activeIndex={previewIndex}
+        dialogLabel="사진 후기 상세보기"
+        closeLabel="사진 후기 닫기"
+        onClose={() => setPreviewIndex(null)}
+        onIndexChange={setPreviewIndex}
+      />
     </>
   );
 }

@@ -19,6 +19,7 @@ import {
 import { authFetch } from "@/src/lib/auth-fetch";
 import { supabase } from "@/src/lib/supabase";
 
+import { ImageLightbox } from "../_components/image-lightbox";
 import { Card, Line, Screen, StatePanel } from "../_components/mobile-ui";
 
 const menuItems = [
@@ -67,6 +68,18 @@ export default function MyPage() {
   const [profileError, setProfileError] = useState("");
   const [myReviews, setMyReviews] = useState<MyReview[]>([]);
   const [isReviewsLoading, setIsReviewsLoading] = useState(false);
+  const [reviewPreview, setReviewPreview] = useState<{
+    reviewId: string;
+    imageIndex: number;
+  } | null>(null);
+  const previewReview = reviewPreview
+    ? myReviews.find((review) => review.id === reviewPreview.reviewId)
+    : null;
+  const previewImages =
+    previewReview?.images.map((image, index) => ({
+      src: image.url,
+      alt: `${previewReview.partnerName} 리뷰 사진 ${index + 1} 상세보기`,
+    })) ?? [];
 
   useEffect(() => {
     let mounted = true;
@@ -409,8 +422,16 @@ export default function MyPage() {
                     {review.images.length > 0 ? (
                       <div className="mt-3 grid grid-cols-4 gap-1.5">
                         {review.images.map((image, index) => (
-                          <div
+                          <button
                             key={image.path}
+                            type="button"
+                            onClick={() =>
+                              setReviewPreview({
+                                reviewId: review.id,
+                                imageIndex: index,
+                              })
+                            }
+                            aria-label={`${review.partnerName} 리뷰 사진 ${index + 1} 크게 보기`}
                             className="aspect-square overflow-hidden rounded-lg bg-slate-100"
                           >
                             {/* Public review media is intentionally rendered directly. */}
@@ -420,7 +441,7 @@ export default function MyPage() {
                               alt={`${review.partnerName} 리뷰 사진 ${index + 1}`}
                               className="size-full object-cover"
                             />
-                          </div>
+                          </button>
                         ))}
                       </div>
                     ) : (
@@ -443,6 +464,23 @@ export default function MyPage() {
           )}
         </section>
       ) : null}
+
+      <ImageLightbox
+        images={previewImages}
+        activeIndex={reviewPreview?.imageIndex ?? null}
+        dialogLabel={
+          previewReview
+            ? `${previewReview.partnerName} 리뷰 사진 상세보기`
+            : "내 리뷰 사진 상세보기"
+        }
+        closeLabel="내 리뷰 사진 닫기"
+        onClose={() => setReviewPreview(null)}
+        onIndexChange={(imageIndex) =>
+          setReviewPreview((current) =>
+            current ? { ...current, imageIndex } : null,
+          )
+        }
+      />
     </Screen>
   );
 }

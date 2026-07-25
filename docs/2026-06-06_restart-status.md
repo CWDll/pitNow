@@ -2242,3 +2242,22 @@ DB 적용 및 실제 미디어 검증:
 - 모바일 public smoke 3 passed. 리뷰 필터·정렬·사진 확대 modal 포함.
 - `npm run e2e:ui:fake` 1 passed. 예약부터 실제 리뷰 이미지 업로드, 공개
   리뷰 확대, 영수증과 Admin drill-down까지 회귀 확인.
+
+## 68. 2026-07-25 공개 이미지 슬라이드와 주소 복사
+
+- 전체 리뷰의 사진 우선 보기, 정비소 시설 사진, 최근 리뷰, 마이페이지의 내가
+  남긴 리뷰 확대 화면을 공통 `ImageLightbox`로 통합했다.
+- 사진이 여러 장이면 좌우 버튼과 키보드 방향키로 순환하며 현재 순번을 표시한다.
+- 사진이 한 장이면 이동 버튼을 숨기고 닫기와 배경 선택 동작만 제공한다.
+- 정비소 상세 주소 오른쪽에 Lucide copy 아이콘을 추가했다.
+- Clipboard API 성공 시 check 아이콘으로 완료 상태를 표시하며, API를 사용할 수
+  없는 브라우저는 임시 textarea 기반 복사 fallback을 사용한다.
+- 마이페이지 사진은 현재 리뷰에 포함된 사진 묶음 안에서만 이동한다.
+
+현재 검증:
+
+- `npm run lint`, `npx tsc --noEmit` 성공.
+- `npm run e2e:ui:fake` production build 포함 성공, 1 passed.
+- 모바일 public smoke 4 passed. 전체 리뷰 1→2 이동, 정비소 갤러리 앞뒤 이동,
+  주소 복사 완료 상태와 가로 overflow를 확인했다.
+- iPhone 14 Pro Max 캡처에서 이동/닫기 버튼과 이미지가 겹치지 않는 것을 확인했다.

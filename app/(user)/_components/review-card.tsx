@@ -1,9 +1,11 @@
 "use client";
 
-import { Star, UserRound, X } from "lucide-react";
+import { Star, UserRound } from "lucide-react";
 import { useState } from "react";
 
 import type { PublicReview } from "@/src/lib/public-reviews";
+
+import { ImageLightbox } from "./image-lightbox";
 
 function formatDate(iso: string): string {
   const parsed = new Date(iso);
@@ -41,7 +43,11 @@ export function ReviewCard({
   compact?: boolean;
   feed?: boolean;
 }) {
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const lightboxImages = review.imageUrls.map((url, index) => ({
+    src: url,
+    alt: `리뷰 사진 ${index + 1} 상세보기`,
+  }));
 
   return (
     <article
@@ -101,7 +107,7 @@ export function ReviewCard({
             <button
               key={url}
               type="button"
-              onClick={() => setPreviewUrl(url)}
+              onClick={() => setPreviewIndex(index)}
               aria-label={`리뷰 사진 ${index + 1} 크게 보기`}
               className="overflow-hidden rounded-lg bg-slate-100"
             >
@@ -116,35 +122,14 @@ export function ReviewCard({
         </div>
       ) : null}
 
-      {previewUrl ? (
-        <div
-          className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/85 p-5"
-          role="dialog"
-          aria-modal="true"
-          aria-label="리뷰 사진 상세보기"
-          onClick={() => setPreviewUrl("")}
-        >
-          <div
-            className="relative max-h-full max-w-3xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="리뷰 사진 상세보기"
-              className="max-h-[85vh] max-w-full rounded-lg bg-white object-contain"
-            />
-            <button
-              type="button"
-              onClick={() => setPreviewUrl("")}
-              aria-label="사진 상세보기 닫기"
-              className="absolute right-3 top-3 grid size-10 place-items-center rounded-md bg-slate-950/80 text-white"
-            >
-              <X className="size-5" />
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <ImageLightbox
+        images={lightboxImages}
+        activeIndex={previewIndex}
+        dialogLabel="리뷰 사진 상세보기"
+        closeLabel="사진 상세보기 닫기"
+        onClose={() => setPreviewIndex(null)}
+        onIndexChange={setPreviewIndex}
+      />
     </article>
   );
 }

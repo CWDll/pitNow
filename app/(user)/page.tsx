@@ -1,6 +1,6 @@
 import { HomePartnerExplorer } from "./_components/home-partner-explorer";
 import Link from "next/link";
-import { CalendarDays, MapPin } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import {
   hasSupabaseEnv,
   missingSupabaseEnvMessage,

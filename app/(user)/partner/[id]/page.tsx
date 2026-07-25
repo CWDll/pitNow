@@ -11,6 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { CopyAddressButton } from "@/app/(user)/_components/copy-address-button";
 import { PartnerImageGallery } from "@/app/(user)/_components/partner-image-gallery";
 import { ReviewCard } from "@/app/(user)/_components/review-card";
 import { formatMinutesLabel } from "@/app/(user)/_data/mock-garages";
@@ -95,10 +96,11 @@ export default async function PartnerDetailPage({
             <h1 className="mt-1 text-[26px] font-black leading-tight text-slate-950">
               {garage.name}
             </h1>
-            <p className="mt-2 flex items-start gap-1.5 text-sm font-medium leading-6 text-slate-500">
+            <div className="mt-2 flex items-start gap-1.5 text-sm font-medium leading-6 text-slate-500">
               <MapPin className="mt-1 size-4 shrink-0 text-blue-600" />
-              {garage.address}
-            </p>
+              <span>{garage.address}</span>
+              <CopyAddressButton address={garage.address} />
+            </div>
           </div>
           <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-sm">
             <Warehouse className="size-6" />
