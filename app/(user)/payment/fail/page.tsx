@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { authFetch } from "@/src/lib/auth-fetch";
 
 function PaymentFailContent() {
   const searchParams = useSearchParams();
-  const [recorded, setRecorded] = useState(false);
 
   const paymentId = searchParams.get("paymentId") ?? "";
   const code = searchParams.get("code") ?? "PAYMENT_FAILED";
@@ -32,7 +31,6 @@ function PaymentFailContent() {
           cancelled: code === "PAY_PROCESS_CANCELED",
         }),
       }).catch(() => null);
-      setRecorded(true);
     }
 
     void recordFailure();

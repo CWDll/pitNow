@@ -524,8 +524,14 @@ function PartnerWorkPageContent() {
       </div>
 
       {isCarPickerOpen && cars.length > 1 ? (
-        <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-950/40">
-          <div className="mb-[calc(4.25rem+env(safe-area-inset-bottom))] w-full max-w-[430px] rounded-t-2xl bg-white p-4 pb-5 shadow-2xl">
+        <div
+          className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] top-0 z-80 flex items-end justify-center bg-slate-950/40"
+          onClick={() => setIsCarPickerOpen(false)}
+        >
+          <div
+            className="w-full max-w-[430px] rounded-t-2xl bg-white p-4 pb-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">차량 선택</h3>
               <button

@@ -151,16 +151,16 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 
 | 순서 | 확인 항목 | Preview 기준 | 상태 | 비고 |
 | --- | --- | --- | --- | --- |
-| 1 | Supabase URL | `NEXT_PUBLIC_SUPABASE_URL` 설정 | 대기 |  |
-| 2 | Supabase anon key | `NEXT_PUBLIC_SUPABASE_ANON_KEY` 설정 | 대기 |  |
-| 3 | Supabase service role key | `SUPABASE_SERVICE_ROLE_KEY` 설정 | 대기 | 서버 전용 |
-| 4 | Admin token | `PITNOW_ADMIN_ACCESS_TOKEN` 설정 | 대기 |  |
-| 5 | Kakao map key | `NEXT_PUBLIC_KAKAO_MAP_APP_KEY` 설정 | 대기 |  |
-| 6 | Kakao web domain | Preview URL이 Kakao Developers Web 플랫폼에 등록됨 | 대기 |  |
-| 7 | Toss client key | `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY` test key 설정 | 대기 |  |
-| 8 | Toss secret key | `TOSS_PAYMENTS_SECRET_KEY` test secret 설정 | 대기 | 서버 전용 |
-| 9 | Payment provider | `PITNOW_PAYMENT_PROVIDER=TOSS_TEST` | 대기 | local E2E만 `FAKE` |
-| 10 | Supabase SQL migrations | target project에 최신 migration 적용 | 대기 | `check-supabase-schema`로 확인 |
+| 1 | Supabase URL | `NEXT_PUBLIC_SUPABASE_URL` 설정 | 성공 | Production 앱 연결 확인 |
+| 2 | Supabase anon key | `NEXT_PUBLIC_SUPABASE_ANON_KEY` 설정 | 성공 | Production 로그인·사용자 전체 흐름 확인 |
+| 3 | Supabase service role key | `SUPABASE_SERVICE_ROLE_KEY` 설정 | 성공 | Production 범위 및 Sensitive 설정 확인 |
+| 4 | Admin token | `PITNOW_ADMIN_ACCESS_TOKEN` 설정 | 성공 | Production/Preview 범위 Admin QA 확인 |
+| 5 | Kakao map key | `NEXT_PUBLIC_KAKAO_MAP_APP_KEY` 설정 | 성공 | StudyMapApi JavaScript 키 사용 확인 |
+| 6 | Kakao web domain | Preview URL이 Kakao Developers Web 플랫폼에 등록됨 | 성공 | `https://pit-now.vercel.app` 등록 및 지도 로드 확인 |
+| 7 | Toss client key | `NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY` test key 설정 | 성공 | Safari Toss Sandbox 결제 확인 |
+| 8 | Toss secret key | `TOSS_PAYMENTS_SECRET_KEY` test secret 설정 | 성공 | 서버 승인·환불·사후정산 확인 |
+| 9 | Payment provider | `PITNOW_PAYMENT_PROVIDER=TOSS_TEST` | 성공 | Production `TOSS_TEST`, local E2E만 `FAKE` |
+| 10 | Supabase SQL migrations | target project에 최신 migration 적용 | 성공 | schema check 및 공개 이미지 실제 업로드 E2E 성공 |
 
 ### 7.4 사용자 모바일 QA
 
@@ -175,31 +175,33 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 7 | 과거 날짜 차단 | schedule 화면에서 과거 날짜 선택 시도 | 과거 날짜 선택 불가 | 대기 |  |
 | 8 | 과거 시간 차단 | 오늘 schedule에서 지난 시간 선택 시도 | 과거 시간 block 비활성화 | 대기 |  |
 | 9 | availability block 반영 | partner-admin에서 block 생성 후 사용자 schedule 확인 | block된 slot disabled | 대기 |  |
-| 10 | Self 예약 결제 | Self 작업 선택 → 일정 → Toss sandbox 결제 | 결제 성공 후 예약 확정 | 대기 |  |
-| 11 | Self 예약 목록 | `/reservation` | 방금 만든 예약이 예정 예약에 표시됨 | 대기 |  |
+| 10 | Self 예약 결제 | Self 작업 선택 → 일정 → Toss sandbox 결제 | 결제 성공 후 예약 확정 | 성공 | iPhone Safari 실결제 QA |
+| 11 | Self 예약 목록 | `/reservation` | 방금 만든 예약이 예정 예약에 표시됨 | 성공 | iPhone 전체 예약 흐름에서 확인 |
 | 12 | Self 취소 가능 경로 | 취소 가능한 예약에서 cancel 실행 | 예약 취소/환불 상태가 일관됨 | 대기 |  |
-| 13 | Self 체크인 시간 제한 | 예약 시작 15분보다 일찍 `/checkin` 진입/제출 | 입장 가능 시각 안내, API `CHECKIN_NOT_OPEN`, 사진 제출 불가 | 대기 |  |
-| 14 | Self 체크인 | 예약 시작 15분 전 이후 QR 확인 + 4 photos | 사진 4장 없으면 진행 불가, 완료 시 CHECKED_IN | 대기 |  |
-| 15 | Self 이용 시작 | 체크인 후 in-use 진입 | 서버 시간 기준 타이머, IN_USE 전환, 연장/SOS/매장 연락 버튼 없음 | 대기 |  |
-| 16 | 이용 중 재진입 | 이용 중 다른 탭 및 `/reservation`으로 이동 | 최상단 복귀 배너가 보이고 예약은 `진행 중·예정` 탭에 유지됨 | 대기 |  |
-| 17 | Self 체크아웃 | checklist + 2 photos | 검수 재선택 없이 예약 기본요금/검수비/추가요금/추가 결제비용 표시 | 대기 |  |
-| 18 | 사후정산 결제 | 1시간 이상 초과된 테스트 예약으로 추가 결제 발생 | 타이머는 `초과 이용 01:00:00`에서 멈추고 초과요금은 최대 1시간분만 표시·청구되며 Toss sandbox 결제 후 complete 진입 | 대기 |  |
-| 19 | 리뷰 작성 | complete/review 작성 | 완료 예약에 리뷰 저장/표시 | 대기 |  |
-| 20 | 내 차 등록/정비 이력 | `/my-car` 차량 추가 및 완료 예약 차량 선택 | 차종 드롭다운이 한 줄로 표시되고 소형 화물차 등 12종 선택 가능, 완료 작업명·정비소·이용 일시·최종 정산액 표시 | 대기 |  |
+| 13 | Self 체크인 시간 제한 | 예약 시작 15분보다 일찍 `/checkin` 진입/제출 | 입장 가능 시각 안내, API `CHECKIN_NOT_OPEN`, 사진 제출 불가 | 성공 | iPhone에서 15분 전 제한 확인 |
+| 14 | Self 체크인 | 예약 시작 15분 전 이후 QR 확인 + 4 photos | 사진 4장 없으면 진행 불가, 완료 시 CHECKED_IN | 부분 성공 | iPhone 사진 4장 제출 확인. QR은 실제 스캔·검증이 아닌 버튼 토글이라 출시 전 방식 확정 필요 |
+| 15 | Self 이용 시작 | 체크인 후 in-use 진입 | 서버 시간 기준 타이머, IN_USE 전환, 연장/SOS/매장 연락 버튼 없음 | 성공 | iPhone 이용 시작 확인 |
+| 16 | 이용 중 재진입 | 이용 중 다른 탭 및 `/reservation`으로 이동 | 최상단 복귀 배너가 보이고 예약은 `진행 중·예정` 탭에 유지됨 | 성공 | 다른 탭 이동 후 복귀 확인 |
+| 17 | Self 체크아웃 | checklist + 2 photos | 검수 재선택 없이 예약 기본요금/검수비/추가요금/추가 결제비용 표시 | 성공 | iPhone 체크아웃 확인 |
+| 18 | 사후정산 결제 | 1시간 이상 초과된 테스트 예약으로 추가 결제 발생 | 타이머는 `초과 이용 01:00:00`에서 멈추고 초과요금은 최대 1시간분만 표시·청구되며 Toss sandbox 결제 후 complete 진입 | 성공 | Toss Sandbox 사후정산 확인 |
+| 19 | 리뷰 작성 | complete/review 작성 | 완료 예약에 리뷰 저장/표시 | 성공 | iPhone 텍스트·사진 리뷰 확인 |
+| 20 | 내 차 등록/정비 이력 | `/my-car` 차량 추가 및 완료 예약 차량 선택 | 차종 드롭다운이 한 줄로 표시되고 소형 화물차 등 12종 선택 가능, 완료 작업명·정비소·이용 일시·최종 정산액 표시 | 성공 | 완료 예약 정비 이력 확인 |
 | 21 | 지난 이용 복귀 | `/reservation` 지난 이용 → 완료 상세 | 상단 뒤로가기로 예약 목록 복귀, 결제 직후 완료 화면에는 미표시 | 대기 |  |
-| 22 | 영수증 재예약 | receipt의 `다시 예약` 선택 | 이용한 정비소 상세로 이동 | 대기 |  |
+| 22 | 영수증 재예약 | receipt의 `다시 예약` 선택 | 이용한 정비소 상세로 이동 | 성공 | iPhone 영수증 흐름 확인 |
 | 23 | 예약 완료 연락 기능 | 주소 복사 / 전화하기 | 실제 정비소 주소가 클립보드에 복사되고 등록 번호로 전화 연결 | 대기 |  |
-| 24 | Shop 예약 결제 | Shop package 선택 → 일정 → Toss sandbox 결제 | 결제 성공 후 예약 확정 | 대기 |  |
+| 24 | Shop 예약 결제 | Shop package 선택 → 일정 → Toss sandbox 결제 | 결제 성공 후 예약 확정 | 성공 | iPhone Safari Toss Sandbox 확인 |
 | 25 | Shop 예약 snapshot | 예약 후 package 가격/이름 변경 | 예약 목록/상세 title이 예약 당시 snapshot 기준으로 안정 표시 | 대기 |  |
 | 26 | 차량 중량 수정 | `/my-car` 기존 차량 `정보 수정` | 차종과 공차중량 kg 저장 후 새로고침해도 유지 | 대기 |  |
 | 27 | 베이 차량 호환성 | 제한 베이 일정 화면에서 허용/비허용 차량 각각 선택 | 허용 차량은 예약 가능, 비허용 차종·중량 초과·중량 미등록 차량은 베이 disabled 및 사유 표시 | 대기 |  |
 | 28 | 홈 정비소 대표 사진 | `/partner-admin` 사진 등록·대표 지정 후 `/` 확인 | 선택한 대표 사진 1장이 해당 정비소 카드에 표시 | 자동 검증 성공 | 실제 Storage 업로드와 홈 public URL 확인 |
 | 29 | 정비소 사진 갤러리 | `/partner/:id` 사진 선택 | 등록한 사진 전체가 순서대로 표시되고 선택 시 화면 내 확대 | 자동 검증 성공 | 실제 업로드 사진과 확대 modal 확인 |
-| 30 | 사용자 프로필 | `/mypage` 닉네임·이름·연락처 저장 후 새로고침 | 입력값 유지, 공개 리뷰에는 닉네임만 표시 | 대기 | 실명·연락처 비공개 확인 |
-| 31 | 사진 리뷰 | 완료 화면에서 사진 1~4장과 리뷰 저장/수정 | 정비소 리뷰와 내 리뷰에 미리보기 표시, 사진 선택 시 확대 | 자동 검증 성공 | JPEG 실제 업로드·공개 리뷰 확대 확인, iPhone HEIC 수동 확인 필요 |
+| 30 | 사용자 프로필 | `/mypage` 닉네임·이름·연락처 저장 후 새로고침 | 입력값 유지, 공개 리뷰에는 닉네임만 표시 | 성공 | iPhone 마이페이지·내 리뷰 확인 |
+| 31 | 사진 리뷰 | 완료 화면에서 사진 1~4장과 리뷰 저장/수정 | 정비소 리뷰와 내 리뷰에 미리보기 표시, 사진 선택 시 확대 | 성공 | 실제 iPhone 사진 업로드·공개 리뷰·확대 확인 |
 | 32 | 리뷰 작성자 구분 | 서로 다른 두 계정 리뷰 확인 | 각 닉네임과 생성형 프로필 표시, 이메일·차량번호 미표시 | 대기 |  |
 | 33 | 전체 리뷰 탐색 | `/partner/:id/reviews` 평점 분포·사진 필터·정렬·사진 선택 | 평균/분포와 사진 리뷰가 표시되고 필터·정렬·화면 내 확대가 동작하며 가로 넘침 없음 | 자동 검증 성공 | 강남 셀프정비소 예시 사진 리뷰 2건으로 모바일 확인 |
 | 34 | 공개 이미지 슬라이드·주소 복사 | 전체 리뷰/정비소 상세/마이페이지 사진 확대, 정비소 주소 copy 선택 | 여러 사진은 좌우 버튼과 방향키로 순환, 단일 사진은 이동 버튼 미표시, 주소는 클립보드 복사 후 완료 상태 표시 | 자동 검증 성공 | 모바일 public 4 passed, 로그인 예약 E2E에서 마이페이지 확대 확인 |
+| 35 | Shop 체크인 상태 화면 | Shop 결제 완료 후 `체크인` 선택 | 실제 패키지명·작업 예정 시간이 표시되고 15분 전까지 체크인이 비활성화되며 완료 버튼은 표시되지 않음 | 수정 후 재확인 | 기존 조기 진입 시 시작 API 오류와 무반응 완료 버튼 노출 수정 |
+| 36 | 차량 선택 overlay | `/partner/:id/work`에서 차량 선택 | 본문만 dim 처리되고 하단 탭은 원래 색상 유지 | 수정 후 재확인 | overlay 하단 경계를 bottom navigation 위로 조정 |
 
 ### 7.5 Partner-admin QA
 
@@ -255,11 +257,11 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 
 | 순서 | 확인 항목 | 결제 경로 | 기대 결과 | 상태 | 비고 / provider order/payment key |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 예약 카드 결제 | Self 또는 Shop 선결제 | `RESERVATION_CONFIRMED` | 대기 |  |
-| 2 | 예약 간편결제 | KakaoPay 등 Toss easy-pay | `RESERVATION_CONFIRMED` | 대기 |  |
-| 3 | 결제 실패/취소 | Toss 창에서 취소 또는 실패 | payment `FAILED` 또는 `CANCELLED` 기록 | 대기 |  |
-| 4 | 예약 취소 환불 | admin/user 취소 가능 경로 | payment `REFUNDED` 또는 refund pending 상태 확인 | 대기 |  |
-| 5 | 사후정산 카드 결제 | checkout 후 추가 결제 | `SETTLEMENT_CONFIRMED` | 대기 |  |
+| 1 | 예약 카드 결제 | Self 또는 Shop 선결제 | `RESERVATION_CONFIRMED` | 성공 | Safari Sandbox 최소 확인 조합 |
+| 2 | 예약 간편결제 | KakaoPay 등 Toss easy-pay | `RESERVATION_CONFIRMED` | 성공 | Safari Sandbox 최소 확인 조합 |
+| 3 | 결제 실패/취소 | Toss 창에서 취소 또는 실패 | payment `FAILED` 또는 `CANCELLED` 기록 | 성공 | Safari Sandbox 최소 확인 조합 |
+| 4 | 예약 취소 환불 | admin/user 취소 가능 경로 | payment `REFUNDED` 또는 refund pending 상태 확인 | 성공 | Safari Sandbox 최소 확인 조합 |
+| 5 | 사후정산 카드 결제 | checkout 후 추가 결제 | `SETTLEMENT_CONFIRMED` | 성공 | Safari Sandbox 최소 확인 조합 |
 | 6 | 사후정산 간편결제 | checkout 후 easy-pay | `SETTLEMENT_CONFIRMED` | 대기 |  |
 
 ### 7.8 Cleanup / Release Gate 기록
@@ -273,4 +275,5 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 5 | Storage evidence 확인 | 불필요 사진 파일 cleanup 또는 식별 가능 | 대기 |  |
 | 6 | 공개 이미지 운영 정책 | 신고/삭제/저작권·개인정보 대응 담당과 절차 확정 | 대기 | 리뷰 이미지 출시 전 필수 |
 | 7 | 공개 Storage 확인 | `partner-images`, `review-images` 파일 제한·공개 범위 확인 | 성공 | schema check 및 실제 public URL 응답 확인 |
+| 8 | 실제 체크인 검증 | Self/Shop별 현장 도착 확인 방식 확정 | 대기 | 현재 QR은 실제 스캔·검증이 아닌 UI 토글. 가짜 QR 제거 후 현장 QR 또는 Partner 확인 방식 구현 필요 |
 | 8 | Production 승격 판단 | 실패/보류 항목 없음 | 대기 |  |

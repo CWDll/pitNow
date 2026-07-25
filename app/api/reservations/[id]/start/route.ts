@@ -139,7 +139,7 @@ export async function POST(req: Request, context: Context) {
     reservationId,
     fromStatus: expectedFromStatus,
     toStatus: "IN_USE",
-    actorType: reservation.reservation_type === "SHOP_SERVICE" ? "PARTNER" : "USER",
+    actorType: "USER",
     actorUserId: auth.source === "supabase" ? auth.userId : null,
     reason: "usage_started",
     client: db,

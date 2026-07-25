@@ -51,6 +51,40 @@ test.describe("mobile public smoke", () => {
     await expect(page.getByRole("link", { name: "예약 내역으로 이동" })).toBeVisible();
   });
 
+  test("shop booking shows its package schedule and gates early check-in", async ({
+    page,
+  }) => {
+    const startTime = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    startTime.setUTCMinutes(0, 0, 0);
+    const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
+    const query = new URLSearchParams({
+      reservationType: "SHOP_SERVICE",
+      bookingMode: "PACKAGE",
+      garageName: "강남 셀프정비소",
+      carLabel: "현대 아반떼 CV7 (2020) · 32조 1234",
+      packageTitle: "엔진오일 패키지",
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+    });
+
+    await page.goto(`/in-use?${query.toString()}`);
+
+    await expect(
+      page.getByRole("heading", { name: "엔진오일 패키지" }),
+    ).toBeVisible();
+    await expect(page.getByText("작업 예정 시간")).toBeVisible();
+    await expect(page.getByText("체크인 대기", { exact: true })).toHaveCount(2);
+    await expect(page.getByRole("button", { name: /부터 체크인/ })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "작업 완료 처리" }),
+    ).toHaveCount(0);
+
+    await page.goto(`/reservation-complete?${query.toString()}`);
+    await expect(page.getByText("예약 시간에 방문해 체크인하세요")).toBeVisible();
+    await expect(page.getByText("QR 코드", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "체크인" })).toBeVisible();
+  });
+
   test("partner reviews provide summary, photo filtering, and image preview", async ({
     page,
   }) => {
