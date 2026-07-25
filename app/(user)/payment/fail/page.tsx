@@ -50,11 +50,6 @@ function PaymentFailContent() {
         <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {message}
         </p>
-        <p className="mt-3 text-xs text-zinc-400">
-          {recorded
-            ? "실패 기록을 저장했습니다."
-            : "실패 기록을 확인 중입니다."}
-        </p>
         <Link
           href="/reservation"
           className="mt-6 flex h-12 items-center justify-center rounded-2xl bg-zinc-950 text-base font-semibold text-white"
