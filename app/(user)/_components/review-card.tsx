@@ -35,14 +35,22 @@ function avatarTone(authorId: string) {
 export function ReviewCard({
   review,
   compact = false,
+  feed = false,
 }: {
   review: PublicReview;
   compact?: boolean;
+  feed?: boolean;
 }) {
   const [previewUrl, setPreviewUrl] = useState("");
 
   return (
-    <article className={compact ? "py-4" : "rounded-lg border border-slate-200 bg-white p-4"}>
+    <article
+      className={
+        compact || feed
+          ? "py-5"
+          : "rounded-lg border border-slate-200 bg-white p-4"
+      }
+    >
       <div className="flex items-center gap-3">
         <span
           className={`grid size-10 shrink-0 place-items-center rounded-full ${avatarTone(review.authorId)}`}
@@ -53,26 +61,39 @@ export function ReviewCard({
           <p className="truncate text-sm font-black text-slate-900">
             {review.nickname}
           </p>
-          <p className="mt-1 text-xs font-semibold text-slate-400">
-            {formatDate(review.createdAt)}
-          </p>
+          <div className="mt-1 flex items-center gap-2">
+            <span
+              className="flex items-center gap-0.5"
+              aria-label={`별점 ${review.rating}점`}
+            >
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Star
+                  key={index}
+                  className={`size-3.5 ${
+                    index + 1 <= review.rating
+                      ? "fill-amber-400 text-amber-400"
+                      : "fill-slate-100 text-slate-200"
+                  }`}
+                />
+              ))}
+            </span>
+            <span className="text-[11px] font-bold text-slate-400">
+              {review.rating.toFixed(1)}
+            </span>
+          </div>
         </div>
-        <div
-          className="flex shrink-0 items-center gap-1 text-sm font-black text-amber-500"
-          aria-label={`별점 ${review.rating}점`}
-        >
-          <Star className="size-4 fill-current" />
-          {review.rating.toFixed(1)}
-        </div>
+        <time className="shrink-0 text-[11px] font-semibold text-slate-400">
+          {formatDate(review.createdAt)}
+        </time>
       </div>
 
-      <p className="mt-3 text-sm font-medium leading-6 text-slate-700">
+      <p className="mt-4 whitespace-pre-wrap text-sm font-medium leading-6 text-slate-700">
         {review.comment || "내용 없이 별점만 남긴 후기입니다."}
       </p>
 
       {review.imageUrls.length > 0 ? (
         <div
-          className={`mt-3 grid gap-2 ${
+          className={`mt-4 grid gap-2 ${
             review.imageUrls.length === 1 ? "grid-cols-1" : "grid-cols-2"
           }`}
         >

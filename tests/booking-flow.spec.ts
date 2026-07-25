@@ -621,12 +621,15 @@ test.describe("booking flow smoke", () => {
       await expect(
         publicReviewPage.getByText("E2E 예약 루프 검증 후기입니다."),
       ).toBeVisible();
+      const createdReview = publicReviewPage.locator("article").filter({
+        hasText: "E2E 예약 루프 검증 후기입니다.",
+      });
       await expect(
-        publicReviewPage.getByRole("button", {
+        createdReview.getByRole("button", {
           name: "리뷰 사진 1 크게 보기",
         }),
       ).toBeVisible();
-      await publicReviewPage.getByRole("button", {
+      await createdReview.getByRole("button", {
         name: "리뷰 사진 1 크게 보기",
       }).click();
       await expect(

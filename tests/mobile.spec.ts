@@ -50,4 +50,40 @@ test.describe("mobile public smoke", () => {
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "예약 내역으로 이동" })).toBeVisible();
   });
+
+  test("partner reviews provide summary, photo filtering, and image preview", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/partner/11111111-1111-1111-1111-111111111111/reviews",
+    );
+
+    await expect(page.getByRole("heading", { name: "이용 후기" })).toBeVisible();
+    await expect(page.getByText("사진으로 먼저 보기")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^전체 \d+$/ })).toBeVisible();
+
+    const photoFilter = page.getByRole("button", { name: /^사진 \d+$/ });
+    await photoFilter.click();
+    await expect(photoFilter).toHaveAttribute("aria-pressed", "true");
+
+    await page.getByLabel("리뷰 정렬").selectOption("HIGH_RATING");
+    await expect(page.getByLabel("리뷰 정렬")).toHaveValue("HIGH_RATING");
+
+    await page
+      .getByRole("button", { name: "사진 후기 1 크게 보기" })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: "사진 후기 상세보기" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "사진 후기 닫기" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "사진 후기 상세보기" }),
+    ).toBeHidden();
+
+    const viewport = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(viewport.scrollWidth).toBe(viewport.clientWidth);
+  });
 });

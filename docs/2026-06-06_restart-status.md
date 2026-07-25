@@ -2208,3 +2208,37 @@ DB 적용 및 실제 미디어 검증:
 - 완료 예약 실제 리뷰 이미지 업로드, DB 연결, public URL, 공개 리뷰 확대,
   Storage cleanup E2E 성공.
 - 구현 구조와 운영 주의점은 `docs/Public_Media_Profile_Implementation.md`에 기록.
+
+## 67. 2026-07-25 전체 리뷰 UI와 예시 미디어
+
+- `/partner/:id/reviews`를 평균 평점, 5~1점 분포, 사진 우선 보기, 전체/사진
+  필터, 최신순/별점순 정렬을 갖춘 모바일 리뷰 탐색 화면으로 개편했다.
+- 반복 카드 대신 구분선 기반 feed를 사용하고 작성자, 별점, 날짜, 본문, 사진의
+  정보 계층을 정리했다.
+- 정비소 외관·베이·장비 3장과 작업 완료 사진 리뷰 2장을 비식별 생성형
+  이미지로 제작하고 JPEG로 압축했다.
+- `seed:public-media-examples`가 Storage 객체와 DB 메타데이터를 경로 기준으로
+  중복 검사하며, 리뷰당 최대 4장 제한 안에서 예시 미디어를 연결한다.
+- 예시 외관 사진은 강남 셀프정비소 대표 이미지로 지정되어 홈 카드에 표시되고,
+  전체 3장은 정비소 상세 갤러리에 표시된다.
+- 예시 리뷰 사진 2장은 공개 전체 리뷰의 사진 탐색과 확대 보기에 표시된다.
+
+구현 상세:
+
+- `ReviewExplorer` client component가 필터·정렬과 평점 분포 계산을 담당한다.
+- `ReviewCard`의 `feed` 변형으로 기존 compact 리뷰와 미디어 확대 로직을
+  재사용한다.
+- 사용자 화면은 `partner-images`, `review-images` public bucket URL을
+  표시하고 저장소 원본은 `public/images/sample-media`에 보존한다.
+- 자세한 데이터 흐름과 운영 방법은
+  `docs/Public_Media_Profile_Implementation.md` 9절에 기록했다.
+
+현재 검증:
+
+- `node scripts/check-supabase-schema.mjs` 전체 성공.
+- `npm run seed:public-media-examples` 재실행 성공, 중복 row 없음.
+- `npx tsc --noEmit`, `npm run lint`, `npm run build` 성공.
+- iPhone 14 Pro Max viewport에서 홈, 정비소 상세, 전체 리뷰 가로 넘침 없음 확인.
+- 모바일 public smoke 3 passed. 리뷰 필터·정렬·사진 확대 modal 포함.
+- `npm run e2e:ui:fake` 1 passed. 예약부터 실제 리뷰 이미지 업로드, 공개
+  리뷰 확대, 영수증과 Admin drill-down까지 회귀 확인.

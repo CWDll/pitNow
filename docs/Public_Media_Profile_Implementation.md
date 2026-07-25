@@ -145,3 +145,34 @@ Safari/iPhone에서 선택할 수 있는 HEIC/HEIF는 브라우저와 Chromium �
   추가한다.
 - public 이미지 트래픽과 Storage 사용량을 모니터링하고 필요하면 CDN cache,
   리사이즈 thumbnail, 원본 보관 정책을 도입한다.
+
+## 9. 리뷰 탐색 UI와 예시 미디어
+
+`/partner/:id/reviews`는 단순 카드 목록 대신 다음 탐색 구조를 사용한다.
+
+- 전체 평균과 5~1점 분포를 한 화면에서 비교한다.
+- 사진이 있는 리뷰 이미지를 상단 가로 목록에서 먼저 탐색한다.
+- 전체/사진 리뷰 필터와 최신순/별점순 정렬을 client state로 처리한다.
+- 본문 리뷰는 중첩 카드 대신 구분선 기반 feed로 표시해 작은 화면의 밀도를
+  낮춘다.
+- 상단 사진과 각 리뷰 사진 모두 화면 내 modal에서 확대하며 다운로드 링크를
+  사용하지 않는다.
+- `ReviewCard`의 `feed` 변형을 추가해 정비소 상세의 compact 리뷰와 전체 리뷰
+  화면이 같은 작성자·별점·사진 표시 로직을 공유한다.
+
+예시 사진은 실제 업체나 사용자의 자산을 복제하지 않고 생성형 이미지로 제작했다.
+사람, 식별 가능한 차량번호, 상표, 워터마크가 나타나지 않도록 한 뒤 JPEG로
+축소·압축해 `public/images/sample-media`에 보관한다.
+
+`npm run seed:public-media-examples [partnerId]`는 다음 작업을 반복 실행 가능한
+형태로 수행한다.
+
+1. `partner-images` bucket에 정비소 외관·베이·장비 사진을 upsert한다.
+2. `partner_images`에 없는 메타데이터만 추가하고 외관 사진을 대표로 지정한다.
+3. 최근 리뷰 두 건에 예시 사진을 연결하되 리뷰당 최대 4장 제한을 넘기지 않는다.
+4. `review-images`의 sample namespace와 `review_images` row를 storage path로
+   중복 검사한다.
+
+홈과 정비소 상세은 DB 메타데이터로 만든 Supabase public URL을 사용한다.
+`public/images/sample-media` 원본은 시드 재실행과 개발 이력 보존용이며 사용자
+화면은 배포 서버의 정적 경로가 아니라 Storage URL을 표시한다.
