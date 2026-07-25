@@ -12,7 +12,10 @@ type ReviewSort = "LATEST" | "HIGH_RATING" | "LOW_RATING";
 
 function RatingStars({ rating }: { rating: number }) {
   return (
-    <span className="flex items-center gap-0.5" aria-label={`평균 별점 ${rating.toFixed(1)}점`}>
+    <span
+      className="flex items-center gap-0.5"
+      aria-label={`평균 별점 ${rating.toFixed(1)}점`}
+    >
       {Array.from({ length: 5 }).map((_, index) => {
         const filled = index + 1 <= Math.round(rating);
         return (
@@ -30,11 +33,7 @@ function RatingStars({ rating }: { rating: number }) {
   );
 }
 
-export function ReviewExplorer({
-  reviews,
-}: {
-  reviews: PublicReview[];
-}) {
+export function ReviewExplorer({ reviews }: { reviews: PublicReview[] }) {
   const [filter, setFilter] = useState<ReviewFilter>("ALL");
   const [sort, setSort] = useState<ReviewSort>("LATEST");
   const [previewUrl, setPreviewUrl] = useState("");
@@ -68,9 +67,7 @@ export function ReviewExplorer({
       if (sort === "LOW_RATING") {
         return a.rating - b.rating;
       }
-      return (
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [filter, reviews, sort]);
 
@@ -111,7 +108,7 @@ export function ReviewExplorer({
                     style={{ width: `${item.percentage}%` }}
                   />
                 </span>
-                <span className="text-right text-[11px] font-semibold text-slate-400">
+                <span className="text-center text-[11px] font-semibold text-slate-400">
                   {item.count}
                 </span>
               </div>

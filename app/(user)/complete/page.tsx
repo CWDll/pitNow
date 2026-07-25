@@ -104,7 +104,11 @@ function formatUsageDuration(startTime: string, endTime: string): string {
   const startMs = new Date(startTime).getTime();
   const endMs = new Date(endTime).getTime();
 
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+  if (
+    !Number.isFinite(startMs) ||
+    !Number.isFinite(endMs) ||
+    endMs <= startMs
+  ) {
     return "-";
   }
 
@@ -136,7 +140,8 @@ function CompletePageContent() {
       searchParams.get("reservationType") === "SHOP_SERVICE"
         ? "SHOP_SERVICE"
         : "SELF_SERVICE",
-    bookingMode: searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF",
+    bookingMode:
+      searchParams.get("bookingMode") === "PACKAGE" ? "PACKAGE" : "SELF",
     partnerId: searchParams.get("partnerId") ?? "",
     garageName: searchParams.get("garageName") ?? "강남 셀프정비소",
     bayId: "",
@@ -158,7 +163,8 @@ function CompletePageContent() {
     reservationId,
     basePrice: Number(searchParams.get("totalPrice") ?? "15000"),
     extraFee: Number(searchParams.get("extraFee") ?? "0"),
-    helperVerifyRequested: Number(searchParams.get("helperVerifyFee") ?? "0") > 0,
+    helperVerifyRequested:
+      Number(searchParams.get("helperVerifyFee") ?? "0") > 0,
     helperVerifyFee: Number(searchParams.get("helperVerifyFee") ?? "0"),
     totalSettlement: Number(searchParams.get("totalSettlement") ?? "0"),
     completedAt: "",
@@ -194,7 +200,7 @@ function CompletePageContent() {
       ? checkout.totalSettlement
       : basePrice + extraFee + helperVerifyFee;
   const paidReservationAmount = Number.isFinite(checkout.paidReservationAmount)
-    ? checkout.paidReservationAmount ?? detail.totalPrice
+    ? (checkout.paidReservationAmount ?? detail.totalPrice)
     : detail.totalPrice;
   const settlementAmountDue =
     typeof checkout.settlementAmountDue === "number" &&
@@ -474,8 +480,7 @@ function CompletePageContent() {
       return;
     }
 
-    const availableSlots =
-      4 - reviewImages.length - pendingReviewImages.length;
+    const availableSlots = 4 - reviewImages.length - pendingReviewImages.length;
     const selected = Array.from(files).slice(0, Math.max(0, availableSlots));
 
     if (selected.length === 0) {
@@ -605,8 +610,12 @@ function CompletePageContent() {
           </span>
         </p>
         <p className="mt-3 flex justify-between text-lg font-semibold">
-          <span>{isSettlementPaid ? "추가 정산 결제 완료" : "추가 결제 필요"}</span>
-          <span className={isSettlementPaid ? "text-emerald-600" : "text-red-500"}>
+          <span>
+            {isSettlementPaid ? "추가 정산 결제 완료" : "추가 결제 필요"}
+          </span>
+          <span
+            className={isSettlementPaid ? "text-emerald-600" : "text-red-500"}
+          >
             {settlementAmountDue.toLocaleString("ko-KR")}원
           </span>
         </p>
@@ -714,9 +723,6 @@ function CompletePageContent() {
                   alt={`추가할 리뷰 사진 ${index + 1}`}
                   className="size-full object-cover"
                 />
-                <span className="absolute bottom-2 left-2 rounded-md bg-blue-600 px-2 py-1 text-[11px] font-bold text-white">
-                  저장 전
-                </span>
                 <button
                   type="button"
                   aria-label={`추가할 리뷰 사진 ${index + 1} 삭제`}

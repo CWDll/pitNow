@@ -174,7 +174,9 @@ export default async function HomePage() {
           </h1>
         </header>
         <div className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-bold text-red-700">서비스 연결을 확인해 주세요</p>
+          <p className="text-sm font-bold text-red-700">
+            서비스 연결을 확인해 주세요
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {missingSupabaseEnvMessage}
           </p>
@@ -206,14 +208,6 @@ export default async function HomePage() {
             <CalendarDays className="size-4 text-blue-600" />
             예약 확인
           </Link>
-        </div>
-
-        <div className="mt-5 flex items-center gap-2 text-xs font-bold text-slate-600">
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-2">
-            <MapPin className="size-3.5 text-blue-600" />
-            강남·서초 중심
-          </span>
-          <span className="text-slate-400">주변 제휴 정비소를 확인하세요</span>
         </div>
       </header>
 
