@@ -29,8 +29,9 @@
 
 ## Check-in
 
-- 4 vehicle photos required
-- Without photo, timer cannot start
+- Self Service requires 4 vehicle photos after Partner arrival verification.
+- Shop Service does not require user check-in photos.
+- Without Self Service photos, the timer cannot start.
 - HEIC/HEIF uploads are converted to JPEG in the browser before storage so evidence remains previewable in web consoles.
 - Check-in and usage start open 15 minutes before the reserved start time
 - Check-in is rejected before the opening time and after the reserved end time
@@ -116,3 +117,15 @@
 - HEIC/HEIF selected on iPhone is converted to JPEG before public upload.
 - User-generated image moderation/reporting is a production-launch policy gate;
   the MVP upload feature does not imply unrestricted content acceptance.
+## Partner Arrival Check-in
+
+- Self Service와 Shop Service 모두 사용자가 현장의 정비소 고정 QR을 스캔하거나
+  수동 코드를 입력해 도착을 인증한다.
+- QR과 수동 코드는 베이별이 아니라 Partner별로 발급하며 모든 예약에 재사용한다.
+- 인증정보는 사용자에게 조회 API로 제공하지 않고 입력값만 서버에서 대조한다.
+- 인증정보 재발급 시 기존 QR과 수동 코드는 즉시 무효화한다.
+- Self Service는 도착 인증 후 차량 4면 사진 제출이 필요하다.
+- Shop Service는 도착 인증으로 `CHECKED_IN`이 되며 사용자는 작업 상태를
+  조회만 한다.
+- Shop Service의 `CHECKED_IN → IN_USE → COMPLETED` 전환은 해당 정비소의
+  Partner-admin만 수행한다.

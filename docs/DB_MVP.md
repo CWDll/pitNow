@@ -667,3 +667,34 @@ RLS:
 - 사진 업로드/삭제와 메타데이터 쓰기는 권한을 검증하는 서버 API만 수행한다.
 - Partner 사진 변경은 `target_type = PARTNER_IMAGE`로
   `partner_admin_audit_logs`에 기록한다.
+
+---
+
+## partner_checkin_credentials / reservation_checkin_verifications
+
+`partner_checkin_credentials`는 정비소마다 하나의 활성 고정 QR token과 수동
+코드를 저장한다. 인증정보는 공개 조회하지 않으며 해당 정비소 Partner-admin과
+service-role 서버 API만 접근한다. 재발급 시 QR token과 수동 코드를 함께
+교체하고 감사 로그를 남긴다.
+
+`reservation_checkin_verifications`는 예약별 도착 인증 방식과 사용자, 인증
+시각을 기록한다. Self 예약은 이 row가 있어야 사진 체크인을 제출할 수 있고,
+Shop 예약은 인증 저장과 함께 `CHECKED_IN`으로 전환된다.
+
+```sql
+create table partner_checkin_credentials (
+  partner_id uuid primary key references partners(id) on delete cascade,
+  qr_token text not null unique,
+  manual_code text not null unique,
+  is_active boolean not null default true,
+  rotated_at timestamptz not null default now()
+);
+
+create table reservation_checkin_verifications (
+  reservation_id uuid primary key references reservations(id) on delete cascade,
+  partner_id uuid not null references partners(id) on delete cascade,
+  method text not null check (method in ('QR', 'MANUAL_CODE')),
+  verified_by uuid not null references auth.users(id) on delete cascade,
+  verified_at timestamptz not null default now()
+);
+```

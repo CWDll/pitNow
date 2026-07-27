@@ -155,12 +155,38 @@ packageTitle
 
 ⸻
 
-3. POST /api/checkin
+3. POST /api/checkin/verify-partner
 
 ⸻
 
 기능:
-체크인 + 사용 시작
+정비소 고정 QR 또는 수동 코드로 사용자 도착 인증
+
+입력:
+{
+reservationId: string,
+method: 'QR' | 'MANUAL_CODE',
+credential: string
+}
+
+검증:
+• 로그인 사용자가 소유한 CONFIRMED 예약
+• 예약 시작 15분 전부터 예약 종료 시각 전
+• 예약의 partner와 활성 인증정보가 일치
+
+로직:
+• reservation_checkin_verifications upsert
+• SHOP_SERVICE는 CONFIRMED → CHECKED_IN
+• SELF_SERVICE는 사진 제출 전까지 CONFIRMED 유지
+
+⸻
+
+4. POST /api/checkin
+
+⸻
+
+기능:
+Self Service 사진 체크인
 
 입력:
 {
@@ -173,6 +199,8 @@ rightImg: string
 
 검증:
 • 이미지 4장 필수
+• SELF_SERVICE만 허용
+• 동일 예약·정비소의 도착 인증 필수
 • reservation 존재
 • status = CONFIRMED
 • 이미 체크인된 경우 불가
@@ -191,7 +219,7 @@ status: “CHECKED_IN”
 
 ⸻
 
-4. POST /api/reservations/:id/start
+5. POST /api/reservations/:id/start
 
 ⸻
 
@@ -200,7 +228,7 @@ status: “CHECKED_IN”
 
 검증:
 • SELF_SERVICE는 CHECKED_IN 상태만 시작 가능
-• SHOP_SERVICE는 CONFIRMED 상태만 시작 가능
+• SHOP_SERVICE는 호출 불가 (`PARTNER_WORK_START_REQUIRED`)
 • 이미 IN_USE이면 idempotent 성공 응답
 • COMPLETED/CANCELLED 상태는 시작 불가
 • 예약 시작 15분 전부터 예약 종료 시각 전까지만 가능

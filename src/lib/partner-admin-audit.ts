@@ -12,13 +12,18 @@ export type PartnerAdminAuditAction =
   | "RESERVATION_NOTE_REOPENED"
   | "PARTNER_IMAGE_CREATED"
   | "PARTNER_IMAGE_COVER_UPDATED"
-  | "PARTNER_IMAGE_DELETED";
+  | "PARTNER_IMAGE_DELETED"
+  | "CHECKIN_CREDENTIAL_ROTATED"
+  | "SHOP_WORK_STARTED"
+  | "SHOP_WORK_COMPLETED";
 
 export type PartnerAdminAuditTargetType =
   | "BAY"
   | "AVAILABILITY_BLOCK"
   | "RESERVATION_NOTE"
-  | "PARTNER_IMAGE";
+  | "PARTNER_IMAGE"
+  | "CHECKIN_CREDENTIAL"
+  | "RESERVATION";
 
 interface RecordPartnerAdminAuditParams {
   db: SupabaseClient;

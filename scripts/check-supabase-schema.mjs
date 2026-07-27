@@ -224,6 +224,30 @@ const checks = [
     ],
   },
   {
+    label: "20260727 partner fixed check-in credentials",
+    table: "partner_checkin_credentials",
+    columns: [
+      "partner_id",
+      "qr_token",
+      "manual_code",
+      "is_active",
+      "rotated_at",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  {
+    label: "20260727 reservation arrival verification",
+    table: "reservation_checkin_verifications",
+    columns: [
+      "reservation_id",
+      "partner_id",
+      "method",
+      "verified_by",
+      "verified_at",
+    ],
+  },
+  {
     label: "20260609/20260620 checkout settlement columns",
     table: "checkouts",
     columns: [

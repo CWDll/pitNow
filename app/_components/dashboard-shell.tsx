@@ -14,6 +14,7 @@ import {
   ReceiptText,
   ShieldCheck,
   Wrench,
+  QrCode,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -41,6 +42,11 @@ const adminNavItems = [
 const partnerNavItems = [
   { href: "/partner-admin", label: "운영 현황", icon: LayoutDashboard },
   { href: "/partner-admin#images", label: "정비소 사진", icon: Images },
+  {
+    href: "/partner-admin#checkin-credential",
+    label: "체크인 인증",
+    icon: QrCode,
+  },
   { href: "/partner-admin#bays", label: "베이 관리", icon: Wrench },
   { href: "/partner-admin#packages", label: "패키지·가격", icon: Boxes },
   { href: "/partner-admin#availability", label: "예약 차단", icon: Ban },

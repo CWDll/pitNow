@@ -6,7 +6,6 @@ import {
   CalendarClock,
   CircleAlert,
   Clock3,
-  LoaderCircle,
   ShieldCheck,
 } from "lucide-react";
 
@@ -71,9 +70,7 @@ function InUsePageContent() {
   const [tick, setTick] = useState<number>(() => Date.now());
   const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
   const [startError, setStartError] = useState<string>("");
-  const [completionError, setCompletionError] = useState<string>("");
   const [isStarting, setIsStarting] = useState(false);
-  const [isCompleting, setIsCompleting] = useState(false);
 
   const reservationId = searchParams.get("reservationId") ?? "";
   const reservationTypeFromQuery = parseMode(searchParams.get("reservationType"));
@@ -162,11 +159,18 @@ function InUsePageContent() {
     }
 
     void hydrateReservationDetail();
+    const pollingId =
+      reservationTypeFromQuery === "SHOP_SERVICE"
+        ? window.setInterval(() => void hydrateReservationDetail(), 10_000)
+        : null;
 
     return () => {
       isCancelled = true;
+      if (pollingId !== null) {
+        window.clearInterval(pollingId);
+      }
     };
-  }, [reservationId]);
+  }, [reservationId, reservationTypeFromQuery]);
 
   const serverNowMs = tick + serverOffsetMs;
 
@@ -326,61 +330,6 @@ function InUsePageContent() {
     router.push(`/checkout?${query.toString()}`);
   }
 
-  async function goCompleteDirectly() {
-    if (isCompleting) {
-      return;
-    }
-
-    setIsCompleting(true);
-    setCompletionError("");
-    const hasSession = await requireClientSession();
-
-    if (!hasSession) {
-      setIsCompleting(false);
-      return;
-    }
-
-    try {
-      const response = await authFetch("/api/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ reservationId }),
-      });
-      const data: unknown = await response.json();
-
-      if (!response.ok) {
-        setCompletionError(
-          extractApiErrorMessage(data, "작업 완료 처리에 실패했습니다."),
-        );
-        return;
-      }
-
-      const typed = data as { extraFee?: number };
-      const query = new URLSearchParams({
-        reservationId,
-        reservationType: detail.reservationType,
-        partnerId: detail.partnerId,
-        carId: detail.carId,
-        garageName: detail.garageName,
-        carLabel: detail.carLabel,
-        workTitle: detail.packageTitle || detail.workTitle,
-        totalPrice: String(confirmedTotalPrice),
-        extraFee: String(typed.extraFee ?? 0),
-        taskIds: detail.taskIds,
-        taskLabels: detail.taskLabels,
-        selectedTaskCount: detail.selectedTaskCount,
-      });
-
-      router.push(`/complete?${query.toString()}`);
-    } catch {
-      setCompletionError("작업 완료 처리 중 네트워크 오류가 발생했습니다.");
-    } finally {
-      setIsCompleting(false);
-    }
-  }
-
   if (detail.reservationType === "SHOP_SERVICE") {
     return (
       <section className="pb-24 pt-8">
@@ -394,9 +343,13 @@ function InUsePageContent() {
             {detail.packageTitle || detail.workTitle}
           </h1>
           <p className="mt-3 text-base text-zinc-700">
-            {detail.status === "IN_USE"
-              ? "정비소에서 예약한 패키지 작업을 진행하고 있습니다."
-              : `체크인은 예약 시작 ${CHECKIN_EARLY_MINUTES}분 전부터 가능합니다.`}
+            {detail.status === "CHECKED_IN"
+              ? "도착 인증이 완료되었습니다. 정비소 담당자의 작업 시작을 기다려 주세요."
+              : detail.status === "IN_USE"
+                ? "정비소에서 예약한 패키지 작업을 진행하고 있습니다."
+                : detail.status === "COMPLETED"
+                  ? "정비소에서 작업 완료 처리를 마쳤습니다."
+                  : `체크인은 예약 시작 ${CHECKIN_EARLY_MINUTES}분 전부터 가능합니다.`}
           </p>
         </div>
 
@@ -446,37 +399,39 @@ function InUsePageContent() {
           </div>
         ) : null}
 
-        {startError || completionError ? (
+        {startError ? (
           <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-            {startError || completionError}
+            {startError}
           </p>
         ) : null}
 
         <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
           <button
             type="button"
-            onClick={
-              detail.status === "CONFIRMED"
-                ? () => void startReservation()
-                : () => void goCompleteDirectly()
-            }
+            onClick={() => {
+              if (detail.status === "CONFIRMED") {
+                router.push(`/checkin?reservationId=${encodeURIComponent(reservationId)}`);
+              } else if (detail.status === "COMPLETED") {
+                router.push(
+                  `/complete?from=reservation&reservationId=${encodeURIComponent(reservationId)}`,
+                );
+              }
+            }}
             disabled={
-              isStarting ||
-              isCompleting ||
-              (detail.status === "CONFIRMED" && shopWindowState !== "OPEN") ||
-              (detail.status !== "CONFIRMED" && detail.status !== "IN_USE")
+              detail.status !== "CONFIRMED" && detail.status !== "COMPLETED"
             }
             className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 text-lg font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-500"
           >
-            {isStarting || isCompleting ? (
-              <LoaderCircle className="size-5 animate-spin" />
-            ) : null}
             {detail.status === "CONFIRMED"
               ? shopWindowState === "NOT_OPEN"
-                ? `${shopCheckinOpensAtLabel}부터 체크인`
+                ? `${shopCheckinOpensAtLabel}부터 체크인 가능`
                 : "체크인"
+              : detail.status === "CHECKED_IN"
+                ? "정비소 작업 시작 대기"
               : detail.status === "IN_USE"
-                ? "작업 완료 처리"
+                ? "정비소 작업 진행 중"
+                : detail.status === "COMPLETED"
+                  ? "완료 내역 보기"
                 : "처리할 수 없는 예약"}
           </button>
         </div>

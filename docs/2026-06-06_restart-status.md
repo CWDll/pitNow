@@ -2261,3 +2261,35 @@ DB 적용 및 실제 미디어 검증:
 - 모바일 public smoke 4 passed. 전체 리뷰 1→2 이동, 정비소 갤러리 앞뒤 이동,
   주소 복사 완료 상태와 가로 overflow를 확인했다.
 - iPhone 14 Pro Max 캡처에서 이동/닫기 버튼과 이미지가 겹치지 않는 것을 확인했다.
+
+## 69. 2026-07-27 Partner 고정 체크인과 Shop 작업 권한 분리
+
+- 정비소별 고정 QR token과 수동 체크인 코드를 발급한다.
+- 사용자는 예약 시작 15분 전부터 앱 카메라로 QR을 스캔하거나 수동 코드를
+  입력해 현장 도착을 인증한다.
+- Self 예약은 도착 인증 후 기존 차량 4면 사진을 제출하고 이용을 시작한다.
+- Shop 예약은 도착 인증으로 `CHECKED_IN`이 되며 사용자는 진행 상태만 조회한다.
+- Partner-admin 예약 상세에서 `작업 시작`과 `작업 완료`를 처리해
+  `CHECKED_IN → IN_USE → COMPLETED`로 전환한다.
+- Shop 사용자의 직접 작업 시작과 체크아웃 API 호출은 403으로 거부한다.
+- Partner Console에서 QR 이미지 저장, 수동 코드 복사와 인증정보 재발급을
+  지원한다.
+- 인증정보 재발급과 Shop 작업 상태 변경은 Partner 감사 로그에 기록한다.
+
+DB 적용:
+
+- `db/migrations/20260727_partner_checkin_credentials.sql` 적용 완료.
+- `partner_checkin_credentials`,
+  `reservation_checkin_verifications`를 포함한 schema check 전체 성공.
+
+현재 검증:
+
+- `npm run verify:static` 성공.
+- `PITNOW_E2E_BASE_URL=http://localhost:3000 npm run e2e:partner-admin` 성공.
+- `PITNOW_E2E_BASE_URL=http://localhost:3000 npm run e2e:partner-checkin-shop`
+  성공. 잘못된 코드 거부, 수동 코드/QR 성공, User 403, Partner 시작·완료,
+  최종 정산과 상태·감사 로그를 확인했다.
+- `npm run e2e:ui:fake` 성공, 1 passed. Self 모바일 전체 예약 흐름에 수동
+  체크인 인증을 포함했다.
+- `npm run verify:partner-admin-ui` 성공, 1 passed. Partner 고정 QR과 수동
+  코드 UI를 실제 데이터로 확인했다.

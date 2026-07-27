@@ -110,6 +110,28 @@ test.describe("partner admin dashboard", () => {
         page.getByRole("heading", { name: "정비소 사진" }),
       ).toBeVisible();
       await expect(page.getByText(/최대 8장 등록/)).toBeVisible();
+      const checkinCredentialSection = page.locator(
+        "section#checkin-credential",
+      );
+      await expect(
+        checkinCredentialSection.getByRole("heading", {
+          name: "현장 체크인 인증",
+        }),
+      ).toBeVisible();
+      await expect(checkinCredentialSection.locator("code")).toHaveText(
+        /^PIT-[A-Z0-9]{4}-[A-Z0-9]{4}$/,
+        { timeout: 15_000 },
+      );
+      await expect(
+        checkinCredentialSection.locator(`img[alt="${seed.partnerName} 체크인 QR"]`),
+      ).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(
+        checkinCredentialSection.getByRole("link", {
+          name: "QR 이미지 저장",
+        }),
+      ).toBeVisible();
 
       const imageSection = page.locator("section#images");
       const uploadStartedAt = new Date(Date.now() - 1_000).toISOString();

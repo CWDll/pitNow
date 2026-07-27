@@ -294,6 +294,14 @@ export async function POST(req: Request) {
     );
   }
 
+  if (normalizeReservationType(reservation.reservation_type) === "SHOP_SERVICE") {
+    return errorResponse(
+      403,
+      "PARTNER_COMPLETION_REQUIRED",
+      "정비 맡기기 예약은 정비소 담당자가 작업 완료를 처리합니다.",
+    );
+  }
+
   if (reservation.status !== "CHECKED_IN" && reservation.status !== "IN_USE") {
     return errorResponse(
       400,

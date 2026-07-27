@@ -38,12 +38,6 @@ function errorResponse(status: number, code: string, message: string) {
   );
 }
 
-function getExpectedFromStatus(
-  reservationType: ReservationType,
-): ReservationStatus {
-  return reservationType === "SHOP_SERVICE" ? "CONFIRMED" : "CHECKED_IN";
-}
-
 export async function POST(req: Request, context: Context) {
   if (!hasSupabaseEnv) {
     return NextResponse.json(getSupabaseEnvErrorResponse(), { status: 503 });
@@ -81,6 +75,14 @@ export async function POST(req: Request, context: Context) {
     return errorResponse(404, "RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다.");
   }
 
+  if (reservation.reservation_type === "SHOP_SERVICE") {
+    return errorResponse(
+      403,
+      "PARTNER_WORK_START_REQUIRED",
+      "정비 맡기기 작업은 정비소 담당자가 시작합니다.",
+    );
+  }
+
   const serverNow = new Date().toISOString();
 
   if (reservation.status === "IN_USE") {
@@ -94,9 +96,7 @@ export async function POST(req: Request, context: Context) {
     });
   }
 
-  const expectedFromStatus = getExpectedFromStatus(
-    reservation.reservation_type,
-  );
+  const expectedFromStatus: ReservationStatus = "CHECKED_IN";
 
   if (reservation.status !== expectedFromStatus) {
     return errorResponse(

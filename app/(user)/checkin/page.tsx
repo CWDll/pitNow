@@ -14,6 +14,7 @@ import {
   getCheckinWindowState,
 } from "@/src/lib/checkin-window";
 import { FlowHeader } from "../_components/mobile-ui";
+import { PartnerArrivalVerification } from "./partner-arrival-verification";
 
 type PhotoField = "frontImg" | "rearImg" | "leftImg" | "rightImg";
 
@@ -112,7 +113,7 @@ function CheckinPageContent() {
     selectedTaskCount: searchParams.get("selectedTaskCount") ?? "1",
   }));
 
-  const [qrScanned, setQrScanned] = useState<boolean>(false);
+  const [arrivalVerified, setArrivalVerified] = useState<boolean>(false);
   const [frontImgFile, setFrontImgFile] = useState<File | null>(null);
   const [rearImgFile, setRearImgFile] = useState<File | null>(null);
   const [leftImgFile, setLeftImgFile] = useState<File | null>(null);
@@ -139,7 +140,7 @@ function CheckinPageContent() {
     rightImgFile !== null;
 
   const canSubmit =
-    qrScanned &&
+    arrivalVerified &&
     allPhotosSelected &&
     !missingReservationId &&
     !isDetailLoading &&
@@ -160,6 +161,26 @@ function CheckinPageContent() {
     ],
     [frontImgFile, leftImgFile, rearImgFile, rightImgFile],
   );
+
+  function buildInUseQuery() {
+    return new URLSearchParams({
+      reservationId,
+      reservationType: detail.reservationType,
+      bookingMode: detail.bookingMode,
+      partnerId: detail.partnerId,
+      carId: detail.carId,
+      carLabel: detail.carLabel,
+      garageName: detail.garageName,
+      bayLabel: detail.bayLabel,
+      startTime: detail.startTime,
+      endTime: detail.endTime,
+      totalPrice: String(detail.totalPrice),
+      workTitle: detail.workTitle,
+      taskIds: detail.taskIds,
+      taskLabels: detail.taskLabels,
+      selectedTaskCount: detail.selectedTaskCount,
+    });
+  }
 
   useEffect(() => {
     let isCancelled = false;
@@ -288,23 +309,7 @@ function CheckinPageContent() {
         return;
       }
 
-      const query = new URLSearchParams({
-        reservationId,
-        reservationType: detail.reservationType,
-        bookingMode: detail.bookingMode,
-        partnerId: detail.partnerId,
-        carId: detail.carId,
-        carLabel: detail.carLabel,
-        garageName: detail.garageName,
-        bayLabel: detail.bayLabel,
-        startTime: detail.startTime,
-        endTime: detail.endTime,
-        totalPrice: String(detail.totalPrice),
-        workTitle: detail.workTitle,
-        taskIds: detail.taskIds,
-        taskLabels: detail.taskLabels,
-        selectedTaskCount: detail.selectedTaskCount,
-      });
+      const query = buildInUseQuery();
       router.push(`/in-use?${query.toString()}`);
     } catch (uploadOrNetworkError) {
       setError(
@@ -380,22 +385,31 @@ function CheckinPageContent() {
       ) : null}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
-        <div>
-          <h2 className="mb-2 text-xl font-semibold">QR 스캔</h2>
-          <button
-            type="button"
-            onClick={() => setQrScanned(true)}
-            className={`flex h-36 w-full items-center justify-center rounded-2xl border-2 border-dashed text-lg ${
-              qrScanned
-                ? "border-emerald-500 bg-emerald-50 text-emerald-600"
-                : "border-zinc-300 bg-zinc-100 text-zinc-500"
-            }`}
-          >
-            {qrScanned ? "스캔 완료" : "탭하여 QR 스캔"}
-          </button>
-        </div>
+        <PartnerArrivalVerification
+          disabled={
+            missingReservationId ||
+            isDetailLoading ||
+            !canCheckInStatus ||
+            !canCheckInNow
+          }
+          reservationId={reservationId}
+          verified={arrivalVerified}
+          onVerified={(result) => {
+            setArrivalVerified(true);
+            setError("");
 
-        <div>
+            if (!result.requiresPhotos) {
+              setDetail((current) => ({
+                ...current,
+                status: "CHECKED_IN",
+              }));
+              const query = buildInUseQuery();
+              router.push(`/in-use?${query.toString()}`);
+            }
+          }}
+        />
+
+        {detail.reservationType === "SELF_SERVICE" ? <div>
           <h2 className="mb-2 text-xl font-semibold">차량 사진 촬영 (4방향)</h2>
           <div className="grid grid-cols-2 gap-3">
             {tiles.map((tile) => (
@@ -428,11 +442,16 @@ function CheckinPageContent() {
               </label>
             ))}
           </div>
-        </div>
+        </div> : (
+          <section className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+            정비 맡기기 예약은 도착 인증 후 정비소 담당자가 작업 시작과 완료를
+            처리합니다. 차량을 인계한 뒤 진행 상태를 확인해 주세요.
+          </section>
+        )}
 
-        {!canSubmit ? (
+        {detail.reservationType === "SELF_SERVICE" && !canSubmit ? (
           <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-            ⚠ QR 스캔과 사진 4장, 체크인 가능한 예약 상태가 필요합니다.
+            정비소 도착 인증과 사진 4장, 체크인 가능한 예약 상태가 필요합니다.
           </p>
         ) : null}
 
@@ -442,15 +461,15 @@ function CheckinPageContent() {
           </p>
         ) : null}
 
-        <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+        {detail.reservationType === "SELF_SERVICE" ? <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
           <button
             type="submit"
             disabled={!canSubmit || isLoading}
             className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
           >
-            {isLoading ? "처리 중..." : "체크인 완료 (타이머 시작)"}
+            {isLoading ? "처리 중..." : "사진 제출하고 체크인 완료"}
           </button>
-        </div>
+        </div> : null}
       </form>
     </section>
   );

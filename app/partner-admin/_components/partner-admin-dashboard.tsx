@@ -10,6 +10,7 @@ import {
   convertHeicBlobToJpeg,
   looksLikeHeic,
 } from "@/src/lib/heic-image";
+import { PartnerCheckinCredentialManager } from "./partner-checkin-credential-manager";
 import { PartnerImageManager } from "./partner-image-manager";
 
 // type, interface, API는 나중에 분리해야 함. 한번에 옮길 것.
@@ -615,6 +616,8 @@ export function PartnerAdminDashboard() {
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
   const [isCreatingBlock, setIsCreatingBlock] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isUpdatingShopStatus, setIsUpdatingShopStatus] = useState(false);
+  const [shopStatusMessage, setShopStatusMessage] = useState("");
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [isCreatingOperationalNote, setIsCreatingOperationalNote] =
@@ -976,6 +979,59 @@ export function PartnerAdminDashboard() {
     setDetail(null);
     setNotes([]);
     setSelectedOperationalAction(null);
+  }
+
+  async function updateShopReservationStatus(action: "START" | "COMPLETE") {
+    if (!selectedReservationId || isUpdatingShopStatus) {
+      return;
+    }
+
+    setIsUpdatingShopStatus(true);
+    setShopStatusMessage("");
+    setError("");
+
+    const response = await authFetch(
+      `/api/partner-admin/reservations/${selectedReservationId}/status`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      },
+    );
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ??
+          (action === "START"
+            ? "작업을 시작하지 못했습니다."
+            : "작업을 완료하지 못했습니다."),
+      );
+      setIsUpdatingShopStatus(false);
+      return;
+    }
+
+    const nextStatus: ReservationStatus =
+      action === "START" ? "IN_USE" : "COMPLETED";
+    setReservations((current) =>
+      current.map((reservation) =>
+        reservation.id === selectedReservationId
+          ? {
+              ...reservation,
+              status: nextStatus,
+              checkoutCompleted:
+                action === "COMPLETE" || reservation.checkoutCompleted,
+            }
+          : reservation,
+      ),
+    );
+    setShopStatusMessage(
+      action === "START"
+        ? "정비 작업을 시작했습니다."
+        : "정비 작업을 완료 처리했습니다.",
+    );
+    await loadReservationDetail(selectedReservationId);
+    setIsUpdatingShopStatus(false);
   }
 
   async function createReservationNote(event: FormEvent<HTMLFormElement>) {
@@ -1532,8 +1588,11 @@ export function PartnerAdminDashboard() {
   const evidenceWaitCount = reservations.filter(
     (reservation) =>
       reservation.status !== "CANCELLED" &&
-      (!reservation.checkinCompleted ||
-        (reservation.status === "COMPLETED" && !reservation.checkoutCompleted)),
+      (reservation.reservationType === "SELF_SERVICE"
+        ? !reservation.checkinCompleted ||
+          (reservation.status === "COMPLETED" && !reservation.checkoutCompleted)
+        : reservation.status === "COMPLETED" &&
+          !reservation.checkoutCompleted),
   ).length;
   const activeBayCount = bays.filter((bay) => bay.isActive).length;
   const activePackageCount = packages.filter((item) => item.isActive).length;
@@ -1640,6 +1699,11 @@ export function PartnerAdminDashboard() {
           </section>
 
           <PartnerImageManager
+            partnerId={selectedPartnerId}
+            partnerName={selectedPartner?.partnerName ?? "정비소"}
+          />
+
+          <PartnerCheckinCredentialManager
             partnerId={selectedPartnerId}
             partnerName={selectedPartner?.partnerName ?? "정비소"}
           />
@@ -2451,10 +2515,22 @@ export function PartnerAdminDashboard() {
                           className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                             detail.checkin
                               ? "bg-emerald-50 text-emerald-700"
-                              : "bg-amber-50 text-amber-700"
+                              : detail.reservation.reservationType ===
+                                    "SHOP_SERVICE" &&
+                                  detail.reservation.status !== "CONFIRMED"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-amber-50 text-amber-700"
                           }`}
                         >
-                          체크인 {detail.checkin ? "증적 완료" : "증적 대기"}
+                          {detail.reservation.reservationType === "SHOP_SERVICE"
+                            ? `도착 인증 ${
+                                detail.reservation.status !== "CONFIRMED"
+                                  ? "완료"
+                                  : "대기"
+                              }`
+                            : `체크인 ${
+                                detail.checkin ? "증적 완료" : "증적 대기"
+                              }`}
                         </span>
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -2507,6 +2583,48 @@ export function PartnerAdminDashboard() {
                       </dl>
                     </section>
 
+                    {detail.reservation.reservationType === "SHOP_SERVICE" &&
+                    (detail.reservation.status === "CHECKED_IN" ||
+                      detail.reservation.status === "IN_USE") ? (
+                      <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <h3 className="text-sm font-bold text-blue-950">
+                              정비 맡기기 작업 상태
+                            </h3>
+                            <p className="mt-1 text-xs leading-5 text-blue-800">
+                              {detail.reservation.status === "CHECKED_IN"
+                                ? "고객 도착 인증이 완료되었습니다. 차량을 인계받은 뒤 작업을 시작하세요."
+                                : "작업을 모두 마치고 차량 인도 준비가 끝났을 때 완료 처리하세요."}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isUpdatingShopStatus}
+                            onClick={() =>
+                              void updateShopReservationStatus(
+                                detail.reservation.status === "CHECKED_IN"
+                                  ? "START"
+                                  : "COMPLETE",
+                              )
+                            }
+                            className="h-10 shrink-0 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white disabled:bg-blue-300"
+                          >
+                            {isUpdatingShopStatus
+                              ? "처리 중"
+                              : detail.reservation.status === "CHECKED_IN"
+                                ? "작업 시작"
+                                : "작업 완료"}
+                          </button>
+                        </div>
+                        {shopStatusMessage ? (
+                          <p className="mt-3 text-xs font-bold text-emerald-700">
+                            {shopStatusMessage}
+                          </p>
+                        ) : null}
+                      </section>
+                    ) : null}
+
                     <section>
                       <h3 className="text-sm font-semibold">체크인 사진</h3>
                       {detail.checkin ? (
@@ -2526,7 +2644,9 @@ export function PartnerAdminDashboard() {
                         </div>
                       ) : (
                         <p className="mt-2 text-sm text-zinc-500">
-                          체크인 증적이 아직 없습니다.
+                          {detail.reservation.reservationType === "SHOP_SERVICE"
+                            ? "정비 맡기기 예약은 체크인 사진을 요구하지 않습니다."
+                            : "체크인 증적이 아직 없습니다."}
                         </p>
                       )}
                     </section>

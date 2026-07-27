@@ -260,7 +260,9 @@ test.describe("booking flow smoke", () => {
       await expect(
         page.getByRole("heading", { name: "예약 완료!" }),
       ).toBeVisible();
-      await expect(page.getByText("아래 QR 코드로 체크인하세요")).toBeVisible();
+      await expect(
+        page.getByText("예약 시간에 방문해 현장 체크인을 진행하세요"),
+      ).toBeVisible();
 
       const completeUrl = new URL(page.url());
       confirmedReservationId = completeUrl.searchParams.get("reservationId");
@@ -271,11 +273,12 @@ test.describe("booking flow smoke", () => {
 
       const { data: reservation, error: reservationError } = await db
         .from("reservations")
-        .select("id, user_id, status, total_price")
+        .select("id,user_id,partner_id,status,total_price")
         .eq("id", e2eReservationId)
         .single<{
           id: string;
           user_id: string;
+          partner_id: string;
           status: string;
           total_price: number | string;
         }>();
@@ -361,7 +364,40 @@ test.describe("booking flow smoke", () => {
         throw checkinWindowUpdateError;
       }
 
-      const checkinButton = page.getByRole("button", { name: "체크인 하러 가기" });
+      const { data: existingCredential, error: credentialLookupError } = await db
+        .from("partner_checkin_credentials")
+        .select("manual_code")
+        .eq("partner_id", reservation.partner_id)
+        .maybeSingle<{ manual_code: string }>();
+
+      if (credentialLookupError) {
+        throw credentialLookupError;
+      }
+
+      let manualCheckinCode = existingCredential?.manual_code ?? "";
+
+      if (!manualCheckinCode) {
+        const { data: createdCredential, error: credentialCreateError } = await db
+          .from("partner_checkin_credentials")
+          .insert({
+            partner_id: reservation.partner_id,
+            qr_token: `e2e-${crypto.randomUUID()}-${crypto.randomUUID()}`,
+            manual_code: "PIT-TEST-CODE",
+          })
+          .select("manual_code")
+          .single<{ manual_code: string }>();
+
+        if (credentialCreateError || !createdCredential) {
+          throw (
+            credentialCreateError ??
+            new Error("Partner check-in credential was not created")
+          );
+        }
+
+        manualCheckinCode = createdCredential.manual_code;
+      }
+
+      const checkinButton = page.getByRole("button", { name: "체크인", exact: true });
       await expect(checkinButton).toBeVisible();
       await Promise.all([
         page.waitForURL(/\/checkin\?/),
@@ -370,8 +406,10 @@ test.describe("booking flow smoke", () => {
 
       await expect(page.getByRole("heading", { name: "체크인" })).toBeVisible();
       await expect(page.getByText("CONFIRMED")).toBeVisible();
-      await page.getByRole("button", { name: "탭하여 QR 스캔" }).click();
-      await expect(page.getByRole("button", { name: "스캔 완료" })).toBeVisible();
+      await page.getByRole("button", { name: "코드 입력" }).click();
+      await page.getByLabel("체크인 코드").fill(manualCheckinCode);
+      await page.getByRole("button", { name: "확인", exact: true }).click();
+      await expect(page.getByText("정비소 도착 인증 완료")).toBeVisible();
 
       const photoInputs = page.locator('input[type="file"]');
       await expect(photoInputs).toHaveCount(4);
@@ -385,7 +423,7 @@ test.describe("booking flow smoke", () => {
       await expect(page.getByText("우측 완료")).toBeVisible();
 
       const completeCheckinButton = page.getByRole("button", {
-        name: "체크인 완료 (타이머 시작)",
+        name: "사진 제출하고 체크인 완료",
       });
       await expect(completeCheckinButton).toBeEnabled();
       await Promise.all([

@@ -177,27 +177,14 @@ function ReservationCompletePageContent() {
         <p className="text-6xl text-emerald-600">✓</p>
         <h1 className="text-4xl font-semibold text-zinc-900">예약 완료!</h1>
         <p className="mt-2 text-lg text-zinc-500">
-          {detail.reservationType === "SELF_SERVICE"
-            ? "아래 QR 코드로 체크인하세요"
-            : "예약 시간에 방문해 체크인하세요"}
+          예약 시간에 방문해 현장 체크인을 진행하세요
         </p>
       </div>
 
-      {detail.reservationType === "SELF_SERVICE" ? (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-center">
-          <div className="mx-auto flex h-44 w-44 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400">
-            QR 코드
-          </div>
-          <p className="mt-3 text-sm text-zinc-500">
-            체크인 시 이 QR 코드를 스캔하세요
-          </p>
-        </div>
-      ) : (
-        <p className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold leading-6 text-blue-800">
-          체크인은 예약 시작 15분 전부터 가능합니다. 도착 후 정비소에
-          차량을 인계해 주세요.
-        </p>
-      )}
+      <p className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold leading-6 text-blue-800">
+        체크인은 예약 시작 15분 전부터 가능합니다. 정비소에 비치된 QR을
+        스캔하거나 안내된 수동 코드를 입력해 주세요.
+      </p>
 
       <div className="mt-4 rounded-2xl bg-zinc-100 p-4 text-base text-zinc-700">
         {error ? (
@@ -277,15 +264,11 @@ function ReservationCompletePageContent() {
         <button
           type="button"
           onClick={() =>
-            router.push(
-              `/${detail.reservationType === "SELF_SERVICE" ? "checkin" : "in-use"}?${query}`,
-            )
+            router.push(`/checkin?${query}`)
           }
           className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
         >
-          {detail.reservationType === "SELF_SERVICE"
-            ? "체크인 하러 가기"
-            : "체크인"}
+          체크인
         </button>
       </div>
     </section>

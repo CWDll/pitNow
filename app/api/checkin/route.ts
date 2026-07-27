@@ -27,6 +27,8 @@ interface CheckinRequestBody {
 
 interface ReservationRow {
   id: string;
+  partner_id: string;
+  reservation_type: "SELF_SERVICE" | "SHOP_SERVICE";
   status: ReservationStatus;
   start_time: string;
   end_time: string;
@@ -34,6 +36,11 @@ interface ReservationRow {
 
 interface CheckinRow {
   id: string;
+}
+
+interface VerificationRow {
+  method: "QR" | "MANUAL_CODE";
+  partner_id: string;
 }
 
 interface ApiErrorBody {
@@ -150,7 +157,7 @@ export async function POST(req: Request) {
 
   const { data: reservation, error: reservationError } = await db
     .from("reservations")
-    .select("id, status, start_time, end_time")
+    .select("id,partner_id,reservation_type,status,start_time,end_time")
     .eq("id", reservationId)
     .eq("user_id", auth.userId)
     .maybeSingle<ReservationRow>();
@@ -162,6 +169,14 @@ export async function POST(req: Request) {
 
   if (!reservation) {
     return errorResponse(404, "RESERVATION_NOT_FOUND", "예약을 찾을 수 없습니다.");
+  }
+
+  if (reservation.reservation_type !== "SELF_SERVICE") {
+    return errorResponse(
+      400,
+      "SHOP_CHECKIN_PHOTOS_NOT_REQUIRED",
+      "정비 맡기기 예약은 정비소 도착 인증만으로 체크인이 완료됩니다.",
+    );
   }
 
   if (reservation.status !== "CONFIRMED") {
@@ -198,6 +213,29 @@ export async function POST(req: Request) {
       500,
       "INVALID_RESERVATION_TIME",
       "예약 시간 정보가 올바르지 않습니다.",
+    );
+  }
+
+  const { data: verification, error: verificationError } = await db
+    .from("reservation_checkin_verifications")
+    .select("partner_id,method")
+    .eq("reservation_id", reservationId)
+    .maybeSingle<VerificationRow>();
+
+  if (verificationError) {
+    console.error("CHECKIN VERIFICATION LOOKUP ERROR:", verificationError);
+    return errorResponse(
+      500,
+      "DB_ERROR",
+      "정비소 도착 인증 확인 중 오류가 발생했습니다.",
+    );
+  }
+
+  if (!verification || verification.partner_id !== reservation.partner_id) {
+    return errorResponse(
+      409,
+      "PARTNER_CHECKIN_VERIFICATION_REQUIRED",
+      "정비소 QR 또는 수동 코드로 먼저 도착 인증을 완료해 주세요.",
     );
   }
 
@@ -244,6 +282,7 @@ export async function POST(req: Request) {
     client: db,
     metadata: {
       photoCount: 4,
+      verificationMethod: verification.method,
     },
   });
 
