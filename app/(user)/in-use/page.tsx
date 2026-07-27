@@ -409,7 +409,10 @@ function InUsePageContent() {
           <button
             type="button"
             onClick={() => {
-              if (detail.status === "CONFIRMED") {
+              if (
+                detail.status === "CONFIRMED" &&
+                shopWindowState === "OPEN"
+              ) {
                 router.push(`/checkin?reservationId=${encodeURIComponent(reservationId)}`);
               } else if (detail.status === "COMPLETED") {
                 router.push(
@@ -418,14 +421,19 @@ function InUsePageContent() {
               }
             }}
             disabled={
-              detail.status !== "CONFIRMED" && detail.status !== "COMPLETED"
+              (detail.status === "CONFIRMED" &&
+                shopWindowState !== "OPEN") ||
+              (detail.status !== "CONFIRMED" &&
+                detail.status !== "COMPLETED")
             }
             className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 text-lg font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-500"
           >
             {detail.status === "CONFIRMED"
               ? shopWindowState === "NOT_OPEN"
                 ? `${shopCheckinOpensAtLabel}부터 체크인 가능`
-                : "체크인"
+                : shopWindowState === "OPEN"
+                  ? "체크인"
+                  : "체크인 가능 시간이 지났습니다"
               : detail.status === "CHECKED_IN"
                 ? "정비소 작업 시작 대기"
               : detail.status === "IN_USE"

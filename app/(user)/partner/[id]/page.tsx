@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   ChevronRight,
@@ -23,6 +23,7 @@ import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 
 interface PartnerDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ partnerToken?: string | string[] }>;
 }
 
 interface SelfTaskRow {
@@ -58,8 +59,15 @@ async function getSelfTasks(): Promise<SelfTaskRow[]> {
 
 export default async function PartnerDetailPage({
   params,
+  searchParams,
 }: PartnerDetailPageProps) {
   const { id } = await params;
+  const { partnerToken } = await searchParams;
+
+  if (partnerToken) {
+    redirect(`/partner/${id}`);
+  }
+
   const garage = await getPartnerProfileById(id);
 
   if (!garage) {

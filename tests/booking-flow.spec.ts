@@ -346,6 +346,9 @@ test.describe("booking flow smoke", () => {
       expect(earlyCheckinResult.payload).toMatchObject({
         error: { code: "CHECKIN_NOT_OPEN" },
       });
+      await expect(
+        page.getByRole("button", { name: /부터 체크인/ }),
+      ).toBeDisabled();
 
       const checkinStart = new Date(Date.now() + 10 * 60 * 1000);
       const checkinEnd = new Date(checkinStart.getTime() + 60 * 60 * 1000);
@@ -363,6 +366,7 @@ test.describe("booking flow smoke", () => {
       if (checkinWindowUpdateError) {
         throw checkinWindowUpdateError;
       }
+      await page.reload();
 
       const { data: existingCredential, error: credentialLookupError } = await db
         .from("partner_checkin_credentials")

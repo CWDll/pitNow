@@ -269,6 +269,35 @@ async function main() {
     if (!manualCode || !qrValue) throw new Error("체크인 인증정보 응답 누락");
     pass("Partner QR·수동 코드 조회");
 
+    const qrUrl = new URL(qrValue);
+    if (qrUrl.pathname !== `/partner/${seed.partnerId}`) {
+      throw new Error(`QR 목적지가 정비소 상세가 아닙니다: ${qrUrl.pathname}`);
+    }
+    const qrToken = qrUrl.searchParams.get("partnerToken");
+    if (!qrToken) throw new Error("QR URL에 partnerToken이 없습니다.");
+
+    const destinationPayload = await request({
+      baseUrl,
+      token: customerToken,
+      path: `/api/checkin/partner-destination?token=${encodeURIComponent(qrToken)}`,
+    });
+    if (destinationPayload.partnerId !== seed.partnerId) {
+      throw new Error("기존 QR 호환 목적지가 예약 정비소와 다릅니다.");
+    }
+    pass("Native 카메라 QR 목적지 및 기존 QR 호환 조회");
+
+    const detailPayload = await request({
+      baseUrl,
+      token: partnerToken,
+      path: `/api/partner-admin/reservations/${reservation.id}`,
+    });
+    if (detailPayload.reservation?.packageName !== seed.packageName) {
+      throw new Error(
+        `Partner 예약 상세 패키지 불일치: ${detailPayload.reservation?.packageName}`,
+      );
+    }
+    pass("Partner 예약 상세 Shop 패키지 정보");
+
     await request({
       baseUrl,
       token: customerToken,

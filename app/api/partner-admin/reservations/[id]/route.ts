@@ -20,6 +20,7 @@ interface ReservationRow {
   bay_id: string | null;
   vehicle_id: string | null;
   reservation_type: ReservationType;
+  package_id: string | null;
   start_time: string;
   end_time: string;
   blocked_until: string | null;
@@ -88,6 +89,13 @@ interface UserProfileRow {
   phone: string | null;
 }
 
+interface ServicePackageRow {
+  id: string;
+  name: string;
+  description: string;
+  duration_minutes: number;
+}
+
 function jsonError(status: number, code: string, message: string) {
   return NextResponse.json(
     {
@@ -140,7 +148,7 @@ export async function GET(req: Request, context: Context) {
   const { data: reservation, error: reservationError } = await db
     .from("reservations")
     .select(
-      "id,user_id,partner_id,bay_id,vehicle_id,reservation_type,start_time,end_time,blocked_until,status,total_price,helper_verify_requested,helper_verify_fee,created_at",
+      "id,user_id,partner_id,bay_id,vehicle_id,reservation_type,package_id,start_time,end_time,blocked_until,status,total_price,helper_verify_requested,helper_verify_fee,created_at",
     )
     .eq("id", reservationId)
     .maybeSingle<ReservationRow>();
@@ -196,6 +204,7 @@ export async function GET(req: Request, context: Context) {
     statusLogsResult,
     reservationUserResult,
     userProfileResult,
+    packageResult,
   ] = await Promise.all([
     db
       .from("partners")
@@ -248,6 +257,13 @@ export async function GET(req: Request, context: Context) {
           .eq("user_id", reservation.user_id)
           .maybeSingle<UserProfileRow>()
       : Promise.resolve({ data: null, error: null }),
+    reservation.package_id
+      ? db
+          .from("service_packages")
+          .select("id,name,description,duration_minutes")
+          .eq("id", reservation.package_id)
+          .maybeSingle<ServicePackageRow>()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   if (
@@ -256,7 +272,8 @@ export async function GET(req: Request, context: Context) {
     vehicleResult.error ||
     checkinResult.error ||
     checkoutResult.error ||
-    statusLogsResult.error
+    statusLogsResult.error ||
+    packageResult.error
   ) {
     console.error("PARTNER ADMIN RESERVATION DETAIL RELATED LOOKUP ERROR:", {
       partnerError: partnerResult.error,
@@ -265,6 +282,7 @@ export async function GET(req: Request, context: Context) {
       checkinError: checkinResult.error,
       checkoutError: checkoutResult.error,
       statusLogsError: statusLogsResult.error,
+      packageError: packageResult.error,
     });
     return jsonError(
       500,
@@ -289,6 +307,10 @@ export async function GET(req: Request, context: Context) {
       bayLabel: bayResult.data?.name ?? "-",
       vehicleLabel: vehicleLabel(vehicleResult.data),
       reservationType: reservation.reservation_type,
+      packageId: reservation.package_id,
+      packageName: packageResult.data?.name ?? null,
+      packageDescription: packageResult.data?.description ?? null,
+      packageDurationMinutes: packageResult.data?.duration_minutes ?? null,
       startTime: reservation.start_time,
       endTime: reservation.end_time,
       blockedUntil: reservation.blocked_until,

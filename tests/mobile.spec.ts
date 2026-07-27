@@ -80,9 +80,13 @@ test.describe("mobile public smoke", () => {
     ).toHaveCount(0);
 
     await page.goto(`/reservation-complete?${query.toString()}`);
-    await expect(page.getByText("예약 시간에 방문해 체크인하세요")).toBeVisible();
+    await expect(
+      page.getByText("예약 시간에 방문해 현장 체크인을 진행하세요"),
+    ).toBeVisible();
     await expect(page.getByText("QR 코드", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "체크인" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /부터 체크인/ }),
+    ).toBeDisabled();
   });
 
   test("partner reviews provide summary, photo filtering, and image preview", async ({

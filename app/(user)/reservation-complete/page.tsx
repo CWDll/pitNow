@@ -7,6 +7,11 @@ import { Check, Copy, Phone } from "lucide-react";
 import type { ReservationType } from "@/src/domain/types";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
+import {
+  CHECKIN_EARLY_MINUTES,
+  getCheckinOpensAt,
+  getCheckinWindowState,
+} from "@/src/lib/checkin-window";
 
 function parseMode(value: string | null): ReservationType {
   return value === "SHOP_SERVICE" ? "SHOP_SERVICE" : "SELF_SERVICE";
@@ -77,12 +82,15 @@ function ReservationCompletePageContent() {
   });
   const [error, setError] = useState<string>("");
   const [contactMessage, setContactMessage] = useState("");
+  const [isDetailLoading, setIsDetailLoading] = useState(Boolean(detail.id));
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     let isCancelled = false;
 
     async function loadReservationDetail() {
       if (!detail.id) {
+        setIsDetailLoading(false);
         return;
       }
 
@@ -104,13 +112,16 @@ function ReservationCompletePageContent() {
               "예약 상세 정보를 다시 불러오지 못했습니다.",
             ),
           );
+          setIsDetailLoading(false);
           return;
         }
 
         setDetail(payload.reservation);
+        setIsDetailLoading(false);
       } catch {
         if (!isCancelled) {
           setError("예약 상세 정보를 다시 불러오지 못했습니다.");
+          setIsDetailLoading(false);
         }
       }
     }
@@ -121,6 +132,34 @@ function ReservationCompletePageContent() {
       isCancelled = true;
     };
   }, [detail.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const checkinWindowState = getCheckinWindowState({
+    startTime: detail.startTime,
+    endTime: detail.endTime,
+    nowMs,
+  });
+  const checkinOpensAt = getCheckinOpensAt(detail.startTime);
+  const canOpenCheckin =
+    Boolean(detail.id) &&
+    !isDetailLoading &&
+    checkinWindowState === "OPEN";
+  const checkinButtonLabel =
+    checkinWindowState === "NOT_OPEN" && checkinOpensAt
+      ? `${new Intl.DateTimeFormat("ko-KR", {
+          timeZone: "Asia/Seoul",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(checkinOpensAt))}부터 체크인`
+      : checkinWindowState === "CLOSED"
+        ? "체크인 가능 시간이 지났습니다"
+        : isDetailLoading
+          ? "예약 확인 중"
+          : "체크인";
 
   const query = useMemo(
     () =>
@@ -182,8 +221,8 @@ function ReservationCompletePageContent() {
       </div>
 
       <p className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold leading-6 text-blue-800">
-        체크인은 예약 시작 15분 전부터 가능합니다. 정비소에 비치된 QR을
-        스캔하거나 안내된 수동 코드를 입력해 주세요.
+        체크인은 예약 시작 {CHECKIN_EARLY_MINUTES}분 전부터 가능합니다.
+        정비소에 비치된 QR을 스캔하거나 안내된 수동 코드를 입력해 주세요.
       </p>
 
       <div className="mt-4 rounded-2xl bg-zinc-100 p-4 text-base text-zinc-700">
@@ -263,12 +302,15 @@ function ReservationCompletePageContent() {
       <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
         <button
           type="button"
-          onClick={() =>
-            router.push(`/checkin?${query}`)
-          }
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white"
+          disabled={!canOpenCheckin}
+          onClick={() => {
+            if (canOpenCheckin) {
+              router.push(`/checkin?${query}`);
+            }
+          }}
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
         >
-          체크인
+          {checkinButtonLabel}
         </button>
       </div>
     </section>

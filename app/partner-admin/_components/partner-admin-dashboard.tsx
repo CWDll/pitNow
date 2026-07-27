@@ -126,6 +126,10 @@ interface PartnerAdminReservationDetail {
     helperVerifyRequested: boolean;
     helperVerifyFee: number;
     createdAt: string;
+    packageId: string | null;
+    packageName: string | null;
+    packageDescription: string | null;
+    packageDurationMinutes: number | null;
     customer: {
       userId: string;
       email: string | null;
@@ -2465,6 +2469,32 @@ export function PartnerAdminDashboard() {
                   </p>
                 ) : (
                   <div className="mt-4 space-y-5">
+                    {detail.reservation.reservationType === "SHOP_SERVICE" ? (
+                      <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                        <p className="text-xs font-bold uppercase text-blue-700">
+                          정비 맡기기 패키지
+                        </p>
+                        <div className="mt-2 flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="text-base font-bold text-blue-950">
+                              {detail.reservation.packageName ??
+                                "패키지 정보 확인 필요"}
+                            </h3>
+                            {detail.reservation.packageDescription ? (
+                              <p className="mt-1 text-xs leading-5 text-blue-800">
+                                {detail.reservation.packageDescription}
+                              </p>
+                            ) : null}
+                          </div>
+                          {detail.reservation.packageDurationMinutes ? (
+                            <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-blue-700">
+                              {detail.reservation.packageDurationMinutes}분
+                            </span>
+                          ) : null}
+                        </div>
+                      </section>
+                    ) : null}
+
                     <dl className="space-y-2 text-sm">
                       {[
                         ["예약 ID", detail.reservation.id],

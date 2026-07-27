@@ -62,6 +62,11 @@ interface ReservationDetailResponse {
   reservation?: ReservationDetail;
 }
 
+interface PartnerDestinationResponse {
+  success: boolean;
+  partnerId?: string;
+}
+
 function extractErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -89,6 +94,7 @@ function CheckinPageContent() {
   const searchParams = useSearchParams();
 
   const reservationId = searchParams.get("reservationId")?.trim() ?? "";
+  const partnerToken = searchParams.get("partnerToken")?.trim() ?? "";
   const [detail, setDetail] = useState<ReservationDetail>(() => ({
     id: reservationId,
     reservationType:
@@ -123,6 +129,9 @@ function CheckinPageContent() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isDetailLoading, setIsDetailLoading] = useState<boolean>(Boolean(reservationId));
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [isResolvingDestination, setIsResolvingDestination] = useState(
+    reservationId.length === 0,
+  );
 
   const missingReservationId = reservationId.length === 0;
   const canCheckInStatus = detail.status === "CONFIRMED";
@@ -151,6 +160,51 @@ function CheckinPageContent() {
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (reservationId) {
+      setIsResolvingDestination(false);
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function redirectMissingReservation() {
+      if (!partnerToken) {
+        router.replace("/reservation");
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/checkin/partner-destination?token=${encodeURIComponent(partnerToken)}`,
+          { cache: "no-store" },
+        );
+        const payload = (await response.json()) as PartnerDestinationResponse;
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (response.ok && payload.success && payload.partnerId) {
+          router.replace(`/partner/${payload.partnerId}`);
+          return;
+        }
+      } catch {
+        // Invalid or rotated legacy QR links fall back to the reservation list.
+      }
+
+      if (!isCancelled) {
+        router.replace("/reservation");
+      }
+    }
+
+    void redirectMissingReservation();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [partnerToken, reservationId, router]);
 
   const tiles: Array<{ field: PhotoField; file: File | null }> = useMemo(
     () => [
@@ -231,6 +285,27 @@ function CheckinPageContent() {
       isCancelled = true;
     };
   }, [reservationId]);
+
+  useEffect(() => {
+    if (
+      reservationId &&
+      !isDetailLoading &&
+      detail.id === reservationId &&
+      detail.status === "CONFIRMED" &&
+      checkinWindowState === "NOT_OPEN"
+    ) {
+      router.replace(
+        `/reservation-complete?reservationId=${encodeURIComponent(reservationId)}`,
+      );
+    }
+  }, [
+    checkinWindowState,
+    detail.id,
+    detail.status,
+    isDetailLoading,
+    reservationId,
+    router,
+  ]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -322,15 +397,42 @@ function CheckinPageContent() {
     }
   }
 
+  if (isResolvingDestination || isDetailLoading) {
+    return (
+      <section className="pb-24">
+        <FlowHeader title="체크인" onBack={() => router.back()} />
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+          <p className="text-sm font-semibold text-slate-700">
+            예약 정보를 확인하고 있습니다.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  if (
+    canCheckInStatus &&
+    (checkinWindowState === "NOT_OPEN" || checkinWindowState === "INVALID")
+  ) {
+    return (
+      <section className="pb-24">
+        <FlowHeader title="체크인" onBack={() => router.back()} />
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+          <p className="font-bold text-blue-900">
+            체크인 가능 시간을 확인하고 있습니다.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-blue-700">
+            체크인은 예약 시작 {CHECKIN_EARLY_MINUTES}분 전부터 열립니다.
+            예약 완료 화면으로 이동합니다.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="pb-24">
       <FlowHeader title="체크인" onBack={() => router.back()} />
-
-      {missingReservationId ? (
-        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-          reservationId가 누락되었습니다.
-        </p>
-      ) : null}
 
       <div className="mb-4 rounded-2xl bg-zinc-100 p-4 text-base text-zinc-700">
         <p className="flex justify-between">

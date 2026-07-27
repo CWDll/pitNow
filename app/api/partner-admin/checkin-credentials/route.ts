@@ -66,7 +66,7 @@ async function authorize(req: Request, partnerId: string) {
 }
 
 function responseFor(req: Request, credential: CredentialRow) {
-  const checkinUrl = new URL("/checkin", req.url);
+  const checkinUrl = new URL(`/partner/${credential.partner_id}`, req.url);
   checkinUrl.searchParams.set("partnerToken", credential.qr_token);
 
   return NextResponse.json({

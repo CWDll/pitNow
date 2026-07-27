@@ -2293,3 +2293,42 @@ DB 적용:
   체크인 인증을 포함했다.
 - `npm run verify:partner-admin-ui` 성공, 1 passed. Partner 고정 QR과 수동
   코드 UI를 실제 데이터로 확인했다.
+
+## 70. 2026-07-27 QR 일반 카메라 진입과 체크인 시간 게이트 보강
+
+- 새 Partner QR의 브라우저 목적지를 `/partner/[partnerId]`로 변경했다.
+- 일반 브라우저로 업체 상세를 연 뒤에는 query token을 즉시 제거해 주소창과
+  공유 URL에 인증정보가 남지 않게 했다.
+- 앱 체크인 카메라는 QR URL의 `partnerToken`을 추출하므로 기존 현장 인증
+  방식은 유지된다.
+- 과거 `/checkin?partnerToken=...` QR을 일반 카메라로 열면 활성 token을
+  서버에서 조회해 해당 정비소 상세로 이동한다.
+- 예약 ID 없는 체크인 화면은 임의 예약 정보를 표시하지 않는다.
+- 예약 완료 화면의 체크인 CTA는 시작 15분 전까지 비활성화되고 입장 가능
+  시각을 버튼에 표시한다.
+- 체크인 URL을 직접 열어도 시작 15분 전이면 예약 완료 화면으로 복귀한다.
+- Partner-admin Shop 예약 상세 상단에 패키지명, 설명, 소요시간을 표시한다.
+
+현장 QA 시간 준비:
+
+```bash
+PITNOW_QA_RESERVATION_ID="<결제 완료된 CONFIRMED 예약 UUID>" \
+PITNOW_QA_CONFIRM=YES \
+npm run qa:open-checkin-window
+```
+
+- 지정 예약의 시작을 현재 시각 10분 뒤로 옮겨 즉시 체크인 가능하게 한다.
+- 원래 예약 duration과 `blocked_until` 버퍼는 유지한다.
+- `CONFIRMED` 예약만 허용하며 베이 중복은 DB exclusion constraint가 거부한다.
+- 실제 고객 예약이 아닌 QA 전용 결제 예약 ID에만 사용한다.
+
+현재 검증:
+
+- `npm run lint`, `npx tsc --noEmit`, `npm run build` 성공.
+- `npm run check:supabase` 전체 성공.
+- `PITNOW_E2E_BASE_URL=http://localhost:3000 npm run
+  e2e:partner-checkin-shop` 성공. QR 목적지, 기존 QR 호환 조회와 Partner 상세
+  패키지 정보까지 포함한다.
+- `npm run e2e:ui:fake` 성공, 1 passed. 이른 체크인 CTA 비활성 및 시간
+  이동 후 Self 전체 예약 흐름을 확인했다.
+- `npm run verify:partner-admin-ui` 성공, 1 passed.
