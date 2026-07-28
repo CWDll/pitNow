@@ -20,6 +20,7 @@ test.describe("partner admin dashboard", () => {
   test("renders partner context, request fields, and pending requests", async ({
     page,
   }) => {
+    test.setTimeout(45_000);
     const db = getAdminSupabaseForE2E();
 
     if (!db) {
@@ -97,6 +98,17 @@ test.describe("partner admin dashboard", () => {
       }
       requestId = request.id;
 
+      const isReservationListResponse = (response: {
+        url(): string;
+        request(): { method(): string };
+      }) =>
+        response.url().includes("/api/partner-admin/reservations?") &&
+        response.request().method() === "GET";
+      const initialReservationResponse = page.waitForResponse(
+        isReservationListResponse,
+        { timeout: 15_000 },
+      );
+
       await page.goto("/login?next=/partner-admin");
       await page.getByLabel("이메일").fill(user.email);
       await page.getByLabel("비밀번호").fill(user.password);
@@ -106,6 +118,12 @@ test.describe("partner admin dashboard", () => {
       await expect(page.locator("header").getByText(seed.partnerName)).toBeVisible({
         timeout: 15_000,
       });
+      await initialReservationResponse;
+      const pollingReservationResponse = await page.waitForResponse(
+        isReservationListResponse,
+        { timeout: 15_000 },
+      );
+      expect(pollingReservationResponse.ok()).toBe(true);
       await expect(
         page.getByRole("heading", { name: "정비소 사진" }),
       ).toBeVisible();

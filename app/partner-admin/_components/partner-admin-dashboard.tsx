@@ -704,12 +704,14 @@ export function PartnerAdminDashboard() {
 
     let mounted = true;
 
-    async function loadReservations() {
-      setIsLoadingReservations(true);
-      setError("");
-      setSelectedReservationId("");
-      setDetail(null);
-      setNotes([]);
+    async function loadReservations(isPolling = false) {
+      if (!isPolling) {
+        setIsLoadingReservations(true);
+        setError("");
+        setSelectedReservationId("");
+        setDetail(null);
+        setNotes([]);
+      }
 
       const query = new URLSearchParams({
         partnerId: selectedPartnerId,
@@ -721,7 +723,7 @@ export function PartnerAdminDashboard() {
       const payload = await readJson(response);
 
       if (!response.ok) {
-        if (mounted) {
+        if (mounted && !isPolling) {
           setError(
             extractErrorMessage(payload) ?? "예약 목록을 불러오지 못했습니다.",
           );
@@ -749,9 +751,15 @@ export function PartnerAdminDashboard() {
     }
 
     void loadReservations();
+    const pollingId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadReservations(true);
+      }
+    }, 10_000);
 
     return () => {
       mounted = false;
+      window.clearInterval(pollingId);
     };
   }, [selectedDate, selectedPartnerId]);
 
@@ -2352,7 +2360,7 @@ export function PartnerAdminDashboard() {
                     key={reservation.id}
                     type="button"
                     onClick={() => void loadReservationDetail(reservation.id)}
-                    className={`grid w-full gap-3 px-4 py-4 text-left transition hover:bg-blue-50/60 xl:grid-cols-[160px_120px_1fr_120px_160px_120px] ${
+                    className={`grid w-full gap-3 px-4 py-4 text-left transition hover:bg-blue-50/60 xl:grid-cols-[130px_90px_100px_minmax(160px,1fr)_minmax(240px,1.4fr)_150px_100px] ${
                       selectedReservationId === reservation.id
                         ? "bg-blue-50"
                         : "bg-white"
@@ -2368,6 +2376,14 @@ export function PartnerAdminDashboard() {
                       </p>
                       <p className="mt-1 text-xs text-zinc-500">
                         {formatDate(reservation.startTime)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                        Type
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-zinc-900">
+                        {reservationTypeLabel(reservation.reservationType)}
                       </p>
                     </div>
                     <div>
@@ -2388,10 +2404,10 @@ export function PartnerAdminDashboard() {
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                        Type
+                        Reservation ID
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-zinc-900">
-                        {reservationTypeLabel(reservation.reservationType)}
+                      <p className="mt-1 break-all font-mono text-xs font-semibold leading-5 text-zinc-800">
+                        {reservation.id}
                       </p>
                     </div>
                     <div>

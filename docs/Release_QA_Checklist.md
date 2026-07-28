@@ -200,7 +200,7 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 32 | 리뷰 작성자 구분 | 서로 다른 두 계정 리뷰 확인 | 각 닉네임과 생성형 프로필 표시, 이메일·차량번호 미표시 | 대기 |  |
 | 33 | 전체 리뷰 탐색 | `/partner/:id/reviews` 평점 분포·사진 필터·정렬·사진 선택 | 평균/분포와 사진 리뷰가 표시되고 필터·정렬·화면 내 확대가 동작하며 가로 넘침 없음 | 자동 검증 성공 | 강남 셀프정비소 예시 사진 리뷰 2건으로 모바일 확인 |
 | 34 | 공개 이미지 슬라이드·주소 복사 | 전체 리뷰/정비소 상세/마이페이지 사진 확대, 정비소 주소 copy 선택 | 여러 사진은 좌우 버튼과 방향키로 순환, 단일 사진은 이동 버튼 미표시, 주소는 클립보드 복사 후 완료 상태 표시 | 자동 검증 성공 | 모바일 public 4 passed, 로그인 예약 E2E에서 마이페이지 확대 확인 |
-| 35 | Shop 체크인·작업 상태 | Shop 결제 완료 후 정비소 QR/코드 인증, Partner 작업 시작·완료 | User 인증 시 CHECKED_IN, Partner 시작 시 IN_USE, Partner 완료 시 COMPLETED. User에는 상태 조회만 표시 | 성공·자동갱신 재확인 | iPhone 수동 코드 체크인, Partner 작업 시작·완료, User 완료 내역·영수증 이동 성공. 작업 시작 후 10초 polling에 의한 `정비 진행 중` 자동 표시만 별도 재확인 |
+| 35 | Shop 체크인·작업 상태 | Shop 결제 완료 후 정비소 QR/코드 인증, Partner 작업 시작·완료 | User 인증 시 CHECKED_IN, Partner 시작 시 IN_USE, Partner 완료 시 COMPLETED. User에는 상태 조회만 표시 | 성공 | iPhone 수동 코드 체크인 후 `작업 시작 대기 → 정비 진행 중 → 정비 완료` 10초 polling 자동 반영과 완료 내역·영수증 이동 확인 |
 | 36 | 차량 선택 overlay | `/partner/:id/work`에서 차량 선택 | 본문만 dim 처리되고 하단 탭은 원래 색상 유지 | 수정 후 재확인 | overlay 하단 경계를 bottom navigation 위로 조정 |
 
 ### 7.5 Partner-admin QA
@@ -231,7 +231,7 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 22 | Partner 로그아웃 | sidebar 하단 `로그아웃` | session 제거 후 `/login?next=/partner-admin` 이동 | 성공 | 로그아웃 확인, 사용자 앱 링크와 action 스타일 통일 |
 | 23 | 정비소 사진 관리 | 사진 여러 장 등록, 대표 변경, 삭제 | 최대 8장, 대표 1장 유지, 사용자 홈/상세 반영 및 audit 기록 | 자동 검증 성공 | 2장 실제 업로드·대표 변경·삭제·원상복구 |
 | 24 | 현장 체크인 인증정보 | QR 표시, 수동 코드 복사, 재발급 | QR/코드 모두 사용자 인증 성공, 재발급 후 기존 값 거부 | 성공 | 기본 카메라 QR은 해당 정비소 상세로 이동하고, Self는 QR·Shop은 수동 코드로 실제 체크인 성공 |
-| 25 | Shop 작업 상태 제어 | 체크인된 Shop 예약 상세에서 작업 시작·완료 | Partner만 IN_USE/COMPLETED 전환, 상태 로그와 audit 기록 | 성공 | Partner 작업 시작·완료와 User 완료 반영 확인. User 직접 전환 403 및 Partner audit E2E 통과 |
+| 25 | Shop 작업 상태 제어 | 체크인된 Shop 예약 상세에서 작업 시작·완료 | Partner만 IN_USE/COMPLETED 전환, 상태 로그와 audit 기록 | 성공 | Partner 작업 시작·완료와 User 10초 polling 상태 반영 확인. User 직접 전환 403 및 Partner audit E2E 통과 |
 
 ### 7.6 Admin QA
 
