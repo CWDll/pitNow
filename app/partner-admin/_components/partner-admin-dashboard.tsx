@@ -2524,8 +2524,14 @@ export function PartnerAdminDashboard() {
                         ["금액", formatPrice(detail.reservation.totalPrice)],
                       ].map(([label, value]) => (
                         <div key={label} className="flex justify-between gap-4">
-                          <dt className="text-zinc-500">{label}</dt>
-                          <dd className="max-w-[220px] truncate text-right font-medium">
+                          <dt className="shrink-0 text-zinc-500">{label}</dt>
+                          <dd
+                            className={
+                              label === "예약 ID"
+                                ? "max-w-[70%] break-all text-right font-mono text-xs font-semibold text-zinc-800"
+                                : "max-w-[220px] truncate text-right font-medium"
+                            }
+                          >
                             {value}
                           </dd>
                         </div>
