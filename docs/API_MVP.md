@@ -35,7 +35,9 @@ Rules:
 - Requires authenticated active partner membership.
 - Name, positive 5-minute-unit duration, and non-negative integer labor price are required.
 - Creates a `PENDING` request for internal Admin review.
-- GET returns the partner's creation requests so pending/reviewed status can be displayed in Partner-admin.
+- GET always returns pending requests. Fulfilled/rejected results remain visible in
+  Partner-admin for 24 hours after `reviewed_at`, then disappear from the request
+  area while the approved package remains in the normal package list.
 - Does not mutate `service_packages` or `partner_package_prices` directly.
 
 ---

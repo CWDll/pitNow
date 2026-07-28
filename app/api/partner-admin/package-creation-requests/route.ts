@@ -9,6 +9,8 @@ import {
   supabaseAdmin,
 } from "@/src/lib/supabase";
 
+const RESOLVED_REQUEST_VISIBILITY_MS = 24 * 60 * 60 * 1000;
+
 interface RequestBody {
   partnerId?: unknown;
   requestedName?: unknown;
@@ -26,6 +28,7 @@ interface PackageCreationRequestRow {
   requested_labor_price: number | string;
   reason: string | null;
   status: "PENDING" | "FULFILLED" | "REJECTED";
+  reviewed_at: string | null;
   created_at: string;
 }
 
@@ -55,6 +58,7 @@ function mapRequest(row: PackageCreationRequestRow) {
     requestedLaborPrice: Number(row.requested_labor_price),
     reason: row.reason ?? "",
     status: row.status,
+    reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
   };
 }
@@ -91,7 +95,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await authResult.auth.client
     .from("partner_package_creation_requests")
-    .select("id,requested_name,requested_description,requested_duration_minutes,requested_labor_price,reason,status,created_at")
+    .select("id,requested_name,requested_description,requested_duration_minutes,requested_labor_price,reason,status,reviewed_at,created_at")
     .eq("partner_id", partnerId)
     .order("created_at", { ascending: false })
     .returns<PackageCreationRequestRow[]>();
@@ -103,7 +107,22 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     success: true,
-    requests: (data ?? []).map(mapRequest),
+    requests: (data ?? [])
+      .filter((request) => {
+        if (request.status === "PENDING") {
+          return true;
+        }
+
+        const reviewedAtMs = request.reviewed_at
+          ? new Date(request.reviewed_at).getTime()
+          : Number.NaN;
+
+        return (
+          Number.isFinite(reviewedAtMs) &&
+          reviewedAtMs >= Date.now() - RESOLVED_REQUEST_VISIBILITY_MS
+        );
+      })
+      .map(mapRequest),
   });
 }
 
@@ -198,7 +217,7 @@ export async function POST(req: Request) {
       requested_by: authResult.auth.userId,
       status: "PENDING",
     })
-    .select("id,requested_name,requested_description,requested_duration_minutes,requested_labor_price,reason,status,created_at")
+    .select("id,requested_name,requested_description,requested_duration_minutes,requested_labor_price,reason,status,reviewed_at,created_at")
     .single<PackageCreationRequestRow>();
 
   if (error || !data) {

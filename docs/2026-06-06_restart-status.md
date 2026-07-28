@@ -2385,3 +2385,16 @@ npm run qa:open-checkin-window
   `reservation_no_show_migration_backfill` SYSTEM 로그가 저장된 것을 확인했다.
 - `npm run e2e:partner-admin`에서 목록 조회 SYSTEM 전환과 종료 예약 노쇼 메모의
   PARTNER 전환·로그를 모두 확인했다.
+
+## 74. 2026-07-28 Partner 패키지 요청 표시 수명과 차단 폼 정렬
+
+- 신규 패키지 생성 요청은 `PENDING` 동안 계속 표시한다.
+- `FULFILLED` 또는 `REJECTED` 결과는 `reviewed_at` 이후 24시간만 Partner-admin
+  요청 영역에 표시한다.
+- 승인된 패키지는 요청 카드가 사라져도 일반 패키지/가격 카드로 계속 표시된다.
+- 최근 처리 완료 요청은 pending의 노란 카드와 구분되는 초록색 결과 카드로
+  표시한다.
+- 예약 차단의 시작/종료 입력에서 `<fieldset>/<legend>` 브라우저 기본 배치를
+  제거하고 범위·사유와 같은 일반 블록 라벨 구조로 통일했다.
+- Partner-admin Playwright는 48시간 지난 완료 요청이 숨겨지는지와 범위·시작
+  날짜/시각·종료 날짜/시각·사유·버튼의 y좌표 차이가 1px 이내인지 검증한다.

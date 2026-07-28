@@ -35,6 +35,7 @@ test.describe("partner admin dashboard", () => {
     const seed = await getSelfReservationSeed(db);
     let membershipCreated = false;
     let requestId = "";
+    let oldFulfilledRequestId = "";
     let initialCoverId = "";
     let uploadedImageIds: string[] = [];
     let uploadedStoragePaths: string[] = [];
@@ -97,6 +98,32 @@ test.describe("partner admin dashboard", () => {
         throw requestError ?? new Error("Failed to seed package request");
       }
       requestId = request.id;
+
+      const { data: oldFulfilledRequest, error: oldFulfilledRequestError } =
+        await db
+          .from("partner_package_creation_requests")
+          .insert({
+            partner_id: seed.partnerId,
+            requested_name: `E2E 오래된 처리 완료 패키지 ${Date.now()}`,
+            requested_description: "Old fulfilled request visibility test",
+            requested_duration_minutes: 60,
+            requested_labor_price: 50000,
+            requested_by: user.id,
+            status: "FULFILLED",
+            reviewed_at: new Date(
+              Date.now() - 2 * 24 * 60 * 60 * 1000,
+            ).toISOString(),
+          })
+          .select("id,requested_name")
+          .single<{ id: string; requested_name: string }>();
+
+      if (oldFulfilledRequestError || !oldFulfilledRequest) {
+        throw (
+          oldFulfilledRequestError ??
+          new Error("Failed to seed old fulfilled package request")
+        );
+      }
+      oldFulfilledRequestId = oldFulfilledRequest.id;
 
       const isReservationListResponse = (response: {
         url(): string;
@@ -280,6 +307,41 @@ test.describe("partner admin dashboard", () => {
         .filter({ hasText: requestName });
       await expect(pendingRequestCard).toBeVisible({ timeout: 20_000 });
       await expect(pendingRequestCard.getByText("승인 대기 중")).toBeVisible();
+      await expect(
+        page.getByText(oldFulfilledRequest.requested_name),
+      ).toHaveCount(0);
+
+      const availabilitySection = page.locator("section#availability");
+      const alignedControlLocators = [
+        ["범위", availabilitySection.getByLabel("범위")],
+        ["시작 날짜", availabilitySection.getByLabel("시작 날짜")],
+        ["시작 시각", availabilitySection.getByLabel("시작 시각")],
+        ["종료 날짜", availabilitySection.getByLabel("종료 날짜")],
+        ["종료 시각", availabilitySection.getByLabel("종료 시각")],
+        ["사유", availabilitySection.getByLabel("사유")],
+        [
+          "차단 추가",
+          availabilitySection.getByRole("button", { name: "차단 추가" }),
+        ],
+      ] as const;
+      const alignedControls = await Promise.all(
+        alignedControlLocators.map(async ([name, locator]) => ({
+          name,
+          box: await locator.boundingBox(),
+        })),
+      );
+      const controlYPositions = alignedControls.map(({ box }) => {
+        if (!box) {
+          throw new Error("예약 차단 입력 컨트롤의 위치를 확인하지 못했습니다.");
+        }
+        return box.y;
+      });
+      expect(
+        Math.max(...controlYPositions) - Math.min(...controlYPositions),
+        JSON.stringify(
+          alignedControls.map(({ name, box }) => ({ name, y: box?.y })),
+        ),
+      ).toBeLessThanOrEqual(1);
 
       const durationInput = page.getByLabel("소요시간(분) 필수");
       await durationInput.fill("60");
@@ -334,6 +396,13 @@ test.describe("partner admin dashboard", () => {
           .from("partner_package_creation_requests")
           .delete()
           .eq("id", requestId);
+      }
+
+      if (oldFulfilledRequestId) {
+        await db
+          .from("partner_package_creation_requests")
+          .delete()
+          .eq("id", oldFulfilledRequestId);
       }
 
       if (membershipCreated) {

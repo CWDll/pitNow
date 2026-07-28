@@ -94,6 +94,7 @@ interface PartnerPackageCreationRequest {
   requestedLaborPrice: number;
   reason: string;
   status: "PENDING" | "FULFILLED" | "REJECTED";
+  reviewedAt: string | null;
   createdAt: string;
 }
 
@@ -238,12 +239,13 @@ function HourDateTimeInput({
   const [dateValue = "", timeValue = "00:00"] = value.split("T");
 
   return (
-    <fieldset>
-      <legend className="text-xs font-semibold text-zinc-500">{label}</legend>
+    <div className="block">
+      <span className="text-xs font-semibold text-zinc-500">{label}</span>
       <div className="mt-1 grid grid-cols-[1fr_92px] gap-2">
         <input
           type="date"
           required
+          aria-label={`${label} 날짜`}
           value={dateValue}
           onChange={(event) =>
             onChange(`${event.target.value}T${timeValue || "00:00"}`)
@@ -263,7 +265,7 @@ function HourDateTimeInput({
           ))}
         </select>
       </div>
-    </fieldset>
+    </div>
   );
 }
 
@@ -2016,7 +2018,14 @@ export function PartnerAdminDashboard() {
                 <div
                   key={request.id}
                   data-testid="package-creation-request"
-                  className="rounded-lg border border-amber-200 bg-amber-50 p-3"
+                  data-status={request.status}
+                  className={`rounded-lg border p-3 ${
+                    request.status === "PENDING"
+                      ? "border-amber-200 bg-amber-50"
+                      : request.status === "FULFILLED"
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-zinc-200 bg-zinc-50"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -2049,7 +2058,15 @@ export function PartnerAdminDashboard() {
                     <span>요청일 {formatDate(request.createdAt)}</span>
                   </div>
                   {request.reason ? (
-                    <p className="mt-2 border-t border-amber-200 pt-2 text-xs text-amber-900">
+                    <p
+                      className={`mt-2 border-t pt-2 text-xs ${
+                        request.status === "PENDING"
+                          ? "border-amber-200 text-amber-900"
+                          : request.status === "FULFILLED"
+                            ? "border-emerald-200 text-emerald-900"
+                            : "border-zinc-200 text-zinc-700"
+                      }`}
+                    >
                       검토 참고: {request.reason}
                     </p>
                   ) : null}
