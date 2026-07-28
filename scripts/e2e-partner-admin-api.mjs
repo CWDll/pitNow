@@ -399,6 +399,61 @@ async function createPastReservation({ admin, userId, vehicleId, bay }) {
   throw new Error("과거 테스트 예약 가능한 시간대를 찾지 못했습니다.");
 }
 
+async function createPastConfirmedReservation({
+  admin,
+  userId,
+  vehicleId,
+  bay,
+}) {
+  const startBase = addHours(new Date(), -24 * 500);
+
+  for (let attempt = 0; attempt < 72; attempt += 1) {
+    const start = addHours(startBase, attempt * 4);
+    start.setUTCMinutes(0, 0, 0);
+    const end = addHours(start, 1);
+    const blockedUntil = addHours(end, 1);
+
+    const { data, error } = await admin
+      .from("reservations")
+      .insert({
+        user_id: userId,
+        vehicle_id: vehicleId,
+        partner_id: bay.partnerId,
+        bay_id: bay.id,
+        reservation_type: "SELF_SERVICE",
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        reserved_end_time: end.toISOString(),
+        blocked_until: blockedUntil.toISOString(),
+        duration_minutes: 60,
+        selected_task_count: 1,
+        helper_verify_requested: false,
+        helper_verify_fee: 0,
+        status: "CONFIRMED",
+        total_price: bay.hourlyPrice,
+      })
+      .select("id,start_time,end_time")
+      .single();
+
+    if (data) {
+      return data;
+    }
+
+    const message = error?.message ?? "unknown";
+
+    if (
+      message.includes("no_overlap") ||
+      message.includes("conflicting key value violates exclusion constraint")
+    ) {
+      continue;
+    }
+
+    throw new Error(`과거 확정 예약 생성 실패: ${message}`);
+  }
+
+  throw new Error("과거 확정 예약 가능한 시간대를 찾지 못했습니다.");
+}
+
 async function createLegacyPackageReservation({
   admin,
   userId,
@@ -655,6 +710,21 @@ async function cleanup(admin, records) {
     );
   }
 
+  if (records.noShowReservationId) {
+    tasks.push(
+      admin.from("reservations").delete().eq("id", records.noShowReservationId),
+    );
+  }
+
+  if (records.noShowNoteReservationId) {
+    tasks.push(
+      admin
+        .from("reservations")
+        .delete()
+        .eq("id", records.noShowNoteReservationId),
+    );
+  }
+
   if (records.legacyReservationId) {
     tasks.push(
       admin.from("reservations").delete().eq("id", records.legacyReservationId),
@@ -835,6 +905,22 @@ async function main() {
     });
     records.staleReservationId = staleReservation.id;
 
+    const noShowReservation = await createPastConfirmedReservation({
+      admin,
+      userId: partnerAdminUser.id,
+      vehicleId: records.vehicleId,
+      bay,
+    });
+    records.noShowReservationId = noShowReservation.id;
+
+    const noShowNoteReservation = await createPastConfirmedReservation({
+      admin,
+      userId: partnerAdminUser.id,
+      vehicleId: records.vehicleId,
+      bay,
+    });
+    records.noShowNoteReservationId = noShowNoteReservation.id;
+
     const legacyReservation = await createLegacyPackageReservation({
       admin,
       userId: partnerAdminUser.id,
@@ -843,6 +929,55 @@ async function main() {
       packageId: `legacy-package-${runId}`,
     });
     records.legacyReservationId = legacyReservation.id;
+
+    const noShowNotePayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/reservations/${noShowNoteReservation.id}/notes`,
+      method: "POST",
+      body: {
+        noteType: "NO_SHOW",
+        body: `종료 예약 노쇼 상태 전환 E2E ${runId}`,
+      },
+    });
+
+    if (
+      !noShowNotePayload.note?.id ||
+      noShowNotePayload.reservationStatusUpdated !== true
+    ) {
+      throw new Error(
+        `노쇼 메모 상태 전환 응답이 올바르지 않습니다: ${JSON.stringify(noShowNotePayload)}`,
+      );
+    }
+    records.noteIds.push(noShowNotePayload.note.id);
+
+    const { data: noShowNoteStatus, error: noShowNoteStatusError } = await admin
+      .from("reservations")
+      .select("status")
+      .eq("id", noShowNoteReservation.id)
+      .single();
+    const { data: noShowNoteStatusLog, error: noShowNoteStatusLogError } =
+      await admin
+        .from("reservation_status_logs")
+        .select("from_status,to_status,actor_type,actor_user_id,reason")
+        .eq("reservation_id", noShowNoteReservation.id)
+        .eq("from_status", "CONFIRMED")
+        .eq("to_status", "NO_SHOW")
+        .maybeSingle();
+
+    if (
+      noShowNoteStatusError ||
+      noShowNoteStatus?.status !== "NO_SHOW" ||
+      noShowNoteStatusLogError ||
+      noShowNoteStatusLog?.actor_type !== "PARTNER" ||
+      noShowNoteStatusLog?.actor_user_id !== partnerAdminUser.id ||
+      noShowNoteStatusLog?.reason !== "partner_no_show_note"
+    ) {
+      throw new Error(
+        `노쇼 메모 상태/로그 검증 실패: ${noShowNoteStatusError?.message ?? noShowNoteStatusLogError?.message ?? JSON.stringify({ noShowNoteStatus, noShowNoteStatusLog })}`,
+      );
+    }
+    formatStep("종료 예약 NO_SHOW 메모의 상태 전환과 Partner 로그 확인");
 
     const mePayload = await apiRequest({
       baseUrl,
@@ -1243,6 +1378,44 @@ async function main() {
       throw new Error("reservations API 응답에 테스트 예약이 없습니다.");
     }
     formatStep("reservations API 확인");
+
+    const noShowReservationDate = formatKstDate(
+      new Date(noShowReservation.start_time),
+    );
+    const noShowReservationsPayload = await apiRequest({
+      baseUrl,
+      token: adminToken,
+      path: `/api/partner-admin/reservations?partnerId=${bay.partnerId}&date=${noShowReservationDate}`,
+    });
+    const noShowReservationItem =
+      noShowReservationsPayload.reservations?.find(
+        (item) => item.id === noShowReservation.id,
+      );
+
+    if (noShowReservationItem?.status !== "NO_SHOW") {
+      throw new Error(
+        `종료된 확정 예약이 NO_SHOW로 전환되지 않았습니다: ${noShowReservationItem?.status}`,
+      );
+    }
+
+    const { data: noShowStatusLog, error: noShowStatusLogError } = await admin
+      .from("reservation_status_logs")
+      .select("from_status,to_status,actor_type,reason")
+      .eq("reservation_id", noShowReservation.id)
+      .eq("from_status", "CONFIRMED")
+      .eq("to_status", "NO_SHOW")
+      .maybeSingle();
+
+    if (
+      noShowStatusLogError ||
+      noShowStatusLog?.actor_type !== "SYSTEM" ||
+      noShowStatusLog?.reason !== "reservation_end_time_passed"
+    ) {
+      throw new Error(
+        `노쇼 상태 로그 검증 실패: ${noShowStatusLogError?.message ?? JSON.stringify(noShowStatusLog)}`,
+      );
+    }
+    formatStep("종료된 확정 예약 NO_SHOW 자동 전환과 상태 로그 확인");
 
     const detailPayload = await apiRequest({
       baseUrl,

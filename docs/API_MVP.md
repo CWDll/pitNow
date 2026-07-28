@@ -1005,6 +1005,7 @@ CHECKED_IN → IN_USE
 CONFIRMED → IN_USE (SHOP_SERVICE only)
 IN_USE → COMPLETED
 CONFIRMED → CANCELLED
+CONFIRMED → NO_SHOW (server, when end_time has passed)
 
 허용되지 않는 전환은 400 반환.
 
@@ -1021,7 +1022,7 @@ MVP 제외
 • 사용자/관리자 주도 환불 기능
 • 헬퍼 대행 작업 모드
 • 관리자 API
-• 노쇼 자동 취소
+• 체크인 마감 전 임의 노쇼 처리
 
 ⸻
 

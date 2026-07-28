@@ -11,7 +11,17 @@
 
 ## No-show
 
-- 10 min late → auto cancel (Phase2)
+- A `CONFIRMED` reservation that has not checked in by `end_time` becomes
+  `NO_SHOW`.
+- The transition is server-side and writes
+  `CONFIRMED → NO_SHOW` to `reservation_status_logs`.
+- Partner-admin may record a `NO_SHOW` field note as operational evidence. If
+  the reservation has already ended, saving that note also triggers the same
+  status transition.
+- No-show does not mean cancellation. The reservation payment remains recorded
+  and is not automatically refunded.
+- `NO_SHOW` no longer blocks a bay and cannot be checked in, completed, or
+  reviewed.
 
 ## Extra Fee
 
@@ -73,6 +83,8 @@
   - provider payment keys or refund operation metadata
   - user-owned vehicle management outside reservation display fields
 - Store-admin field notes are internal partner-side records and must not be shown in the user app.
+- A `NO_SHOW` note changes an ended `CONFIRMED` reservation to `NO_SHOW`;
+  other note types do not change reservation status.
 - Internal PitNow admin keeps using server-only service role access for cross-partner operations.
 
 ## Partner Availability Blocks

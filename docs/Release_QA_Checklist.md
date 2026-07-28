@@ -232,6 +232,7 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 23 | 정비소 사진 관리 | 사진 여러 장 등록, 대표 변경, 삭제 | 최대 8장, 대표 1장 유지, 사용자 홈/상세 반영 및 audit 기록 | 자동 검증 성공 | 2장 실제 업로드·대표 변경·삭제·원상복구 |
 | 24 | 현장 체크인 인증정보 | QR 표시, 수동 코드 복사, 재발급 | QR/코드 모두 사용자 인증 성공, 재발급 후 기존 값 거부 | 성공 | 기본 카메라 QR은 해당 정비소 상세로 이동하고, Self는 QR·Shop은 수동 코드로 실제 체크인 성공 |
 | 25 | Shop 작업 상태 제어 | 체크인된 Shop 예약 상세에서 작업 시작·완료 | Partner만 IN_USE/COMPLETED 전환, 상태 로그와 audit 기록 | 성공 | Partner 작업 시작·완료와 User 10초 polling 상태 반영 확인. User 직접 전환 403 및 Partner audit E2E 통과 |
+| 26 | 종료 예약 노쇼 전환 | 종료 시각이 지난 `CONFIRMED` 예약 조회 또는 노쇼 메모 작성 | User/Partner/Admin 모두 `노쇼` 표시, `CONFIRMED → NO_SHOW` SYSTEM/PARTNER 로그 기록, 자동 환불 없음 | 자동 검증 성공·배포 재확인 | migration 적용 및 기존 09:00/12:00 예약 backfill 확인. Partner API E2E에서 SYSTEM/PARTNER 전환 로그 통과 |
 
 ### 7.6 Admin QA
 

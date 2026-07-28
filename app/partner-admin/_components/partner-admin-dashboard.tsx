@@ -16,7 +16,12 @@ import { PartnerImageManager } from "./partner-image-manager";
 // type, interface, API는 나중에 분리해야 함. 한번에 옮길 것.
 
 type ReservationStatus =
-  "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
+  | "CONFIRMED"
+  | "CHECKED_IN"
+  | "IN_USE"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 type PartnerNoteType = "NOTE" | "ISSUE" | "DELAY" | "NO_SHOW";
 type NoteFilter = "ALL" | "OPEN" | "ISSUES";
@@ -438,6 +443,8 @@ function statusLabel(status: ReservationStatus): string {
       return "완료";
     case "CANCELLED":
       return "취소";
+    case "NO_SHOW":
+      return "노쇼";
     default:
       return status;
   }
@@ -454,6 +461,8 @@ function statusClass(status: ReservationStatus): string {
       return "bg-emerald-50 text-emerald-700";
     case "CANCELLED":
       return "bg-zinc-200 text-zinc-600";
+    case "NO_SHOW":
+      return "bg-amber-50 text-amber-700";
     default:
       return "bg-zinc-100 text-zinc-700";
   }

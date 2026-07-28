@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { ReservationStatus, ReservationType } from "@/src/domain/types";
 import { requireRequestUser } from "@/src/lib/auth";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
+import { expirePastConfirmedReservations } from "@/src/lib/reservation-no-shows";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
@@ -133,6 +134,15 @@ export async function GET(req: Request) {
 
   const { startIso, endIso } = getKstDayRangeIso(searchParams.get("date"));
   const db = supabaseAdmin ?? authResult.auth.client;
+  const noShowResult = await expirePastConfirmedReservations({
+    client: db,
+    partnerId,
+  });
+
+  if (noShowResult.errors.length > 0) {
+    console.error("PARTNER ADMIN NO SHOW SYNC ERROR:", noShowResult.errors);
+  }
+
   const { data: reservations, error: reservationError } = await db
     .from("reservations")
     .select(

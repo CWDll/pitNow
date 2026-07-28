@@ -295,7 +295,8 @@ status in (
 ‘CHECKED_IN’,
 ‘IN_USE’,
 ‘COMPLETED’,
-‘CANCELLED’
+‘CANCELLED’,
+‘NO_SHOW’
 )
 ),
 total_price numeric not null,
@@ -621,7 +622,7 @@ create table reservation_status_logs (
   reservation_id uuid not null references reservations(id) on delete cascade,
   from_status text,
   to_status text not null check (
-    to_status in ('CONFIRMED', 'CHECKED_IN', 'IN_USE', 'COMPLETED', 'CANCELLED')
+    to_status in ('CONFIRMED', 'CHECKED_IN', 'IN_USE', 'COMPLETED', 'CANCELLED', 'NO_SHOW')
   ),
   actor_type text not null default 'SYSTEM' check (
     actor_type in ('SYSTEM', 'USER', 'PARTNER', 'ADMIN')
@@ -631,7 +632,7 @@ create table reservation_status_logs (
   created_at timestamptz not null default now(),
   check (
     from_status is null
-    or from_status in ('CONFIRMED', 'CHECKED_IN', 'IN_USE', 'COMPLETED', 'CANCELLED')
+    or from_status in ('CONFIRMED', 'CHECKED_IN', 'IN_USE', 'COMPLETED', 'CANCELLED', 'NO_SHOW')
   )
 );
 

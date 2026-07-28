@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CalendarDays, LogIn, RefreshCw } from "lucide-react";
 
+import { authFetch } from "@/src/lib/auth-fetch";
 import { supabase } from "@/src/lib/supabase";
 import { formatKstDateTimeRange } from "@/src/lib/timezone";
 import { Line, Screen, StatePanel } from "../_components/mobile-ui";
@@ -13,7 +14,12 @@ import ReservationListClient, {
 } from "./reservation-list-client";
 
 type ReservationStatus =
-  "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
+  | "CONFIRMED"
+  | "CHECKED_IN"
+  | "IN_USE"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 
 interface ReservationRow {
@@ -195,13 +201,12 @@ function mapReservationItem(
   };
 }
 
-function getReservationOccupancyEndMs(item: ReservationListItem): number {
-  const fallbackEndMs = new Date(item.endTime).getTime();
-  const occupancyEndMs = item.blockedUntil
-    ? new Date(item.blockedUntil).getTime()
-    : fallbackEndMs;
-
-  return Number.isFinite(occupancyEndMs) ? occupancyEndMs : fallbackEndMs;
+function hasReservationEnded(
+  item: ReservationListItem,
+  nowMs: number,
+): boolean {
+  const endMs = new Date(item.endTime).getTime();
+  return Number.isFinite(endMs) && endMs <= nowMs;
 }
 
 function isUpcomingReservation(
@@ -212,11 +217,15 @@ function isUpcomingReservation(
     return true;
   }
 
-  if (item.status === "COMPLETED" || item.status === "CANCELLED") {
+  if (
+    item.status === "COMPLETED" ||
+    item.status === "CANCELLED" ||
+    item.status === "NO_SHOW"
+  ) {
     return false;
   }
 
-  return getReservationOccupancyEndMs(item) > nowMs;
+  return !hasReservationEnded(item, nowMs);
 }
 
 export default function ReservationListPage() {
@@ -267,6 +276,21 @@ export default function ReservationListPage() {
           setIsLoading(false);
         }
         return;
+      }
+
+      try {
+        const syncResponse = await authFetch("/api/reservations/no-shows/sync", {
+          method: "POST",
+        });
+
+        if (!syncResponse.ok) {
+          console.warn(
+            "RESERVATION NO SHOW SYNC SKIPPED:",
+            await syncResponse.text(),
+          );
+        }
+      } catch (syncError) {
+        console.warn("RESERVATION NO SHOW SYNC ERROR:", syncError);
       }
 
       const { data, error: reservationError } = await supabase
@@ -583,11 +607,17 @@ export default function ReservationListPage() {
     );
   }
 
-  const visibleReservations = reservations.map((item) => ({
-    ...item,
-    canCancel:
-      item.status === "CONFIRMED" && isUpcomingReservation(item, nowMs),
-  }));
+  const visibleReservations = reservations.map((item) => {
+    const isExpiredConfirmation =
+      item.status === "CONFIRMED" && hasReservationEnded(item, nowMs);
+
+    return {
+      ...item,
+      status: isExpiredConfirmation ? ("NO_SHOW" as const) : item.status,
+      canCancel:
+        item.status === "CONFIRMED" && !hasReservationEnded(item, nowMs),
+    };
+  });
   const upcomingReservations = visibleReservations.filter((item) =>
     isUpcomingReservation(item, nowMs),
   );

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireRequestUser } from "@/src/lib/auth";
 import { recordPartnerAdminAudit } from "@/src/lib/partner-admin-audit";
 import { hasPartnerAdminMembership } from "@/src/lib/partner-admin";
+import { expirePastConfirmedReservations } from "@/src/lib/reservation-no-shows";
 import {
   getSupabaseEnvErrorResponse,
   hasSupabaseEnv,
@@ -18,6 +19,8 @@ interface Context {
 interface ReservationRow {
   id: string;
   partner_id: string;
+  end_time: string;
+  status: string;
 }
 
 interface PartnerReservationNoteRow {
@@ -103,7 +106,7 @@ async function getAuthorizedReservation(params: {
 
   const { data: reservation, error } = await supabaseAdmin
     .from("reservations")
-    .select("id,partner_id")
+    .select("id,partner_id,end_time,status")
     .eq("id", params.reservationId)
     .maybeSingle<ReservationRow>();
 
@@ -305,8 +308,32 @@ export async function POST(req: Request, context: Context) {
     },
   });
 
+  let reservationStatusUpdated = false;
+
+  if (
+    data.note_type === "NO_SHOW" &&
+    reservationResult.reservation.status === "CONFIRMED" &&
+    new Date(reservationResult.reservation.end_time).getTime() <= Date.now()
+  ) {
+    const noShowResult = await expirePastConfirmedReservations({
+      client: supabaseAdmin!,
+      reservationId: data.reservation_id,
+      actorType: "PARTNER",
+      actorUserId: authResult.auth.userId,
+      reason: "partner_no_show_note",
+      limit: 1,
+    });
+
+    reservationStatusUpdated = noShowResult.expiredCount === 1;
+
+    if (noShowResult.errors.length > 0) {
+      console.error("PARTNER NOTE NO SHOW STATUS ERROR:", noShowResult.errors);
+    }
+  }
+
   return NextResponse.json({
     success: true,
     note: normalizeNote(data),
+    reservationStatusUpdated,
   });
 }

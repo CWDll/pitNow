@@ -28,7 +28,28 @@ function statusClass(status: AdminReservationStatus): string {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
+  if (status === "NO_SHOW") {
+    return "bg-amber-50 text-amber-700 ring-amber-200";
+  }
+
   return "bg-slate-100 text-slate-700 ring-slate-200";
+}
+
+function statusLabel(status: AdminReservationStatus): string {
+  switch (status) {
+    case "CONFIRMED":
+      return "예약 확정";
+    case "CHECKED_IN":
+      return "체크인";
+    case "IN_USE":
+      return "이용 중";
+    case "COMPLETED":
+      return "완료";
+    case "CANCELLED":
+      return "취소";
+    case "NO_SHOW":
+      return "노쇼";
+  }
 }
 
 function typeLabel(type: AdminReservationType): string {
@@ -181,7 +202,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
             reservation.status,
           )}`}
         >
-          {reservation.status}
+          {statusLabel(reservation.status)}
         </span>
       </header>
 
@@ -215,6 +236,11 @@ export default async function AdminReservationDetailPage(props: PageProps) {
         <div className="rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-700 shadow-sm">
           이 예약은 이미 취소되었습니다. 상태 전환 로그에서 취소 사유를 확인할
           수 있습니다.
+        </div>
+      ) : reservation.status === "NO_SHOW" ? (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 shadow-sm">
+          예약 종료 시각까지 체크인되지 않아 노쇼로 처리되었습니다. 선결제는 자동
+          환불되지 않습니다.
         </div>
       ) : null}
 

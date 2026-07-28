@@ -3,7 +3,8 @@ export type ReservationStatus =
   | "CHECKED_IN"
   | "IN_USE"
   | "COMPLETED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "NO_SHOW";
 
 export type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 

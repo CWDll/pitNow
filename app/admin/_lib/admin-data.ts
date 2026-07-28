@@ -1,8 +1,14 @@
 import { hasSupabaseServiceRoleEnv, supabaseAdmin } from "@/src/lib/supabase";
+import { expirePastConfirmedReservations } from "@/src/lib/reservation-no-shows";
 import { formatKstAdminDateTime } from "@/src/lib/timezone";
 
 export type AdminReservationStatus =
-  "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
+  | "CONFIRMED"
+  | "CHECKED_IN"
+  | "IN_USE"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
 
 export type AdminReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 
@@ -601,6 +607,14 @@ export async function getAdminReservations(options?: {
     return [];
   }
 
+  const noShowResult = await expirePastConfirmedReservations({
+    client: supabaseAdmin,
+  });
+
+  if (noShowResult.errors.length > 0) {
+    console.error("ADMIN RESERVATION NO SHOW SYNC ERROR:", noShowResult.errors);
+  }
+
   let reservationQuery = supabaseAdmin
     .from("reservations")
     .select(
@@ -861,6 +875,19 @@ export async function getAdminReservationDetail(
 ): Promise<AdminReservationDetail | null> {
   if (!hasSupabaseServiceRoleEnv || !supabaseAdmin) {
     return null;
+  }
+
+  const noShowResult = await expirePastConfirmedReservations({
+    client: supabaseAdmin,
+    reservationId,
+    limit: 1,
+  });
+
+  if (noShowResult.errors.length > 0) {
+    console.error(
+      "ADMIN RESERVATION DETAIL NO SHOW SYNC ERROR:",
+      noShowResult.errors,
+    );
   }
 
   const [partnerMap, bayMap, vehicleMap, reservationResult] = await Promise.all(

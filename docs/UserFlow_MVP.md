@@ -47,6 +47,9 @@ G --> H[User reviews receipt and writes review]
 - Self/Shop 모두 사용자가 정비소 고정 QR 또는 수동 코드로 도착을 인증한다.
 - Self는 도착 인증 후 체크인 사진 4장을 제출하고 사용자 흐름에서 이용을 시작한다.
 - Shop은 도착 인증 즉시 `CHECKED_IN`이 되며 작업 시작과 완료는 Partner-admin이 처리한다.
+- 예약 종료 시각까지 체크인되지 않은 `CONFIRMED` 예약은 서버에서
+  `NO_SHOW`로 전환되어 지난 이용에 표시된다.
+- 노쇼는 취소나 환불 완료 상태가 아니며 결제 기록은 그대로 유지한다.
 
 ## Store Admin Flow
 
@@ -72,6 +75,8 @@ I --> J[Reservation Prepare Rejects Blocked Slot]
 - 체크인/체크아웃 사진과 체크리스트는 본인 정비소 예약에 한해 조회한다.
 - Partner-admin은 정비소 고정 QR과 수동 체크인 코드를 발급·재발급한다.
 - Shop 예약은 `CHECKED_IN → IN_USE → COMPLETED` 전환을 Partner-admin만 수행한다.
+- 종료된 미체크인 예약은 목록 조회 시 `CONFIRMED → NO_SHOW`로 전환되며,
+  Partner가 남긴 노쇼 메모는 운영 증적으로 함께 보관한다.
 - 베이 활성/비활성은 `bays.partner_id`가 본인 정비소인 경우에만 허용한다.
 - 임시 휴무, 장비 점검, 특정 베이 고장 등은 `partner_availability_blocks`에 저장한다.
 - 사용자 예약 준비 단계는 `partner_availability_blocks`와 겹치는 시간대를 거부해야 한다.

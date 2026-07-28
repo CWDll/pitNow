@@ -2359,3 +2359,29 @@ npm run qa:open-checkin-window
   PRICE`로 변경했다.
 - 예약 ID는 말줄임 없이 전체 UUID를 표시하며 폭이 부족하면 ID 내부에서
   줄바꿈한다.
+
+## 73. 2026-07-28 종료된 확정 예약 노쇼 상태 전환
+
+- 예약 상태에 `NO_SHOW`를 추가하고, 종료 시각까지 체크인되지 않은
+  `CONFIRMED` 예약을 서버에서 전환한다.
+- migration 적용 시 이미 종료된 기존 확정 예약도 SYSTEM 로그와 함께 즉시
+  `NO_SHOW`로 backfill한다.
+- 1시간 단위 정책 도입 전에 생성된 40분 등 legacy 예약은 시간을 수정하지 않고,
+  status backfill 동안 `chk_reservation_hour_unit`를 잠시 제거한 뒤 `NOT VALID`
+  제약으로 복구한다. 신규 행에는 기존 1시간 단위 검증이 계속 적용된다.
+- User 예약 목록 진입, Partner 예약 목록 10초 polling, Admin 예약 목록/상세
+  조회가 같은 만료 함수를 사용한다.
+- 동시 조회는 `status = CONFIRMED` 조건부 갱신으로 중복 전환을 막고,
+  `reservation_status_logs`에 판정 종료 시각과 실행 시각을 남긴다.
+- 종료된 예약에 Partner-admin이 노쇼 메모를 남겨도 같은 상태 전환을 실행한다.
+- 사용자 지난 이용에는 `노쇼`와 미체크인 안내를 표시하며 완료·영수증 화면으로
+  연결하지 않는다.
+- 노쇼는 취소가 아니므로 예약 결제는 자동 환불하지 않는다.
+- 적용 SQL: `db/migrations/20260728_reservation_no_show_status.sql`.
+- 자동 검증은 과거 `CONFIRMED` 예약을 만든 뒤 Partner 예약 API 조회로
+  `NO_SHOW` 상태와 SYSTEM 상태 로그를 확인한다.
+- Supabase migration 적용 후 schema check 전체 성공.
+- 제보된 `191c9bcd-...`, `2cb99013-...` 예약이 실제 `NO_SHOW`로 바뀌고
+  `reservation_no_show_migration_backfill` SYSTEM 로그가 저장된 것을 확인했다.
+- `npm run e2e:partner-admin`에서 목록 조회 SYSTEM 전환과 종료 예약 노쇼 메모의
+  PARTNER 전환·로그를 모두 확인했다.

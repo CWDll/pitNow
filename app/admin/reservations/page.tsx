@@ -185,7 +185,28 @@ function statusClass(status: AdminReservationStatus): string {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200";
   }
 
+  if (status === "NO_SHOW") {
+    return "bg-amber-50 text-amber-700 ring-amber-200";
+  }
+
   return "bg-slate-100 text-slate-700 ring-slate-200";
+}
+
+function statusLabel(status: AdminReservationStatus): string {
+  switch (status) {
+    case "CONFIRMED":
+      return "예약 확정";
+    case "CHECKED_IN":
+      return "체크인";
+    case "IN_USE":
+      return "이용 중";
+    case "COMPLETED":
+      return "완료";
+    case "CANCELLED":
+      return "취소";
+    case "NO_SHOW":
+      return "노쇼";
+  }
 }
 
 function typeLabel(type: AdminReservationType): string {
@@ -431,7 +452,7 @@ export default async function AdminReservationsPage({
                         reservation.status,
                       )}`}
                     >
-                      {reservation.status}
+                      {statusLabel(reservation.status)}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4">{typeLabel(reservation.reservationType)}</td>

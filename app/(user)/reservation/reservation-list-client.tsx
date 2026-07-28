@@ -13,7 +13,13 @@ import {
 
 import { authFetch } from "@/src/lib/auth-fetch";
 
-type ReservationStatus = "CONFIRMED" | "CHECKED_IN" | "IN_USE" | "COMPLETED" | "CANCELLED";
+type ReservationStatus =
+  | "CONFIRMED"
+  | "CHECKED_IN"
+  | "IN_USE"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
 type ReservationType = "SELF_SERVICE" | "SHOP_SERVICE";
 
 export interface ReservationListItem {
@@ -51,6 +57,8 @@ function getStatusLabel(status: ReservationStatus): string {
       return "완료";
     case "CANCELLED":
       return "취소됨";
+    case "NO_SHOW":
+      return "노쇼";
     default:
       return status;
   }
@@ -67,6 +75,10 @@ function statusClass(status: ReservationStatus): string {
 
   if (status === "COMPLETED") {
     return "bg-emerald-50 text-emerald-600";
+  }
+
+  if (status === "NO_SHOW") {
+    return "bg-amber-50 text-amber-700";
   }
 
   return "bg-zinc-100 text-zinc-600";
@@ -211,6 +223,7 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
   const statusBadgeClass = hasUnpaidSettlement
     ? "bg-red-50 text-red-600"
     : statusClass(item.status);
+  const isNoShow = item.status === "NO_SHOW";
 
   async function handleCancelSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -259,41 +272,73 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
     }
   }
 
+  const reservationSummary = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-lg font-black text-slate-950">
+            {item.garageName}
+          </h3>
+          <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+            {item.workTitle}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-bold ${statusBadgeClass}`}
+        >
+          {hasUnpaidSettlement
+            ? "정산 미완료"
+            : getStatusLabel(item.status)}
+        </span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <span
+          className={`rounded-md px-2 py-1 text-xs font-bold ${modeClass(item.reservationType)}`}
+        >
+          {getReservationTypeLabel(item.reservationType)}
+        </span>
+      </div>
+
+      <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-600">
+        <p className="flex items-start gap-2">
+          <CalendarDays className="mt-0.5 size-3.5 shrink-0 text-blue-600" />
+          {item.dateLabel}
+        </p>
+        <p className="flex items-center gap-2">
+          {item.bayLabel ? (
+            <MapPin className="size-3.5 shrink-0 text-blue-600" />
+          ) : (
+            <CarFront className="size-3.5 shrink-0 text-blue-600" />
+          )}
+          {item.bayLabel ?? item.carLabel}
+        </p>
+      </div>
+
+      <div className="mt-3 flex items-center justify-end gap-1 text-xs font-bold text-blue-600">
+        {isNoShow ? (
+          <span className="text-amber-700">
+            예약 종료 시각까지 체크인되지 않았습니다
+          </span>
+        ) : (
+          <>
+            예약 상세
+            <ChevronRight className="size-4" />
+          </>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition hover:border-slate-300">
-      <Link href={buildReservationHref(item)} className="block">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate text-lg font-black text-slate-950">{item.garageName}</h3>
-            <p className="mt-1 truncate text-sm font-semibold text-slate-500">{item.workTitle}</p>
-          </div>
-          <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-bold ${statusBadgeClass}`}>
-            {hasUnpaidSettlement ? "정산 미완료" : getStatusLabel(item.status)}
-          </span>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className={`rounded-md px-2 py-1 text-xs font-bold ${modeClass(item.reservationType)}`}>
-            {getReservationTypeLabel(item.reservationType)}
-          </span>
-        </div>
-
-        <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-600">
-          <p className="flex items-start gap-2">
-            <CalendarDays className="mt-0.5 size-3.5 shrink-0 text-blue-600" />
-            {item.dateLabel}
-          </p>
-          <p className="flex items-center gap-2">
-            {item.bayLabel ? <MapPin className="size-3.5 shrink-0 text-blue-600" /> : <CarFront className="size-3.5 shrink-0 text-blue-600" />}
-            {item.bayLabel ?? item.carLabel}
-          </p>
-        </div>
-
-        <div className="mt-3 flex items-center justify-end gap-1 text-xs font-bold text-blue-600">
-          예약 상세
-          <ChevronRight className="size-4" />
-        </div>
-      </Link>
+      {isNoShow ? (
+        <div>{reservationSummary}</div>
+      ) : (
+        <Link href={buildReservationHref(item)} className="block">
+          {reservationSummary}
+        </Link>
+      )}
 
       {hasUnpaidSettlement ? (
         <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
