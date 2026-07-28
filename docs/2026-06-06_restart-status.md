@@ -2332,3 +2332,22 @@ npm run qa:open-checkin-window
 - `npm run e2e:ui:fake` 성공, 1 passed. 이른 체크인 CTA 비활성 및 시간
   이동 후 Self 전체 예약 흐름을 확인했다.
 - `npm run verify:partner-admin-ui` 성공, 1 passed.
+
+## 71. 2026-07-28 배포 URL 현장 체크인·Shop 운영 QA
+
+사용자 확인 완료:
+
+- Partner-admin QR을 iPhone 기본 카메라로 읽어 해당 `/partner/[partnerId]`
+  상세로 이동했다.
+- 예약 완료 화면에서 체크인 오픈 시각이 표시되고 오픈 전 CTA가 비활성화됐다.
+- 체크인 가능 시간에는 CTA가 활성화됐다.
+- Self 예약은 Partner QR 인증과 차량 사진 제출 후 타이머 화면까지 진입했다.
+- Shop 예약은 수동 코드 도착 인증 후 Partner-admin에서 작업 시작·완료를
+  처리했고, User 화면에서 완료 반영 후 완료 내역과 영수증으로 이동했다.
+
+남은 관찰:
+
+- Shop 작업 시작 직후 User 화면을 새로고침하지 않고 최대 10초 유지해
+  `정비 진행 중`으로 자동 변경되는지 한 번 재확인한다.
+- 상태 API와 10초 polling은 자동 E2E에서 검증됐으며, 이번 현장 QA에서는
+  작업 시작 후 새로고침해 중간 표시를 직접 관찰하지 못했다.
