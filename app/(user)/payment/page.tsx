@@ -436,7 +436,7 @@ function PaymentPageContent() {
           ) : null}
           {bookingMode === "SELF" ? (
             <p className="flex justify-between">
-              <span>카 마스터 검수</span>
+              <span>정비사 작업 확인</span>
               <span>
                 {Math.max(0, helperVerifyFee).toLocaleString("ko-KR")}원
               </span>

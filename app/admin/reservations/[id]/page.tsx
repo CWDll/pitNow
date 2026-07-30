@@ -316,7 +316,7 @@ export default async function AdminReservationDetailPage(props: PageProps) {
                 </dd>
               </div>
               <div className="flex justify-between">
-                <dt>카 마스터 검수</dt>
+                <dt>정비사 작업 확인</dt>
                 <dd className="text-slate-950">
                   {formatAdminCurrency(checkout.helperVerifyFee)}
                 </dd>

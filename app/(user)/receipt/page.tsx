@@ -261,7 +261,7 @@ function ReceiptPageContent() {
                   <dd>{formatCurrency(extraFee)}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt>카 마스터 검수</dt>
+                  <dt>정비사 작업 확인</dt>
                   <dd>{formatCurrency(helperVerifyFee)}</dd>
                 </div>
                 <div className="border-t border-zinc-300 pt-3">

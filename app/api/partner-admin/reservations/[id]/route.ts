@@ -96,6 +96,41 @@ interface ServicePackageRow {
   duration_minutes: number;
 }
 
+interface ReservationTaskRow {
+  id: string;
+  task_id: string;
+  work_check_unit_fee_snapshot: number | string;
+  check_scope_snapshot: Array<{
+    id: string;
+    label: string;
+    version: number;
+    sortOrder: number;
+  }>;
+  self_maintenance_tasks:
+    | { code: string; name: string }
+    | Array<{ code: string; name: string }>;
+}
+
+interface WorkCheckRow {
+  id: string;
+  status: "PENDING" | "RECORDED" | "NOT_PERFORMED";
+  prepaid_fee: number | string;
+  summary_note: string | null;
+  recorded_at: string | null;
+}
+
+interface WorkCheckResultRow {
+  id: string;
+  reservation_task_id: string;
+  check_item_id: string | null;
+  item_label_snapshot: string;
+  result: "NO_ISSUE" | "ISSUE_FOUND" | "UNABLE_TO_CHECK";
+  note: string | null;
+  check_round: 1 | 2;
+  sort_order: number;
+  created_at: string;
+}
+
 function jsonError(status: number, code: string, message: string) {
   return NextResponse.json(
     {
@@ -205,6 +240,8 @@ export async function GET(req: Request, context: Context) {
     reservationUserResult,
     userProfileResult,
     packageResult,
+    reservationTasksResult,
+    workCheckResult,
   ] = await Promise.all([
     db
       .from("partners")
@@ -264,6 +301,22 @@ export async function GET(req: Request, context: Context) {
           .eq("id", reservation.package_id)
           .maybeSingle<ServicePackageRow>()
       : Promise.resolve({ data: null, error: null }),
+    reservation.reservation_type === "SELF_SERVICE"
+      ? db
+          .from("reservation_tasks")
+          .select(
+            "id,task_id,work_check_unit_fee_snapshot,check_scope_snapshot,self_maintenance_tasks!inner(code,name)",
+          )
+          .eq("reservation_id", reservation.id)
+          .returns<ReservationTaskRow[]>()
+      : Promise.resolve({ data: [], error: null }),
+    reservation.helper_verify_requested
+      ? db
+          .from("reservation_work_checks")
+          .select("id,status,prepaid_fee,summary_note,recorded_at")
+          .eq("reservation_id", reservation.id)
+          .maybeSingle<WorkCheckRow>()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   if (
@@ -273,7 +326,9 @@ export async function GET(req: Request, context: Context) {
     checkinResult.error ||
     checkoutResult.error ||
     statusLogsResult.error ||
-    packageResult.error
+    packageResult.error ||
+    reservationTasksResult.error ||
+    workCheckResult.error
   ) {
     console.error("PARTNER ADMIN RESERVATION DETAIL RELATED LOOKUP ERROR:", {
       partnerError: partnerResult.error,
@@ -283,6 +338,8 @@ export async function GET(req: Request, context: Context) {
       checkoutError: checkoutResult.error,
       statusLogsError: statusLogsResult.error,
       packageError: packageResult.error,
+      reservationTasksError: reservationTasksResult.error,
+      workCheckError: workCheckResult.error,
     });
     return jsonError(
       500,
@@ -296,6 +353,46 @@ export async function GET(req: Request, context: Context) {
   const reservationUser = reservationUserResult.data.user;
   const userProfile = userProfileResult.data;
   const userMetadata = reservationUser?.user_metadata ?? {};
+  const workCheck = workCheckResult.data;
+  const workCheckResultsResult = workCheck
+    ? await db
+        .from("reservation_work_check_results")
+        .select(
+          "id,reservation_task_id,check_item_id,item_label_snapshot,result,note,check_round,sort_order,created_at",
+        )
+        .eq("work_check_id", workCheck.id)
+        .order("check_round")
+        .order("sort_order")
+        .returns<WorkCheckResultRow[]>()
+    : { data: [], error: null };
+
+  if (workCheckResultsResult.error) {
+    console.error(
+      "PARTNER ADMIN WORK CHECK RESULTS LOOKUP ERROR:",
+      workCheckResultsResult.error,
+    );
+    return jsonError(
+      500,
+      "DB_ERROR",
+      "정비사 작업 확인 결과를 불러오지 못했습니다.",
+    );
+  }
+
+  const selfTasks = (reservationTasksResult.data ?? []).map((row) => {
+    const task = Array.isArray(row.self_maintenance_tasks)
+      ? row.self_maintenance_tasks[0]
+      : row.self_maintenance_tasks;
+    return {
+      reservationTaskId: row.id,
+      taskId: row.task_id,
+      taskCode: task?.code ?? "",
+      taskName: task?.name ?? "SELF 작업",
+      workCheckUnitFee: toNumber(row.work_check_unit_fee_snapshot),
+      checkItems: Array.isArray(row.check_scope_snapshot)
+        ? row.check_scope_snapshot
+        : [],
+    };
+  });
 
   return NextResponse.json({
     success: true,
@@ -357,6 +454,34 @@ export async function GET(req: Request, context: Context) {
           checkoutPhoto1: checkout.checkout_photo_1,
           checkoutPhoto2: checkout.checkout_photo_2,
           completedAt: checkout.completed_at,
+        }
+      : null,
+    selfTasks,
+    workCheck: workCheck
+      ? {
+          id: workCheck.id,
+          status: workCheck.status,
+          prepaidFee: toNumber(workCheck.prepaid_fee),
+          summaryNote: workCheck.summary_note ?? "",
+          recordedAt: workCheck.recorded_at,
+          results: (workCheckResultsResult.data ?? []).map((result) => {
+            const task = selfTasks.find(
+              (item) => item.reservationTaskId === result.reservation_task_id,
+            );
+            return {
+              id: result.id,
+              reservationTaskId: result.reservation_task_id,
+              taskCode: task?.taskCode ?? "",
+              taskName: task?.taskName ?? "SELF 작업",
+              checkItemId: result.check_item_id,
+              itemLabel: result.item_label_snapshot,
+              result: result.result,
+              note: result.note ?? "",
+              checkRound: result.check_round,
+              sortOrder: result.sort_order,
+              createdAt: result.created_at,
+            };
+          }),
         }
       : null,
     statusLogs: (statusLogsResult.data ?? []).map((log) => ({

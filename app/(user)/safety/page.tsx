@@ -1,45 +1,74 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useRef, useState } from "react";
-import { FlowHeader } from "../_components/mobile-ui";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { Check, LoaderCircle, PlayCircle, ShieldCheck } from "lucide-react";
 
-const safetyChecklist = [
-  "리프트와 장비 사용 전 주의사항을 숙지합니다.",
-  "화재 위험 작업과 위험물 반입은 하지 않습니다.",
-  "폐유와 폐기물은 지정된 수거함에 처리합니다.",
-  "작업 중 발생하는 사고 책임 범위를 확인했습니다.",
-];
+import { FlowHeader } from "../_components/mobile-ui";
+import type {
+  SelfMaintenanceCatalog,
+  SelfSafetyContent,
+} from "@/src/domain/self-maintenance";
+import { authFetch } from "@/src/lib/auth-fetch";
+
+const agreementText =
+  "위에서 선택한 작업만 수행하며, 예약하지 않은 작업은 진행하지 않습니다. 예약하지 않은 작업을 수행하거나 추가 분해를 하는 경우 정비사 작업 확인이 제한될 수 있습니다.";
+
+interface CatalogResponse {
+  success: boolean;
+  catalog?: SelfMaintenanceCatalog;
+}
+
+interface TrainingResponse {
+  success: boolean;
+  completed?: boolean;
+}
 
 function SafetyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [catalog, setCatalog] = useState<SelfMaintenanceCatalog | null>(null);
+  const [commonTrainingCompleted, setCommonTrainingCompleted] =
+    useState<boolean | null>(null);
+  const [confirmedContentIds, setConfirmedContentIds] = useState<string[]>([]);
+  const [agreeOnlySelectedTasks, setAgreeOnlySelectedTasks] = useState(false);
+  const [finalConsentConfirmed, setFinalConsentConfirmed] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const [isVideoWatched, setIsVideoWatched] = useState(false);
-  const [checks, setChecks] = useState<boolean[]>([false, false, false, false]);
-  const [agreeOnlySelectedTasks, setAgreeOnlySelectedTasks] =
-    useState<boolean>(false);
-  const [consentMethod, setConsentMethod] = useState<"CHECKBOX" | "SIGNATURE">(
-    "CHECKBOX",
+  const partnerId = searchParams.get("partnerId") ?? "";
+  const taskCodes = useMemo(
+    () =>
+      (searchParams.get("taskIds") ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    [searchParams],
   );
-  const [checkboxConsentConfirmed, setCheckboxConsentConfirmed] =
-    useState<boolean>(false);
-  const [hasSigned, setHasSigned] = useState<boolean>(false);
-  const [isDrawing, setIsDrawing] = useState<boolean>(false);
-
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
   const taskLabels = searchParams.get("taskLabels") ?? "선택 작업 없음";
-  const selectedTaskCount = searchParams.get("selectedTaskCount") ?? "0";
 
-  const consentValid =
-    consentMethod === "CHECKBOX" ? checkboxConsentConfirmed : hasSigned;
-
+  const selectedTasks = useMemo(
+    () =>
+      (catalog?.tasks ?? []).filter((task) => taskCodes.includes(task.code)),
+    [catalog, taskCodes],
+  );
+  const taskSafetyContents = useMemo(
+    () => selectedTasks.flatMap((task) => task.safetyContents),
+    [selectedTasks],
+  );
+  const requiredContentIds = taskSafetyContents
+    .filter((content) => content.isRequired)
+    .map((content) => content.id);
+  const allContentsConfirmed = requiredContentIds.every((id) =>
+    confirmedContentIds.includes(id),
+  );
   const canProceed =
-    isVideoWatched &&
-    checks.every(Boolean) &&
+    commonTrainingCompleted === true &&
+    selectedTasks.length === taskCodes.length &&
+    requiredContentIds.length > 0 &&
+    allContentsConfirmed &&
     agreeOnlySelectedTasks &&
-    consentValid;
+    finalConsentConfirmed;
 
   const forwardQuery = useMemo(() => {
     const query = new URLSearchParams();
@@ -63,200 +92,221 @@ function SafetyPageContent() {
       "helperVerifyRequested",
       "helperVerifyFee",
     ];
-
     keys.forEach((key) => {
       const value = searchParams.get(key);
       if (value) {
         query.set(key, value);
       }
     });
-
     return query.toString();
   }, [searchParams]);
 
-  function buildNextQueryString() {
-    const query = new URLSearchParams(forwardQuery);
-    query.set("agreeOnlySelectedTasks", String(agreeOnlySelectedTasks));
-    query.set("consentMethod", consentMethod);
+  useEffect(() => {
+    let cancelled = false;
 
-    if (consentMethod === "SIGNATURE") {
-      const signatureDataUrl = canvasRef.current?.toDataURL("image/png") ?? "";
-      query.set(
-        "signatureImageUrl",
-        signatureDataUrl || `mock://signature/${Date.now()}`,
-      );
+    async function loadSafetyData() {
+      try {
+        const [catalogResponse, trainingResponse] = await Promise.all([
+          fetch(
+            `/api/self-maintenance-catalog?partnerId=${encodeURIComponent(partnerId)}`,
+            { cache: "no-store" },
+          ),
+          authFetch("/api/self-safety-training", { cache: "no-store" }),
+        ]);
+        const catalogPayload = (await catalogResponse.json()) as CatalogResponse;
+        const trainingPayload =
+          (await trainingResponse.json()) as TrainingResponse;
+
+        if (
+          !catalogResponse.ok ||
+          !catalogPayload.success ||
+          !catalogPayload.catalog
+        ) {
+          throw new Error("작업별 안전수칙을 불러오지 못했습니다.");
+        }
+
+        if (!cancelled) {
+          setCatalog(catalogPayload.catalog);
+          setCommonTrainingCompleted(
+            trainingResponse.ok &&
+              trainingPayload.success &&
+              trainingPayload.completed === true,
+          );
+        }
+      } catch (error) {
+        console.error("SAFETY DATA LOAD ERROR:", error);
+        if (!cancelled) {
+          setErrorMessage("안전 동의 정보를 불러오지 못했습니다.");
+          setCommonTrainingCompleted(false);
+        }
+      }
     }
 
+    void loadSafetyData();
+    return () => {
+      cancelled = true;
+    };
+  }, [partnerId]);
+
+  function toggleContent(content: SelfSafetyContent) {
+    setConfirmedContentIds((current) =>
+      current.includes(content.id)
+        ? current.filter((id) => id !== content.id)
+        : [...current, content.id],
+    );
+  }
+
+  function buildNextQueryString() {
+    const query = new URLSearchParams(forwardQuery);
+    query.set("agreeOnlySelectedTasks", "true");
+    query.set("consentMethod", "CHECKBOX");
     return query.toString();
   }
 
-  function drawAt(clientX: number, clientY: number) {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) {
-      return;
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#111827";
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
-  }
-
-  function startDraw(clientX: number, clientY: number) {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) {
-      return;
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    setIsDrawing(true);
-    setHasSigned(true);
-    ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
-  }
-
-  function endDraw() {
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) {
-      return;
-    }
-
-    setIsDrawing(false);
-    ctx.beginPath();
-  }
+  const currentSafetyPath = `/safety?${forwardQuery}`;
 
   return (
-    <section className="pb-24">
-      <FlowHeader title="안전 동의" onBack={() => router.back()} />
+    <section className="space-y-5 pb-28 pt-5">
+      <FlowHeader title="작업별 안전 확인" onBack={() => router.back()} />
 
-      <div className="mb-5">
-        <h2 className="mb-2 text-xl font-semibold text-zinc-900">
-          안전 교육 영상
-        </h2>
-        <button
-          type="button"
-          onClick={() => setIsVideoWatched(true)}
-          className="flex h-44 w-full items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500"
-        >
-          {isVideoWatched ? "시청 완료" : "탭하여 시청 완료 처리"}
-        </button>
-      </div>
+      {commonTrainingCompleted === null ? (
+        <div className="flex justify-center py-12">
+          <LoaderCircle className="size-6 animate-spin text-blue-600" />
+        </div>
+      ) : commonTrainingCompleted === false ? (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <div className="flex gap-3">
+            <ShieldCheck className="mt-0.5 size-5 shrink-0 text-blue-600" />
+            <div>
+              <h2 className="text-base font-black text-slate-950">
+                공통 안전교육이 먼저 필요합니다
+              </h2>
+              <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+                SELF 정비 최초 1회 공통 시설·장비 안전수칙을 확인해 주세요.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/safety-training?next=${encodeURIComponent(currentSafetyPath)}`}
+            className="mt-4 flex h-11 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white"
+          >
+            공통 안전교육 확인
+          </Link>
+        </div>
+      ) : null}
 
-      <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-        <h2 className="text-xl font-semibold text-zinc-900">
-          선택 작업 한정 동의
-        </h2>
-        <p className="mt-2 text-sm text-zinc-700">선택 작업: {taskLabels}</p>
-        <p className="mt-1 text-sm text-zinc-700">
-          선택 개수: {selectedTaskCount}개
+      {selectedTasks.map((task) => (
+        <section key={task.id} aria-labelledby={`safety-${task.id}`}>
+          <div className="mb-3">
+            <h2
+              id={`safety-${task.id}`}
+              className="text-lg font-black text-slate-950"
+            >
+              {task.name}
+            </h2>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              작업 방법 교육이 아닌 주요 위험과 안전수칙 안내입니다.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {task.safetyContents.map((content) => {
+              const confirmed = confirmedContentIds.includes(content.id);
+              return (
+                <article
+                  key={content.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start gap-3">
+                    {content.contentType === "VIDEO" ? (
+                      <PlayCircle className="mt-0.5 size-5 shrink-0 text-blue-600" />
+                    ) : (
+                      <ShieldCheck className="mt-0.5 size-5 shrink-0 text-blue-600" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-black text-slate-900">
+                        {content.title}
+                      </h3>
+                      <div className="mt-2 whitespace-pre-line text-sm font-semibold leading-6 text-slate-600">
+                        {content.body}
+                      </div>
+                    </div>
+                  </div>
+                  {content.contentType === "VIDEO" && content.mediaUrl ? (
+                    <video
+                      controls
+                      preload="metadata"
+                      className="mt-3 aspect-video w-full rounded-xl bg-slate-950"
+                      onEnded={() =>
+                        setConfirmedContentIds((current) =>
+                          current.includes(content.id)
+                            ? current
+                            : [...current, content.id],
+                        )
+                      }
+                    >
+                      <source src={content.mediaUrl} />
+                    </video>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => toggleContent(content)}
+                      className={`mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-black ${
+                        confirmed
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      <Check className="size-4" />
+                      {confirmed ? "확인 완료" : "안전수칙 확인"}
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+        <h2 className="text-lg font-black text-slate-950">선택 작업 한정 동의</h2>
+        <p className="mt-2 text-sm font-semibold text-slate-600">
+          선택 작업: {taskLabels}
         </p>
-        <label className="mt-3 flex items-start gap-3 text-base text-zinc-800">
+        <label className="mt-4 flex items-start gap-3 text-sm font-bold leading-6 text-slate-800">
           <input
             type="checkbox"
             checked={agreeOnlySelectedTasks}
-            onChange={() => setAgreeOnlySelectedTasks((prev) => !prev)}
-            className="mt-1 h-5 w-5"
+            onChange={(event) =>
+              setAgreeOnlySelectedTasks(event.target.checked)
+            }
+            className="mt-0.5 size-5 shrink-0 accent-blue-600"
           />
-          <span>
-            위에서 선택한 작업만 수행하고, 그 외 작업은 진행하지 않겠습니다.
-          </span>
+          <span>{agreementText}</span>
         </label>
       </div>
 
-      <div className="mb-5 space-y-3">
-        <h2 className="text-xl font-semibold text-zinc-900">안전 체크리스트</h2>
-        {safetyChecklist.map((label, index) => (
-          <label
-            key={label}
-            className="flex items-start gap-3 text-lg text-zinc-800"
-          >
-            <input
-              type="checkbox"
-              checked={checks[index]}
-              onChange={() =>
-                setChecks((prev) => {
-                  const next = [...prev];
-                  next[index] = !next[index];
-                  return next;
-                })
-              }
-              className="mt-1 h-5 w-5"
-            />
-            <span>{label}</span>
-          </label>
-        ))}
-      </div>
+      <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-800 shadow-sm">
+        <input
+          type="checkbox"
+          checked={finalConsentConfirmed}
+          onChange={(event) => setFinalConsentConfirmed(event.target.checked)}
+          className="mt-0.5 size-5 shrink-0 accent-blue-600"
+        />
+        <span>작업별 안전수칙과 선택 작업 한정 동의 내용을 확인했습니다.</span>
+      </label>
 
-      <div>
-        <h2 className="mb-2 text-xl font-semibold text-zinc-900">동의 방식</h2>
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setConsentMethod("CHECKBOX")}
-            className={`rounded-xl px-3 py-2 text-sm font-medium ${
-              consentMethod === "CHECKBOX"
-                ? "bg-blue-600 text-white"
-                : "bg-zinc-100 text-zinc-700"
-            }`}
-          >
-            체크박스 동의
-          </button>
-          <button
-            type="button"
-            onClick={() => setConsentMethod("SIGNATURE")}
-            className={`rounded-xl px-3 py-2 text-sm font-medium ${
-              consentMethod === "SIGNATURE"
-                ? "bg-blue-600 text-white"
-                : "bg-zinc-100 text-zinc-700"
-            }`}
-          >
-            서명 동의
-          </button>
-        </div>
+      {errorMessage ? (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          {errorMessage}
+        </p>
+      ) : null}
 
-        {consentMethod === "CHECKBOX" ? (
-          <label className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-3 py-3 text-base text-zinc-800">
-            <input
-              type="checkbox"
-              checked={checkboxConsentConfirmed}
-              onChange={() => setCheckboxConsentConfirmed((prev) => !prev)}
-              className="mt-1 h-5 w-5"
-            />
-            <span>선택 작업 한정 동의 내용을 확인했으며 이에 동의합니다.</span>
-          </label>
-        ) : (
-          <>
-            <canvas
-              ref={canvasRef}
-              width={390}
-              height={120}
-              className="w-full rounded-2xl border border-zinc-300 bg-white"
-              onPointerDown={(event) => startDraw(event.clientX, event.clientY)}
-              onPointerMove={(event) => {
-                if (isDrawing) {
-                  drawAt(event.clientX, event.clientY);
-                }
-              }}
-              onPointerUp={endDraw}
-              onPointerLeave={endDraw}
-            />
-            <p className="mt-2 text-sm text-zinc-500">위 영역에 서명해주세요</p>
-          </>
-        )}
-      </div>
-
-      <div className="fixed bottom-16 left-1/2 z-40 w-full max-w-107.5 -translate-x-1/2 bg-white px-4 pb-3 pt-2">
+      <div className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur">
         <button
           type="button"
           disabled={!canProceed}
           onClick={() => router.push(`/payment?${buildNextQueryString()}`)}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-semibold text-white disabled:bg-zinc-300 disabled:text-zinc-500"
+          className="flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white disabled:bg-slate-200 disabled:text-slate-400"
         >
           동의하고 결제
         </button>
@@ -267,7 +317,7 @@ function SafetyPageContent() {
 
 export default function SafetyPage() {
   return (
-    <Suspense fallback={<section className="pb-24" />}>
+    <Suspense fallback={<section className="pb-28 pt-5" />}>
       <SafetyPageContent />
     </Suspense>
   );

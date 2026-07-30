@@ -108,6 +108,7 @@ Store-admin is the partner-side operator for a registered garage.
   - 예약 상세 조회
   - 체크인 4방향 사진 확인
   - 체크아웃 사진/체크리스트 확인
+  - Self 정비사 작업 확인 신청 예약의 작업별/항목별 결과 등록
   - 베이 활성/비활성 관리
   - 베이 또는 업장 단위 예약 차단 시간 관리
 

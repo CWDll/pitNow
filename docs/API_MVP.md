@@ -306,8 +306,8 @@ checkoutPhoto2?: string
 • 과금 대상 초과 시간은 최대 60분으로 제한
 • extra_fee 계산
 • SELF_SERVICE는 tool/cleaning/waste 체크와 체크아웃 사진 2장 필수
-• 카 마스터 검수 여부와 비용은 예약 시 확정된 reservation 값을 사용
-• 체크아웃 요청으로 카 마스터 검수를 새로 추가할 수 없음
+• 정비사 작업 확인 여부와 비용은 예약 시 확정된 reservation 값을 사용
+• 체크아웃 요청으로 정비사 작업 확인을 새로 추가할 수 없음
 • basePrice / extraFee / helperVerifyFee / totalSettlement를 서버에서 확정
 • checkouts insert
 • reservations.status → COMPLETED
@@ -500,7 +500,7 @@ paymentStatus: 'FAILED' | 'CANCELLED'
 ⸻
 
 기능:
-체크아웃 후 발생한 초과요금/검수비 등 사후정산 결제 준비 row를 생성한다.
+체크아웃 후 발생한 초과요금/작업 확인 비용 등 사후정산 결제 준비 row를 생성한다.
 
 입력:
 {
@@ -1072,3 +1072,50 @@ Partner-admin이 소속 정비소 사진을 최대 8장 관리하고 대표 사�
 • `GET ?mine=1`은 로그인 사용자가 작성한 리뷰와 정비소·사진을 반환
 • POST/PATCH `imagePaths`는 본인 사용자/예약 Storage 경로만 허용
 • 리뷰 수정에서 제외된 기존 사진은 Storage에서도 정리
+
+⸻
+
+29. GET `/api/self-maintenance-catalog?partnerId=:partnerId`
+
+기능:
+활성 SELF 작업, 작업별 확인 항목·가산 비용, 정비소별 제공 여부,
+작업별 안전 콘텐츠를 하나의 카탈로그로 반환한다.
+
+규칙:
+• 사용자 작업 선택, 요금 표시, 안전 동의는 이 응답을 원천으로 사용한다.
+• 선택 작업 중 하나라도 작업 확인 미제공이면 전체 작업 확인 옵션을 비활성화한다.
+
+⸻
+
+30. GET / POST `/api/self-safety-training`
+
+기능:
+로그인 사용자의 필수 공통 SELF 안전교육 콘텐츠와 버전별 완료 여부를 조회/저장한다.
+
+규칙:
+• Auth session 필수
+• 필수 공통 콘텐츠 버전을 모두 완료해야 SELF 예약 생성 가능
+
+⸻
+
+31. GET / PATCH `/api/partner-admin/self-work-check-settings`
+
+기능:
+Partner-admin이 소속 정비소의 SELF 작업별 정비사 작업 확인 제공 여부를
+조회하고 변경한다.
+
+검증:
+• active `partner_admins` membership 필수
+
+⸻
+
+32. PUT `/api/partner-admin/reservations/:id/work-check`
+
+기능:
+작업 확인을 선결제한 SELF 예약의 작업·항목별 1차/재확인 결과와 메모를 저장한다.
+
+규칙:
+• 결과는 `NO_ISSUE`, `ISSUE_FOUND`, `UNABLE_TO_CHECK`
+• 예약 당시 `check_scope_snapshot`에 없는 항목은 거부
+• 결과 저장은 예약 상태를 변경하거나 Self 체크아웃을 막지 않음
+• 사용자 예약 상세 GET 응답은 본인 예약의 작업 확인 결과를 함께 반환

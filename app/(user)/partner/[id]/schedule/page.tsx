@@ -13,7 +13,7 @@ import {
   Warehouse,
 } from "lucide-react";
 
-import { selfMaintenanceTaskOptions } from "../../../_data/mock-garages";
+import type { SelfMaintenanceCatalog } from "@/src/domain/self-maintenance";
 import type { VehicleType } from "@/src/domain/vehicle";
 import {
   checkBayCompatibility,
@@ -85,6 +85,11 @@ interface PartnerInfo {
 interface PartnerResponse {
   success: boolean;
   partner?: PartnerInfo;
+}
+
+interface SelfCatalogResponse {
+  success: boolean;
+  catalog?: SelfMaintenanceCatalog;
 }
 
 function stripTime(date: Date): Date {
@@ -235,8 +240,10 @@ function PartnerSchedulePageContent() {
   const [selectedEndIdx, setSelectedEndIdx] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
-  const [carMasterVerifyRequested, setCarMasterVerifyRequested] =
+  const [workCheckRequested, setWorkCheckRequested] =
     useState<boolean>(false);
+  const [selfCatalog, setSelfCatalog] =
+    useState<SelfMaintenanceCatalog | null>(null);
   const [bayIds, setBayIds] = useState<string[]>([]);
   const [bayLabels, setBayLabels] = useState<string[]>([]);
   const [bayRows, setBayRows] = useState<BayRow[]>([]);
@@ -298,6 +305,39 @@ function PartnerSchedulePageContent() {
       isCancelled = true;
     };
   }, [params.id]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadSelfCatalog() {
+      if (bookingMode !== "SELF") {
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/self-maintenance-catalog?partnerId=${encodeURIComponent(params.id)}`,
+          { cache: "no-store" },
+        );
+        const payload = (await response.json()) as SelfCatalogResponse;
+        if (
+          response.ok &&
+          payload.success &&
+          payload.catalog &&
+          !isCancelled
+        ) {
+          setSelfCatalog(payload.catalog);
+        }
+      } catch (error) {
+        console.error("SELF CATALOG LOAD ERROR:", error);
+      }
+    }
+
+    void loadSelfCatalog();
+    return () => {
+      isCancelled = true;
+    };
+  }, [bookingMode, params.id]);
 
   const safeGarage = useMemo(() => garage, [garage]);
   const timeBoundaries = useMemo(
@@ -595,24 +635,27 @@ function PartnerSchedulePageContent() {
   const packageDurationBlocks =
     bookingMode === "PACKAGE" ? Math.max(1, Math.ceil(packageMinutes / 60)) : 0;
 
-  const selectedSelfTasks = selfMaintenanceTaskOptions.filter((option) =>
+  const selectedSelfTasks = (selfCatalog?.tasks ?? []).filter((option) =>
     taskIds
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean)
-      .includes(option.id),
+      .includes(option.code),
   );
 
-  const carMasterVerifyFee =
-    bookingMode === "SELF" && carMasterVerifyRequested
+  const workCheckAvailable =
+    selectedSelfTasks.length > 0 &&
+    selectedSelfTasks.every((task) => task.workCheckEnabled);
+  const workCheckFee =
+    bookingMode === "SELF" && workCheckRequested
       ? 5000 +
         selectedSelfTasks.reduce(
-          (sum, task) => sum + task.helperVerifyUnitFee,
+          (sum, task) => sum + task.workCheckUnitFee,
           0,
         )
       : 0;
 
-  const totalPriceWithVerify = totalPrice + carMasterVerifyFee;
+  const totalPriceWithVerify = totalPrice + workCheckFee;
 
   const meetsMinimum = selectedBlocks >= MIN_BLOCKS;
   const selectedRangeSelectable =
@@ -826,8 +869,8 @@ function PartnerSchedulePageContent() {
       endTime: toIsoByDateAndTime(selectedDate, endTime),
       blockedUntil: toIsoByDateAndTime(selectedDate, blockedUntilTime),
       totalPrice: String(totalPriceWithVerify),
-      helperVerifyRequested: String(carMasterVerifyRequested),
-      helperVerifyFee: String(carMasterVerifyFee),
+      helperVerifyRequested: String(workCheckRequested),
+      helperVerifyFee: String(workCheckFee),
     });
 
     if (bookingMode === "PACKAGE") {
@@ -1082,8 +1125,8 @@ function PartnerSchedulePageContent() {
           </div>
           {bookingMode === "SELF" ? (
             <div className="flex items-center justify-between">
-              <span>카 마스터 검수</span>
-              <span>{carMasterVerifyFee.toLocaleString("ko-KR")}원</span>
+              <span>정비사 작업 확인</span>
+              <span>{workCheckFee.toLocaleString("ko-KR")}원</span>
             </div>
           ) : null}
           <div className="my-3 border-t border-slate-200" />
@@ -1102,14 +1145,17 @@ function PartnerSchedulePageContent() {
           <input
             type="checkbox"
             className="mt-0.5 size-5 accent-blue-600"
-            checked={carMasterVerifyRequested}
-            onChange={() => setCarMasterVerifyRequested((prev) => !prev)}
+            checked={workCheckRequested}
+            disabled={!workCheckAvailable}
+            onChange={() => setWorkCheckRequested((prev) => !prev)}
           />
           <span>
-            카 마스터 검수
+            정비사 작업 확인
             <br />
             <span className="text-xs font-semibold text-slate-500">
-              기본 5,000원 + 선택 작업 검수 가산
+              {workCheckAvailable
+                ? "기본 5,000원 + 선택 작업별 확인 비용"
+                : "선택한 작업 중 이 정비소에서 확인을 제공하지 않는 항목이 있습니다."}
             </span>
           </span>
         </label>

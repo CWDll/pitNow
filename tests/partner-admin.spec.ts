@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   ensureE2EUser,
+  ensureE2EVehicle,
   getAdminSupabaseForE2E,
   getE2ECredentials,
   getSelfReservationSeed,
@@ -405,6 +406,224 @@ test.describe("partner admin dashboard", () => {
           .eq("id", oldFulfilledRequestId);
       }
 
+      if (membershipCreated) {
+        await db
+          .from("partner_admins")
+          .delete()
+          .eq("partner_id", seed.partnerId)
+          .eq("user_id", user.id);
+      }
+    }
+  });
+
+  test("records SELF work-check results and exposes them to the customer", async ({
+    page,
+  }) => {
+    test.setTimeout(45_000);
+    const db = getAdminSupabaseForE2E();
+
+    if (!db) {
+      test.skip(true, "Supabase service role env is required");
+      return;
+    }
+
+    const user = await ensureE2EUser(
+      db,
+      getE2ECredentials({ email: "pitnow-e2e-work-check@example.com" }),
+    );
+    const vehicle = await ensureE2EVehicle({ db, userId: user.id });
+    const seed = await getSelfReservationSeed(db);
+    let membershipCreated = false;
+    let reservationId = "";
+
+    try {
+      const { data: existingMembership, error: membershipLookupError } =
+        await db
+          .from("partner_admins")
+          .select("partner_id")
+          .eq("partner_id", seed.partnerId)
+          .eq("user_id", user.id)
+          .maybeSingle<{ partner_id: string }>();
+
+      if (membershipLookupError) {
+        throw membershipLookupError;
+      }
+      if (!existingMembership) {
+        const { error } = await db.from("partner_admins").insert({
+          partner_id: seed.partnerId,
+          user_id: user.id,
+          role: "OWNER",
+          is_active: true,
+        });
+        if (error) {
+          throw error;
+        }
+        membershipCreated = true;
+      }
+
+      const { data: task, error: taskError } = await db
+        .from("self_maintenance_tasks")
+        .select("id,helper_verify_unit_fee")
+        .eq("code", seed.taskCode)
+        .single<{ id: string; helper_verify_unit_fee: number | string }>();
+      if (taskError || !task) {
+        throw taskError ?? new Error("SELF task was not found");
+      }
+
+      const { data: checkItems, error: checkItemsError } = await db
+        .from("self_task_check_items")
+        .select("id,label,version,sort_order")
+        .eq("task_id", task.id)
+        .eq("is_active", true)
+        .order("sort_order")
+        .returns<
+          Array<{
+            id: string;
+            label: string;
+            version: number;
+            sort_order: number;
+          }>
+        >();
+      if (checkItemsError || !checkItems?.length) {
+        throw checkItemsError ?? new Error("SELF check items were not found");
+      }
+
+      const start = new Date();
+      start.setUTCMinutes(0, 0, 0);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      const blockedUntil = new Date(end.getTime() + 60 * 60 * 1000);
+      const unitFee = Number(task.helper_verify_unit_fee);
+      const prepaidFee = 5000 + unitFee;
+      const { data: reservation, error: reservationError } = await db
+        .from("reservations")
+        .insert({
+          user_id: user.id,
+          vehicle_id: vehicle.id,
+          partner_id: seed.partnerId,
+          bay_id: seed.bayId,
+          reservation_type: "SELF_SERVICE",
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          reserved_end_time: end.toISOString(),
+          blocked_until: blockedUntil.toISOString(),
+          duration_minutes: 60,
+          selected_task_count: 1,
+          helper_verify_requested: true,
+          helper_verify_fee: prepaidFee,
+          status: "COMPLETED",
+          total_price: prepaidFee,
+        })
+        .select("id")
+        .single<{ id: string }>();
+      if (reservationError || !reservation) {
+        throw reservationError ?? new Error("Work-check reservation was not created");
+      }
+      reservationId = reservation.id;
+
+      const scopeSnapshot = checkItems.map((item) => ({
+        id: item.id,
+        label: item.label,
+        version: item.version,
+        sortOrder: item.sort_order,
+      }));
+      const { data: reservationTask, error: reservationTaskError } = await db
+        .from("reservation_tasks")
+        .insert({
+          reservation_id: reservationId,
+          task_id: task.id,
+          work_check_unit_fee_snapshot: unitFee,
+          check_scope_snapshot: scopeSnapshot,
+        })
+        .select("id")
+        .single<{ id: string }>();
+      if (reservationTaskError || !reservationTask) {
+        throw (
+          reservationTaskError ??
+          new Error("Work-check reservation task was not created")
+        );
+      }
+
+      const { error: workCheckError } = await db
+        .from("reservation_work_checks")
+        .insert({
+          reservation_id: reservationId,
+          partner_id: seed.partnerId,
+          status: "PENDING",
+          prepaid_fee: prepaidFee,
+        });
+      if (workCheckError) {
+        throw workCheckError;
+      }
+
+      await page.goto("/login?next=/partner-admin");
+      await page.getByLabel("이메일").fill(user.email);
+      await page.getByLabel("비밀번호").fill(user.password);
+      await page.locator("form").getByRole("button", { name: "로그인" }).click();
+      await expect(page).toHaveURL(/\/partner-admin/);
+
+      const reservationRow = page.locator("button").filter({
+        hasText: reservationId,
+      });
+      await expect(reservationRow).toBeVisible({ timeout: 15_000 });
+      await reservationRow.click();
+
+      const detailDialog = page.getByRole("dialog", { name: "예약 상세" });
+      await expect(
+        detailDialog.getByRole("heading", {
+          name: "정비사 작업 확인 결과",
+        }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(
+        detailDialog.getByText(checkItems[0].label),
+      ).toBeVisible();
+      await detailDialog.getByLabel("전체 메모").fill(
+        "E2E 1차 작업 확인 결과입니다.",
+      );
+      await detailDialog
+        .getByRole("button", { name: "1차 결과 저장" })
+        .click();
+      await expect(
+        detailDialog.getByText("1차 작업 확인 결과를 저장했습니다."),
+      ).toBeVisible({ timeout: 15_000 });
+
+      const customerPayload = await page.evaluate(async (id) => {
+        const storageKey = Object.keys(localStorage).find((key) =>
+          key.endsWith("-auth-token"),
+        );
+        const session = storageKey
+          ? (JSON.parse(localStorage.getItem(storageKey) ?? "{}") as {
+              access_token?: string;
+            })
+          : {};
+        const response = await fetch(`/api/reservations/${id}`, {
+          headers: session.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {},
+        });
+        return {
+          status: response.status,
+          body: await response.json(),
+        };
+      }, reservationId);
+
+      expect(customerPayload.status).toBe(200);
+      expect(customerPayload.body.workCheck).toMatchObject({
+        status: "RECORDED",
+        summaryNote: "E2E 1차 작업 확인 결과입니다.",
+      });
+      expect(customerPayload.body.workCheck.results).toHaveLength(
+        checkItems.length,
+      );
+      expect(
+        customerPayload.body.workCheck.results.every(
+          (result: { result: string; checkRound: number }) =>
+            result.result === "NO_ISSUE" && result.checkRound === 1,
+        ),
+      ).toBe(true);
+    } finally {
+      if (reservationId) {
+        await db.from("reservations").delete().eq("id", reservationId);
+      }
       if (membershipCreated) {
         await db
           .from("partner_admins")

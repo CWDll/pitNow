@@ -6,7 +6,7 @@
 - Reservation extension is not supported in MVP
 - Bay blocking window: work time + 1 hour buffer
 - Self-maintenance tasks must be selected from legal allowlist only
-- User must agree "only selected tasks" via checkbox or signature before payment
+- User must agree "only selected tasks" via an authenticated checkbox before payment
 - Prepaid only
 
 ## No-show
@@ -30,12 +30,29 @@
 - Billable overtime is capped at 60 minutes (one hourly charge)
 - An active reservation must be checked out even after the billing cap is reached
 
-## Car Master Verification (Optional)
+## Mechanic Work Check (Optional)
 
-- User can request verification only during reservation
-- Fee = 5,000 base + per-selected-task additional fee
-- Additional fee scales by selected task count/type
-- The selected fee is prepaid with the reservation and cannot be added again at checkout
+- 사용자 노출 명칭은 `정비사 작업 확인`으로 통일한다.
+- Self Service 예약에만 적용하며 Shop Service로 전환하지 않는다.
+- User can request the work check only during reservation.
+- Fee = 5,000 base + per-selected-task additional fee.
+- Partner availability is configured per Self task.
+- The selected fee is prepaid with the reservation and cannot be added again at checkout.
+- The work card and payment flow show the exact check items before purchase.
+- Item results are `NO_ISSUE`, `ISSUE_FOUND`, or `UNABLE_TO_CHECK`.
+- The result does not guarantee whole-vehicle safety, future failure, or roadworthiness.
+- Self checkout and `COMPLETED` transition do not wait for the result.
+- One recheck of issue items is included only within the reserved use time.
+- Mechanic repair and extra payment are handled separately with the partner.
+
+## Self Safety Education
+
+- Common Self safety education is completed once before the first Self booking.
+- A new required common content version may require acknowledgement again.
+- Every selected task displays its active safety cards during reservation.
+- Only tasks with an active required video add a video to the flow.
+- New bookings use checkbox consent; legacy signature records remain readable.
+- The agreement stores the selected tasks, agreement text, and safety content versions.
 
 ## Check-in
 

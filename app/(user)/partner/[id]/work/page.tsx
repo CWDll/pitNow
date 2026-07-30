@@ -16,24 +16,34 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  formatMinutesLabel,
-  selfMaintenanceTaskOptions,
-} from "../../../_data/mock-garages";
+import { formatMinutesLabel } from "../../../_data/mock-garages";
 import type { CarItem } from "@/app/(user)/_data/mock-cars";
+import type {
+  SelfMaintenanceCatalog,
+  SelfTaskDifficulty,
+} from "@/src/domain/self-maintenance";
 import type { PartnerShopPackage } from "@/src/domain/shop-package";
 import type { ReservationType } from "@/src/domain/types";
 import { supabase } from "@/src/lib/supabase";
 
-function levelClass(level: "초급" | "중급"): string {
-  return level === "초급"
+function levelClass(level: SelfTaskDifficulty): string {
+  return level === "BEGINNER"
     ? "bg-emerald-50 text-emerald-600"
     : "bg-amber-50 text-amber-600";
+}
+
+function levelLabel(level: SelfTaskDifficulty): string {
+  return level === "BEGINNER" ? "초급" : "중급";
 }
 
 interface PartnerPackagesResponse {
   success: boolean;
   packages?: PartnerShopPackage[];
+}
+
+interface SelfCatalogResponse {
+  success: boolean;
+  catalog?: SelfMaintenanceCatalog;
 }
 
 interface PartnerInfo {
@@ -100,14 +110,15 @@ function PartnerWorkPageContent() {
   const [bookingMode, setBookingMode] = useState<"SELF" | "PACKAGE">(
     initialBookingMode,
   );
-  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([
-    selfMaintenanceTaskOptions[0].id,
-  ]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string>("");
   const [selectedCarId, setSelectedCarId] = useState<string>("");
   const [isCarPickerOpen, setIsCarPickerOpen] = useState(false);
   const [garage, setGarage] = useState<PartnerInfo | null>(null);
   const [packages, setPackages] = useState<PartnerShopPackage[]>([]);
+  const [selfCatalog, setSelfCatalog] =
+    useState<SelfMaintenanceCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState("");
 
   const selectedCar = useMemo(
     () => cars.find((car) => car.id === selectedCarId) ?? cars[0],
@@ -171,6 +182,48 @@ function PartnerWorkPageContent() {
       isCancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadSelfCatalog() {
+      setCatalogError("");
+      try {
+        const response = await fetch(
+          `/api/self-maintenance-catalog?partnerId=${encodeURIComponent(params.id)}`,
+          { cache: "no-store" },
+        );
+        const payload = (await response.json()) as SelfCatalogResponse;
+
+        if (!response.ok || !payload.success || !payload.catalog) {
+          throw new Error("SELF 카탈로그 응답이 올바르지 않습니다.");
+        }
+
+        if (!isCancelled) {
+          setSelfCatalog(payload.catalog);
+          setSelectedTaskIds((current) =>
+            current.length > 0
+              ? current
+              : payload.catalog?.tasks[0]?.code
+                ? [payload.catalog.tasks[0].code]
+                : [],
+          );
+        }
+      } catch (error) {
+        console.error("SELF CATALOG LOAD ERROR:", error);
+        if (!isCancelled) {
+          setCatalogError(
+            "SELF 작업 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          );
+        }
+      }
+    }
+
+    void loadSelfCatalog();
+    return () => {
+      isCancelled = true;
+    };
+  }, [params.id]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -376,18 +429,27 @@ function PartnerWorkPageContent() {
         </div>
         <div className="space-y-3">
         {bookingMode === "SELF" ? (
-          selfMaintenanceTaskOptions.map((option) => {
-            const selected = selectedTaskIds.includes(option.id);
+          catalogError ? (
+            <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              {catalogError}
+            </p>
+          ) : !selfCatalog ? (
+            <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-10">
+              <LoaderCircle className="size-5 animate-spin text-blue-600" />
+            </div>
+          ) : (
+          selfCatalog.tasks.map((option) => {
+            const selected = selectedTaskIds.includes(option.code);
 
             return (
               <button
-                key={option.id}
+                key={option.code}
                 type="button"
                 onClick={() =>
                   setSelectedTaskIds((prev) =>
-                    prev.includes(option.id)
-                      ? prev.filter((id) => id !== option.id)
-                      : [...prev, option.id],
+                    prev.includes(option.code)
+                      ? prev.filter((id) => id !== option.code)
+                      : [...prev, option.code],
                   )
                 }
                 aria-pressed={selected}
@@ -399,7 +461,7 @@ function PartnerWorkPageContent() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-base font-black text-slate-900">
-                    {option.title}
+                    {option.name}
                   </p>
                   {selected ? (
                     <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-600 text-white">
@@ -410,22 +472,40 @@ function PartnerWorkPageContent() {
 
                 <div className="mt-2 flex flex-wrap gap-2 text-xs">
                   <span
-                    className={`rounded-full px-2 py-1 font-medium ${levelClass(option.level)}`}
+                    className={`rounded-full px-2 py-1 font-medium ${levelClass(option.difficulty)}`}
                   >
-                    {option.level}
+                    {levelLabel(option.difficulty)}
                   </span>
                   <span className="rounded-md bg-slate-100 px-2 py-1 font-bold text-slate-600">
-                    검수 가산{" "}
-                    {option.helperVerifyUnitFee.toLocaleString("ko-KR")}원
+                    작업 확인 가산{" "}
+                    {option.workCheckUnitFee.toLocaleString("ko-KR")}원
                   </span>
+                  {!option.workCheckEnabled ? (
+                    <span className="rounded-md bg-slate-100 px-2 py-1 font-bold text-slate-500">
+                      이 정비소는 작업 확인 미제공
+                    </span>
+                  ) : null}
                 </div>
 
                 <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
                   {option.description}
                 </p>
+                <div className="mt-3 border-t border-slate-200 pt-3">
+                  <p className="text-xs font-black text-slate-700">
+                    정비사 작업 확인 항목
+                  </p>
+                  <ul className="mt-2 grid gap-1.5 text-xs font-semibold text-slate-500">
+                    {option.checkItems.map((item) => (
+                      <li key={item.id} className="flex gap-2">
+                        <Check className="mt-0.5 size-3.5 shrink-0 text-blue-600" />
+                        {item.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </button>
             );
-          })
+          }))
         ) : packages.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center">
             <ShieldCheck className="mx-auto size-6 text-slate-400" />
@@ -483,6 +563,7 @@ function PartnerWorkPageContent() {
           disabled={
             isCarsLoading ||
             !selectedCar ||
+            (bookingMode === "SELF" && !selfCatalog) ||
             (bookingMode === "SELF" && selectedTaskIds.length === 0) ||
             (bookingMode === "PACKAGE" && !resolvedSelectedPackageId)
           }
@@ -492,9 +573,9 @@ function PartnerWorkPageContent() {
                   `/partner/${garage.id}/schedule?mode=${bookingMode === "PACKAGE" ? "SHOP_SERVICE" : "SELF_SERVICE"}&bookingMode=${bookingMode}&taskIds=${encodeURIComponent(
                     selectedTaskIds.join(","),
                   )}&taskLabels=${encodeURIComponent(
-                    selfMaintenanceTaskOptions
-                      .filter((task) => selectedTaskIds.includes(task.id))
-                      .map((task) => task.title)
+                    (selfCatalog?.tasks ?? [])
+                      .filter((task) => selectedTaskIds.includes(task.code))
+                      .map((task) => task.name)
                       .join(", "),
                   )}&packageId=${encodeURIComponent(resolvedSelectedPackageId)}&packageTitle=${encodeURIComponent(
                     packages.find(

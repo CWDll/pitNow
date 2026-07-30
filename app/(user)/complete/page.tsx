@@ -10,6 +10,7 @@ import type {
   ReservationStatus,
   ReservationType,
 } from "@/src/domain/types";
+import type { ReservationWorkCheck } from "@/src/domain/self-maintenance";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
@@ -79,6 +80,7 @@ interface ReservationDetail {
 interface ReservationDetailResponse {
   success: boolean;
   reservation?: ReservationDetail;
+  workCheck?: ReservationWorkCheck | null;
 }
 
 interface CheckoutDetail {
@@ -173,6 +175,7 @@ function CompletePageContent() {
     Boolean(reservationId),
   );
   const [detailError, setDetailError] = useState("");
+  const [workCheck, setWorkCheck] = useState<ReservationWorkCheck | null>(null);
 
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
@@ -251,6 +254,7 @@ function CompletePageContent() {
           reservationPayload.reservation
         ) {
           setDetail(reservationPayload.reservation);
+          setWorkCheck(reservationPayload.workCheck ?? null);
         } else {
           setDetailError(
             extractApiErrorMessage(
@@ -599,7 +603,7 @@ function CompletePageContent() {
           <span>{extraFee.toLocaleString("ko-KR")}원</span>
         </p>
         <p className="mt-2 flex justify-between text-base text-zinc-700">
-          <span>카 마스터 검수</span>
+          <span>정비사 작업 확인</span>
           <span>{helperVerifyFee.toLocaleString("ko-KR")}원</span>
         </p>
         <div className="my-3 border-t border-zinc-300" />
@@ -620,6 +624,112 @@ function CompletePageContent() {
           </span>
         </p>
       </div>
+
+      {workCheck ? (
+        <section className="mt-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-slate-950">
+                정비사 작업 확인
+              </h2>
+              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                예약한 SELF 작업 범위 안에서 확인한 결과입니다. 차량 전체 상태나
+                향후 운행을 보증하는 내용은 아닙니다.
+              </p>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${
+                workCheck.status === "RECORDED"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : workCheck.status === "NOT_PERFORMED"
+                    ? "bg-slate-100 text-slate-600"
+                    : "bg-amber-50 text-amber-700"
+              }`}
+            >
+              {workCheck.status === "RECORDED"
+                ? "결과 등록"
+                : workCheck.status === "NOT_PERFORMED"
+                  ? "미진행"
+                  : "결과 등록 대기"}
+            </span>
+          </div>
+
+          {workCheck.summaryNote ? (
+            <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold leading-6 text-slate-700">
+              {workCheck.summaryNote}
+            </p>
+          ) : null}
+
+          {workCheck.results.length > 0 ? (
+            <div className="mt-4 space-y-4">
+              {([1, 2] as const).map((round) => {
+                const roundResults = workCheck.results.filter(
+                  (result) => result.checkRound === round,
+                );
+                if (roundResults.length === 0) {
+                  return null;
+                }
+                const taskNames = [...new Set(
+                  roundResults.map((result) => result.taskName),
+                )];
+                return (
+                  <div key={round}>
+                    <h3 className="text-sm font-black text-slate-900">
+                      {round === 1 ? "1차 확인" : "재확인"}
+                    </h3>
+                    {taskNames.map((taskName) => (
+                      <div key={taskName} className="mt-3">
+                        <p className="text-xs font-black text-blue-700">
+                          {taskName}
+                        </p>
+                        <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
+                          {roundResults
+                            .filter((result) => result.taskName === taskName)
+                            .map((result) => (
+                              <div key={result.id} className="px-3 py-2.5">
+                                <div className="flex items-start justify-between gap-3">
+                                  <span className="text-sm font-semibold text-slate-700">
+                                    {result.itemLabel}
+                                  </span>
+                                  <span
+                                    className={`shrink-0 text-xs font-black ${
+                                      result.result === "NO_ISSUE"
+                                        ? "text-emerald-700"
+                                        : result.result === "ISSUE_FOUND"
+                                          ? "text-red-600"
+                                          : "text-amber-700"
+                                    }`}
+                                  >
+                                    {result.result === "NO_ISSUE"
+                                      ? "특이사항 없음"
+                                      : result.result === "ISSUE_FOUND"
+                                        ? "이상 발견"
+                                        : "확인 불가"}
+                                  </span>
+                                </div>
+                                {result.note ? (
+                                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                                    {result.note}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm font-semibold text-slate-500">
+              {workCheck.status === "NOT_PERFORMED"
+                ? "정비소에서 작업 확인을 진행하지 않았습니다."
+                : "정비소가 결과를 등록하면 이 화면에서 확인할 수 있습니다."}
+            </p>
+          )}
+        </section>
+      ) : null}
 
       {detailError ? (
         <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">

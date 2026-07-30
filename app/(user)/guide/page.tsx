@@ -124,14 +124,14 @@ export default function GuidePage() {
             <UserRoundCheck className="size-5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-slate-900">카 마스터 검수</h2>
+            <h2 className="text-base font-black text-slate-900">정비사 작업 확인</h2>
             <p className="mt-1 text-sm font-medium leading-6 text-slate-600">
-              예약할 때 선택하면 작업 종료 후 정비소 카 마스터가 차량과 작업 상태를 최종 확인합니다.
+              예약할 때 선택하면 작업 종료 후 정비소 정비사가 예약한 작업 범위의 상태를 확인합니다.
             </p>
           </div>
         </div>
         <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-bold text-slate-700">
-          기본 5,000원 + 선택한 작업별 검수 가산 금액
+          기본 5,000원 + 선택한 작업별 확인 비용
         </div>
       </Card>
 
@@ -143,7 +143,7 @@ export default function GuidePage() {
         <ul className="space-y-2 text-sm font-semibold text-slate-600">
           <li className="flex gap-2"><ClipboardCheck className="size-4 shrink-0 text-emerald-600" />공구 반납, 베이 청소, 폐유·폐기물 처리 확인</li>
           <li className="flex gap-2"><Camera className="size-4 shrink-0 text-emerald-600" />정리된 차량과 베이 사진 2장 제출</li>
-          <li className="flex gap-2"><ShieldCheck className="size-4 shrink-0 text-emerald-600" />예약 시 신청한 카 마스터 검수 결과 확인</li>
+          <li className="flex gap-2"><ShieldCheck className="size-4 shrink-0 text-emerald-600" />예약 시 신청한 정비사 작업 확인 결과 조회</li>
         </ul>
       </Card>
 

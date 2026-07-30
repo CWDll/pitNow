@@ -699,3 +699,32 @@ create table reservation_checkin_verifications (
   verified_at timestamptz not null default now()
 );
 ```
+
+---
+
+## SELF work check / safety catalog
+
+`self_maintenance_tasks`는 사용자 SELF 작업 화면의 원천 카탈로그다.
+`self_task_check_items`는 작업별 정비사 작업 확인 범위를 버전과 순서로 관리하고,
+`partner_self_task_check_settings`는 정비소별 제공 여부를 저장한다.
+
+예약 시 `reservation_tasks.check_scope_snapshot`과
+`work_check_unit_fee_snapshot`에 당시 범위와 작업별 비용을 보존한다.
+따라서 카탈로그를 수정해도 과거 예약의 결제·확인 범위를 재현할 수 있다.
+
+`self_safety_contents`는 공통/작업별 카드와 영상의 버전을 관리한다.
+`user_safety_training_completions`는 로그인 사용자의 공통교육 완료 버전을 저장하며,
+`self_task_agreements.safety_content_snapshot`은 해당 예약에서 확인한 콘텐츠 버전을
+보존한다.
+
+`reservation_work_checks`는 예약별 유료 작업 확인의 상태와 요약을,
+`reservation_work_check_results`는 작업·항목·확인 차수별 결과를 저장한다.
+결과 값은 `NO_ISSUE`, `ISSUE_FOUND`, `UNABLE_TO_CHECK`만 허용하며
+예약 상태와 독립적이다. 결과 저장 Partner-admin 계정은 내부 감사 용도로만
+`recorded_by`에 남기고 사용자에게 노출하지 않는다.
+
+RLS:
+
+- 활성 작업·확인 항목·안전 콘텐츠와 정비소별 제공 여부는 예약 UI에서 공개 읽기.
+- 정비소별 제공 여부와 작업 확인 결과 쓰기는 해당 정비소 active Partner-admin만 허용.
+- 공통 안전교육 완료 기록과 작업 확인 결과 읽기는 예약 사용자 본인만 허용.

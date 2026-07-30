@@ -194,7 +194,7 @@ export default async function PartnerDetailPage({
                   </span>
                 </div>
                 <p className="mt-1 text-xs font-medium text-slate-500">
-                  검수 가산{" "}
+                  작업 확인 가산{" "}
                   {Number(task.helper_verify_unit_fee).toLocaleString("ko-KR")}
                   원
                 </p>

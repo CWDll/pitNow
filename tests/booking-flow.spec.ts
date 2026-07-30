@@ -155,6 +155,33 @@ test.describe("booking flow smoke", () => {
       );
       await ensureE2EVehicle({ db, userId: user.id });
       const seed = await getSelfReservationSeed(db);
+      const { data: commonSafetyContents, error: safetyContentError } = await db
+        .from("self_safety_contents")
+        .select("id,version")
+        .eq("scope", "COMMON")
+        .eq("is_active", true)
+        .eq("is_required", true)
+        .returns<Array<{ id: string; version: number }>>();
+      if (safetyContentError || !commonSafetyContents?.length) {
+        throw (
+          safetyContentError ??
+          new Error("Required common safety content was not found")
+        );
+      }
+      const { error: safetyCompletionError } = await db
+        .from("user_safety_training_completions")
+        .upsert(
+          commonSafetyContents.map((content) => ({
+            user_id: user.id,
+            content_id: content.id,
+            content_version: content.version,
+            completed_at: new Date().toISOString(),
+          })),
+          { onConflict: "user_id,content_id,content_version" },
+        );
+      if (safetyCompletionError) {
+        throw safetyCompletionError;
+      }
 
       await page.goto("/login?next=/");
       await page.getByLabel("이메일").fill(user.email);
@@ -226,21 +253,18 @@ test.describe("booking flow smoke", () => {
 
       expect(selected).toBe(true);
       await expect(page.getByText(/작업 시간: (?!-)/)).toBeVisible();
+      await page
+        .getByRole("checkbox", { name: /정비사 작업 확인/ })
+        .check();
       await page.getByRole("button", { name: "안전 동의" }).click();
 
       await expect(page).toHaveURL(/\/safety\?/);
       await expect(
-        page.getByRole("heading", { name: "안전 동의" }),
+        page.getByRole("heading", { name: "작업별 안전 확인" }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "탭하여 시청 완료 처리" }).click();
+      await page.getByRole("button", { name: "안전수칙 확인" }).click();
       await page.getByLabel(/위에서 선택한 작업만 수행/).check();
-      await page.getByLabel("리프트와 장비 사용 전 주의사항을 숙지합니다.").check();
-      await page.getByLabel("화재 위험 작업과 위험물 반입은 하지 않습니다.").check();
-      await page.getByLabel("폐유와 폐기물은 지정된 수거함에 처리합니다.").check();
-      await page
-        .getByLabel("작업 중 발생하는 사고 책임 범위를 확인했습니다.")
-        .check();
-      await page.getByLabel(/선택 작업 한정 동의 내용을 확인/).check();
+      await page.getByLabel(/작업별 안전수칙과 선택 작업 한정/).check();
       await page.getByRole("button", { name: "동의하고 결제" }).click();
 
       await expect(page).toHaveURL(/\/payment\?/);
@@ -273,7 +297,9 @@ test.describe("booking flow smoke", () => {
 
       const { data: reservation, error: reservationError } = await db
         .from("reservations")
-        .select("id,user_id,partner_id,status,total_price")
+        .select(
+          "id,user_id,partner_id,status,total_price,helper_verify_requested,helper_verify_fee",
+        )
         .eq("id", e2eReservationId)
         .single<{
           id: string;
@@ -281,6 +307,8 @@ test.describe("booking flow smoke", () => {
           partner_id: string;
           status: string;
           total_price: number | string;
+          helper_verify_requested: boolean;
+          helper_verify_fee: number | string;
         }>();
 
       if (reservationError || !reservation) {
@@ -290,6 +318,58 @@ test.describe("booking flow smoke", () => {
       expect(reservation.user_id).toBe(user.id);
       expect(reservation.status).toBe("CONFIRMED");
       expect(Number(reservation.total_price)).toBeGreaterThan(0);
+      expect(reservation.helper_verify_requested).toBe(true);
+      expect(Number(reservation.helper_verify_fee)).toBeGreaterThanOrEqual(5000);
+
+      const { data: reservationTasks, error: reservationTasksError } = await db
+        .from("reservation_tasks")
+        .select(
+          "id,work_check_unit_fee_snapshot,check_scope_snapshot",
+        )
+        .eq("reservation_id", e2eReservationId)
+        .returns<
+          Array<{
+            id: string;
+            work_check_unit_fee_snapshot: number | string;
+            check_scope_snapshot: Array<{
+              id: string;
+              label: string;
+              version: number;
+              sortOrder: number;
+            }>;
+          }>
+        >();
+
+      if (reservationTasksError || !reservationTasks?.length) {
+        throw (
+          reservationTasksError ??
+          new Error("Reservation work-check task snapshot was not found")
+        );
+      }
+      expect(
+        reservationTasks.every(
+          (task) =>
+            Number(task.work_check_unit_fee_snapshot) > 0 &&
+            task.check_scope_snapshot.length > 0,
+        ),
+      ).toBe(true);
+
+      const { data: pendingWorkCheck, error: pendingWorkCheckError } = await db
+        .from("reservation_work_checks")
+        .select("status,prepaid_fee")
+        .eq("reservation_id", e2eReservationId)
+        .single<{ status: string; prepaid_fee: number | string }>();
+
+      if (pendingWorkCheckError || !pendingWorkCheck) {
+        throw (
+          pendingWorkCheckError ??
+          new Error("Pending reservation work check was not found")
+        );
+      }
+      expect(pendingWorkCheck.status).toBe("PENDING");
+      expect(Number(pendingWorkCheck.prepaid_fee)).toBe(
+        Number(reservation.helper_verify_fee),
+      );
 
       const { data: payment, error: paymentError } = await db
         .from("payments")
@@ -567,7 +647,7 @@ test.describe("booking flow smoke", () => {
 
       await expect(page.getByText("사진1 완료")).toBeVisible();
       await expect(page.getByText("사진2 완료")).toBeVisible();
-      await expect(page.getByText("카 마스터 검수비")).toBeVisible();
+      await expect(page.getByText("정비사 작업 확인 비용")).toBeVisible();
       await expect(page.getByText("추가 결제비용")).toBeVisible();
 
       const checkoutButton = page.getByRole("button", {
@@ -798,11 +878,16 @@ test.describe("booking flow smoke", () => {
       expect(checkout.waste_disposal_completed).toBe(true);
       expect(checkout.checkout_photo_1).toContain("/reservation-photos/");
       expect(checkout.checkout_photo_2).toContain("/reservation-photos/");
-      expect(checkout.helper_verify_requested).toBe(false);
-      expect(Number(checkout.helper_verify_fee)).toBe(0);
-      expect(Number(checkout.extra_fee)).toBe(Number(reservation.total_price));
+      expect(checkout.helper_verify_requested).toBe(true);
+      expect(Number(checkout.helper_verify_fee)).toBe(
+        Number(reservation.helper_verify_fee),
+      );
+      const reservationBasePrice =
+        Number(reservation.total_price) -
+        Number(reservation.helper_verify_fee);
+      expect(Number(checkout.extra_fee)).toBe(reservationBasePrice);
       expect(Number(checkout.total_settlement)).toBe(
-        Number(reservation.total_price) * 2,
+        Number(reservation.total_price) + reservationBasePrice,
       );
 
       const { data: settlementPayment, error: settlementPaymentError } =

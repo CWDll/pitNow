@@ -3,6 +3,11 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
+import type {
+  ReservationWorkCheck,
+  SelfMaintenanceCatalogItem,
+  WorkCheckResult,
+} from "@/src/domain/self-maintenance";
 import { VEHICLE_TYPE_OPTIONS, type VehicleType } from "@/src/domain/vehicle";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { redirectToLogin } from "@/src/lib/client-auth";
@@ -164,6 +169,20 @@ interface PartnerAdminReservationDetail {
     checkoutPhoto2: string | null;
     completedAt: string;
   } | null;
+  selfTasks: Array<{
+    reservationTaskId: string;
+    taskId: string;
+    taskCode: string;
+    taskName: string;
+    workCheckUnitFee: number;
+    checkItems: Array<{
+      id: string;
+      label: string;
+      version: number;
+      sortOrder: number;
+    }>;
+  }>;
+  workCheck: ReservationWorkCheck | null;
   statusLogs: Array<{
     id: string;
     fromStatus: ReservationStatus | null;
@@ -173,6 +192,43 @@ interface PartnerAdminReservationDetail {
     reason: string | null;
     createdAt: string;
   }>;
+}
+
+interface WorkCheckDraft {
+  reservationTaskId: string;
+  checkItemId: string;
+  itemLabel: string;
+  result: WorkCheckResult;
+  note: string;
+  sortOrder: number;
+}
+
+function buildWorkCheckDrafts(params: {
+  tasks: PartnerAdminReservationDetail["selfTasks"];
+  workCheck: ReservationWorkCheck;
+  checkRound: 1 | 2;
+}): WorkCheckDraft[] {
+  const { tasks, workCheck, checkRound } = params;
+  const existing = workCheck.results.filter(
+    (result) => result.checkRound === checkRound,
+  );
+  return tasks.flatMap((task) =>
+    task.checkItems.map((item) => {
+      const saved = existing.find(
+        (result) =>
+          result.reservationTaskId === task.reservationTaskId &&
+          result.checkItemId === item.id,
+      );
+      return {
+        reservationTaskId: task.reservationTaskId,
+        checkItemId: item.id,
+        itemLabel: item.label,
+        result: saved?.result ?? "NO_ISSUE",
+        note: saved?.note ?? "",
+        sortOrder: item.sortOrder,
+      };
+    }),
+  );
 }
 
 function todayKstDate(): string {
@@ -573,6 +629,211 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+function SelfWorkCheckEditor({
+  reservationId,
+  tasks,
+  workCheck,
+  onSaved,
+}: {
+  reservationId: string;
+  tasks: PartnerAdminReservationDetail["selfTasks"];
+  workCheck: ReservationWorkCheck;
+  onSaved: () => Promise<void>;
+}) {
+  const [checkRound, setCheckRound] = useState<1 | 2>(1);
+  const [drafts, setDrafts] = useState<WorkCheckDraft[]>(() =>
+    buildWorkCheckDrafts({ tasks, workCheck, checkRound: 1 }),
+  );
+  const [summaryNote, setSummaryNote] = useState(workCheck.summaryNote);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  function selectCheckRound(round: 1 | 2) {
+    setCheckRound(round);
+    setDrafts(buildWorkCheckDrafts({ tasks, workCheck, checkRound: round }));
+    setMessage("");
+  }
+
+  function updateDraft(
+    reservationTaskId: string,
+    checkItemId: string,
+    patch: Partial<Pick<WorkCheckDraft, "result" | "note">>,
+  ) {
+    setDrafts((current) =>
+      current.map((draft) =>
+        draft.reservationTaskId === reservationTaskId &&
+        draft.checkItemId === checkItemId
+          ? { ...draft, ...patch }
+          : draft,
+      ),
+    );
+  }
+
+  async function save(status: "RECORDED" | "NOT_PERFORMED") {
+    setIsSaving(true);
+    setMessage("");
+    const response = await authFetch(
+      `/api/partner-admin/reservations/${reservationId}/work-check`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status,
+          summaryNote,
+          results:
+            status === "RECORDED"
+              ? drafts.map((draft) => ({
+                  ...draft,
+                  checkRound,
+                }))
+              : [],
+        }),
+      },
+    );
+    const payload = await readJson(response);
+    if (!response.ok) {
+      setMessage(
+        extractErrorMessage(payload) ?? "작업 확인 결과를 저장하지 못했습니다.",
+      );
+      setIsSaving(false);
+      return;
+    }
+    await onSaved();
+    setMessage(
+      status === "RECORDED"
+        ? `${checkRound}차 작업 확인 결과를 저장했습니다.`
+        : "작업 확인을 진행하지 않은 것으로 기록했습니다.",
+    );
+    setIsSaving(false);
+  }
+
+  return (
+    <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold text-blue-700">SELF 부가서비스</p>
+          <h3 className="mt-1 text-base font-bold text-blue-950">
+            정비사 작업 확인 결과
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-blue-800">
+            예약 상태와 별개로 저장됩니다. 1차 확인 후 예약 시간 안에서 1회
+            재확인을 기록할 수 있습니다.
+          </p>
+        </div>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-blue-700">
+          선결제 {formatPrice(workCheck.prepaidFee)}
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {([1, 2] as const).map((round) => (
+          <button
+            key={round}
+            type="button"
+            onClick={() => selectCheckRound(round)}
+            className={`h-9 rounded-lg text-xs font-bold ${
+              checkRound === round
+                ? "bg-blue-600 text-white"
+                : "border border-blue-200 bg-white text-blue-700"
+            }`}
+          >
+            {round === 1 ? "1차 확인" : "재확인"}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-4">
+        {tasks.map((task) => (
+          <div
+            key={task.reservationTaskId}
+            className="rounded-lg border border-blue-100 bg-white p-3"
+          >
+            <h4 className="text-sm font-bold text-zinc-950">{task.taskName}</h4>
+            <div className="mt-3 space-y-3">
+              {drafts
+                .filter(
+                  (draft) =>
+                    draft.reservationTaskId === task.reservationTaskId,
+                )
+                .map((draft) => (
+                  <div
+                    key={draft.checkItemId}
+                    className="grid gap-2 border-t border-zinc-100 pt-3 md:grid-cols-[minmax(180px,1fr)_150px_minmax(180px,1fr)]"
+                  >
+                    <span className="text-xs font-semibold text-zinc-700">
+                      {draft.itemLabel}
+                    </span>
+                    <select
+                      value={draft.result}
+                      onChange={(event) =>
+                        updateDraft(
+                          draft.reservationTaskId,
+                          draft.checkItemId,
+                          {
+                            result: event.target.value as WorkCheckResult,
+                          },
+                        )
+                      }
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-2 text-xs font-semibold"
+                    >
+                      <option value="NO_ISSUE">특이사항 없음</option>
+                      <option value="ISSUE_FOUND">이상 발견</option>
+                      <option value="UNABLE_TO_CHECK">확인 불가</option>
+                    </select>
+                    <input
+                      value={draft.note}
+                      onChange={(event) =>
+                        updateDraft(
+                          draft.reservationTaskId,
+                          draft.checkItemId,
+                          { note: event.target.value },
+                        )
+                      }
+                      placeholder="항목 메모 (선택)"
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-xs"
+                    />
+                  </div>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <label className="mt-4 block">
+        <span className="text-xs font-semibold text-blue-900">전체 메모</span>
+        <textarea
+          value={summaryNote}
+          onChange={(event) => setSummaryNote(event.target.value)}
+          placeholder="사용자에게 함께 보여줄 확인 결과 요약"
+          className="mt-1 min-h-20 w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm"
+        />
+      </label>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          disabled={isSaving || drafts.length === 0}
+          onClick={() => void save("RECORDED")}
+          className="h-10 rounded-lg bg-blue-600 text-sm font-bold text-white disabled:opacity-50"
+        >
+          {isSaving ? "저장 중" : `${checkRound}차 결과 저장`}
+        </button>
+        <button
+          type="button"
+          disabled={isSaving}
+          onClick={() => void save("NOT_PERFORMED")}
+          className="h-10 rounded-lg border border-zinc-300 bg-white text-sm font-bold text-zinc-700 disabled:opacity-50"
+        >
+          확인 미진행 기록
+        </button>
+      </div>
+      {message ? (
+        <p className="mt-3 text-xs font-semibold text-blue-800">{message}</p>
+      ) : null}
+    </section>
+  );
+}
+
 export function PartnerAdminDashboard() {
   const [partners, setPartners] = useState<PartnerMembership[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
@@ -582,6 +843,10 @@ export function PartnerAdminDashboard() {
   );
   const [bays, setBays] = useState<PartnerBay[]>([]);
   const [packages, setPackages] = useState<PartnerAdminPackage[]>([]);
+  const [selfWorkCheckTasks, setSelfWorkCheckTasks] = useState<
+    SelfMaintenanceCatalogItem[]
+  >([]);
+  const [updatingWorkCheckTaskId, setUpdatingWorkCheckTaskId] = useState("");
   const [packageCreationRequests, setPackageCreationRequests] = useState<
     PartnerPackageCreationRequest[]
   >([]);
@@ -778,6 +1043,45 @@ export function PartnerAdminDashboard() {
     if (!selectedPartnerId) {
       return;
     }
+    let mounted = true;
+
+    async function loadWorkCheckSettings() {
+      const query = new URLSearchParams({ partnerId: selectedPartnerId });
+      const response = await authFetch(
+        `/api/partner-admin/self-work-check-settings?${query.toString()}`,
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        if (mounted) {
+          setError(
+            extractErrorMessage(payload) ??
+              "SELF 작업 확인 설정을 불러오지 못했습니다.",
+          );
+        }
+        return;
+      }
+      if (
+        mounted &&
+        payload &&
+        typeof payload === "object" &&
+        Array.isArray((payload as { tasks?: unknown }).tasks)
+      ) {
+        setSelfWorkCheckTasks(
+          (payload as { tasks: SelfMaintenanceCatalogItem[] }).tasks,
+        );
+      }
+    }
+
+    void loadWorkCheckSettings();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedPartnerId]);
+
+  useEffect(() => {
+    if (!selectedPartnerId) {
+      return;
+    }
 
     let mounted = true;
 
@@ -946,13 +1250,18 @@ export function PartnerAdminDashboard() {
     };
   }, [selectedPartnerId]);
 
-  async function loadReservationDetail(reservationId: string) {
+  async function loadReservationDetail(
+    reservationId: string,
+    options: { background?: boolean } = {},
+  ) {
     setSelectedReservationId(reservationId);
-    setIsLoadingDetail(true);
-    setIsLoadingNotes(true);
-    setSelectedOperationalAction(null);
-    setOperationalReason("");
-    setNoteFilter("ALL");
+    if (!options.background) {
+      setIsLoadingDetail(true);
+      setIsLoadingNotes(true);
+      setSelectedOperationalAction(null);
+      setOperationalReason("");
+      setNoteFilter("ALL");
+    }
     setError("");
 
     const [detailResponse, notesResponse] = await Promise.all([
@@ -995,6 +1304,40 @@ export function PartnerAdminDashboard() {
 
     setNotes(nextNotes);
     setIsLoadingNotes(false);
+  }
+
+  async function updateWorkCheckSetting(
+    task: SelfMaintenanceCatalogItem,
+    isEnabled: boolean,
+  ) {
+    setUpdatingWorkCheckTaskId(task.id);
+    setError("");
+    const response = await authFetch(
+      "/api/partner-admin/self-work-check-settings",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partnerId: selectedPartnerId,
+          taskId: task.id,
+          isEnabled,
+        }),
+      },
+    );
+    const payload = await readJson(response);
+    if (!response.ok) {
+      setError(
+        extractErrorMessage(payload) ?? "작업 확인 제공 설정을 바꾸지 못했습니다.",
+      );
+      setUpdatingWorkCheckTaskId("");
+      return;
+    }
+    setSelfWorkCheckTasks((current) =>
+      current.map((item) =>
+        item.id === task.id ? { ...item, workCheckEnabled: isEnabled } : item,
+      ),
+    );
+    setUpdatingWorkCheckTaskId("");
   }
 
   function closeReservationDetail() {
@@ -1897,6 +2240,56 @@ export function PartnerAdminDashboard() {
               </div>
             </div>
 
+            <div className="border-b border-zinc-200 bg-blue-50/60 p-4">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-950">
+                  SELF 정비사 작업 확인 제공 범위
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                  활성화한 작업만 사용자가 유료 작업 확인으로 신청할 수 있습니다.
+                  선택 작업 중 하나라도 미제공이면 예약 화면에서 옵션이
+                  비활성화됩니다.
+                </p>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {selfWorkCheckTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="rounded-lg border border-blue-100 bg-white p-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-zinc-950">
+                          {task.name}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          확인 항목 {task.checkItems.length}개 · 가산{" "}
+                          {formatPrice(task.workCheckUnitFee)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={updatingWorkCheckTaskId === task.id}
+                        onClick={() =>
+                          void updateWorkCheckSetting(
+                            task,
+                            !task.workCheckEnabled,
+                          )
+                        }
+                        className={`h-8 shrink-0 rounded-lg px-3 text-xs font-bold text-white disabled:opacity-50 ${
+                          task.workCheckEnabled
+                            ? "bg-emerald-600"
+                            : "bg-zinc-500"
+                        }`}
+                      >
+                        {task.workCheckEnabled ? "제공 중" : "미제공"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="grid gap-2 p-4 md:grid-cols-2 xl:grid-cols-3">
               {packageRequestMessage ? (
                 <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 md:col-span-2 xl:col-span-3">
@@ -2244,7 +2637,7 @@ export function PartnerAdminDashboard() {
               <button
                 type="submit"
                 disabled={isCreatingBlock}
-                className="self-end rounded-lg bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:bg-zinc-300"
+                className="mt-7 h-10 self-start rounded-lg bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:bg-zinc-300"
               >
                 {isCreatingBlock ? "생성 중" : "차단 추가"}
               </button>
@@ -2537,6 +2930,34 @@ export function PartnerAdminDashboard() {
                       </section>
                     ) : null}
 
+                    {detail.reservation.reservationType === "SELF_SERVICE" &&
+                    detail.reservation.helperVerifyRequested &&
+                    detail.workCheck ? (
+                      <SelfWorkCheckEditor
+                        key={detail.workCheck.id}
+                        reservationId={detail.reservation.id}
+                        tasks={detail.selfTasks}
+                        workCheck={detail.workCheck}
+                        onSaved={() =>
+                          loadReservationDetail(detail.reservation.id, {
+                            background: true,
+                          })
+                        }
+                      />
+                    ) : detail.reservation.reservationType ===
+                        "SELF_SERVICE" ? (
+                      <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                        <h3 className="text-sm font-semibold text-zinc-900">
+                          선택한 SELF 작업
+                        </h3>
+                        <p className="mt-2 text-sm text-zinc-600">
+                          {detail.selfTasks
+                            .map((task) => task.taskName)
+                            .join(", ") || "작업 정보 없음"}
+                        </p>
+                      </section>
+                    ) : null}
+
                     <dl className="space-y-2 text-sm">
                       {[
                         ["예약 ID", detail.reservation.id],
@@ -2787,7 +3208,7 @@ export function PartnerAdminDashboard() {
                                 formatPrice(detail.checkout.extraFee),
                               ],
                               [
-                                "검수 요금",
+                                "작업 확인 비용",
                                 formatPrice(detail.checkout.helperVerifyFee),
                               ],
                               [

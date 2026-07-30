@@ -426,7 +426,7 @@ function CheckoutPageContent() {
           <span>{reservationBasePrice.toLocaleString("ko-KR")}원</span>
         </p>
         <p className="mt-2 flex justify-between">
-          <span>카 마스터 검수비</span>
+          <span>정비사 작업 확인 비용</span>
           <span>{helperVerifyFee.toLocaleString("ko-KR")}원</span>
         </p>
         <p className="mt-2 flex justify-between">
@@ -445,7 +445,7 @@ function CheckoutPageContent() {
           </span>
         </p>
         <p className="mt-3 text-sm font-medium leading-6 text-slate-500">
-          예약 기본요금과 검수비는 예약할 때 결제되었습니다. 예약 종료 이후 초과 이용분만 추가 결제됩니다.
+          예약 기본요금과 작업 확인 비용은 예약할 때 결제되었습니다. 예약 종료 이후 초과 이용분만 추가 결제됩니다.
         </p>
       </div>
 

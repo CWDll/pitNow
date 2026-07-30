@@ -146,7 +146,7 @@ export default async function AdminSettlementPage({
           체크아웃 정산
         </h2>
         <p className="mt-2 text-sm text-slate-600">
-          최근 100개 체크아웃의 기본요금, 초과요금, 검수비와 증적 완료 여부를
+          최근 100개 체크아웃의 기본요금, 초과요금, 작업 확인 비용과 증적 완료 여부를
           확인합니다.
         </p>
       </header>
@@ -203,7 +203,7 @@ export default async function AdminSettlementPage({
               <th className="px-4 py-4">방식</th>
               <th className="px-4 py-4 text-right">기본 금액</th>
               <th className="px-4 py-4 text-right">추가 요금</th>
-              <th className="px-4 py-4 text-right">검수비</th>
+              <th className="px-4 py-4 text-right">작업 확인 비용</th>
               <th className="px-4 py-4 text-right">총 정산</th>
               <th className="px-4 py-4 text-right">결제 완료</th>
               <th className="px-4 py-4 text-right">미수 금액</th>

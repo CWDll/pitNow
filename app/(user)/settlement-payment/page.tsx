@@ -462,7 +462,7 @@ function SettlementPaymentContent() {
           <span>{reservationBasePrice.toLocaleString("ko-KR")}원</span>
         </p>
         <p className="mt-2 flex justify-between text-base text-zinc-700">
-          <span>카 마스터 검수비</span>
+          <span>정비사 작업 확인 비용</span>
           <span>{helperVerifyFee.toLocaleString("ko-KR")}원</span>
         </p>
         <p className="mt-2 flex justify-between text-base text-zinc-700">

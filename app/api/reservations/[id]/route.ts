@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { ReservationType } from "@/src/domain/types";
+import type { ReservationWorkCheck } from "@/src/domain/self-maintenance";
 import { requireRequestUser } from "@/src/lib/auth";
 import { formatKstDateTimeRange } from "@/src/lib/timezone";
 import {
@@ -53,6 +54,7 @@ interface VehicleRow {
 }
 
 interface ReservationTaskRow {
+  id: string;
   task_id: string;
 }
 
@@ -69,6 +71,26 @@ interface ServicePackageRow {
 
 interface ReservationPaymentSnapshotRow {
   reservation_snapshot: unknown;
+}
+
+interface WorkCheckRow {
+  id: string;
+  status: ReservationWorkCheck["status"];
+  prepaid_fee: number | string;
+  summary_note: string | null;
+  recorded_at: string | null;
+}
+
+interface WorkCheckResultRow {
+  id: string;
+  reservation_task_id: string;
+  check_item_id: string | null;
+  item_label_snapshot: string;
+  result: ReservationWorkCheck["results"][number]["result"];
+  note: string | null;
+  check_round: 1 | 2;
+  sort_order: number;
+  created_at: string;
 }
 
 function jsonError(status: number, code: string, message: string) {
@@ -189,11 +211,16 @@ export async function GET(req: Request, context: Context) {
   let taskIds: string[] = [];
   let taskLabels = "";
   let packageTitle = "";
+  let reservationTaskDetails: Array<{
+    reservationTaskId: string;
+    taskCode: string;
+    taskName: string;
+  }> = [];
 
   if (reservation.reservation_type === "SELF_SERVICE") {
     const { data: taskRows, error: taskError } = await db
       .from("reservation_tasks")
-      .select("task_id")
+      .select("id,task_id")
       .eq("reservation_id", reservation.id)
       .returns<ReservationTaskRow[]>();
 
@@ -236,6 +263,18 @@ export async function GET(req: Request, context: Context) {
 
       taskIds = orderedTasks.map((task) => task.code);
       taskLabels = orderedTasks.map((task) => task.name).join(", ");
+      reservationTaskDetails = (taskRows ?? []).flatMap((row) => {
+        const task = tasksById.get(row.task_id);
+        return task
+          ? [
+              {
+                reservationTaskId: row.id,
+                taskCode: task.code,
+                taskName: task.name,
+              },
+            ]
+          : [];
+      });
     }
   } else if (reservation.package_id) {
     const [paymentResult, packageResult] = await Promise.all([
@@ -275,6 +314,47 @@ export async function GET(req: Request, context: Context) {
     reservation.reservation_type === "SELF_SERVICE"
       ? taskLabels || "셀프 정비"
       : packageTitle || "전문가 맡기기";
+  const workCheckResult = reservation.helper_verify_requested
+    ? await db
+        .from("reservation_work_checks")
+        .select("id,status,prepaid_fee,summary_note,recorded_at")
+        .eq("reservation_id", reservation.id)
+        .maybeSingle<WorkCheckRow>()
+    : { data: null, error: null };
+
+  if (workCheckResult.error) {
+    console.error("RESERVATION WORK CHECK LOOKUP ERROR:", workCheckResult.error);
+    return jsonError(
+      500,
+      "DB_ERROR",
+      "정비사 작업 확인 결과를 불러오지 못했습니다.",
+    );
+  }
+
+  const workCheck = workCheckResult.data;
+  const workCheckItemsResult = workCheck
+    ? await db
+        .from("reservation_work_check_results")
+        .select(
+          "id,reservation_task_id,check_item_id,item_label_snapshot,result,note,check_round,sort_order,created_at",
+        )
+        .eq("work_check_id", workCheck.id)
+        .order("check_round")
+        .order("sort_order")
+        .returns<WorkCheckResultRow[]>()
+    : { data: [], error: null };
+
+  if (workCheckItemsResult.error) {
+    console.error(
+      "RESERVATION WORK CHECK ITEM LOOKUP ERROR:",
+      workCheckItemsResult.error,
+    );
+    return jsonError(
+      500,
+      "DB_ERROR",
+      "정비사 작업 확인 항목을 불러오지 못했습니다.",
+    );
+  }
 
   return NextResponse.json({
     success: true,
@@ -314,5 +394,33 @@ export async function GET(req: Request, context: Context) {
       packageId: reservation.package_id ?? "",
       packageTitle,
     },
+    workCheck: workCheck
+      ? {
+          id: workCheck.id,
+          status: workCheck.status,
+          prepaidFee: toNumber(workCheck.prepaid_fee),
+          summaryNote: workCheck.summary_note ?? "",
+          recordedAt: workCheck.recorded_at,
+          results: (workCheckItemsResult.data ?? []).map((result) => {
+            const task = reservationTaskDetails.find(
+              (item) =>
+                item.reservationTaskId === result.reservation_task_id,
+            );
+            return {
+              id: result.id,
+              reservationTaskId: result.reservation_task_id,
+              taskCode: task?.taskCode ?? "",
+              taskName: task?.taskName ?? "SELF 작업",
+              checkItemId: result.check_item_id,
+              itemLabel: result.item_label_snapshot,
+              result: result.result,
+              note: result.note ?? "",
+              checkRound: result.check_round,
+              sortOrder: result.sort_order,
+              createdAt: result.created_at,
+            };
+          }),
+        }
+      : null,
   });
 }

@@ -2,13 +2,20 @@ import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 
 import type { ReservationType } from "@/src/domain/types";
 import type { VehicleType } from "@/src/domain/vehicle";
+import type {
+  SelfMaintenanceCatalogItem,
+  SelfSafetyContent,
+} from "@/src/domain/self-maintenance";
 import { checkBayCompatibility } from "@/src/lib/bay-compatibility";
+import { getSelfMaintenanceCatalog } from "@/src/lib/self-maintenance-catalog";
 import {
   isReservationStatusLogFailureFatal,
   logReservationStatusChange,
 } from "@/src/lib/reservation-status";
 
 const HELPER_VERIFY_BASE_FEE = 5000;
+const SELF_AGREEMENT_TEXT =
+  "선택한 작업만 수행하며 예약하지 않은 작업은 진행하지 않습니다. 예약하지 않은 작업을 수행하거나 추가 분해를 하는 경우 정비사 작업 확인이 제한될 수 있습니다.";
 
 type ConsentMethod = "CHECKBOX" | "SIGNATURE";
 
@@ -112,6 +119,15 @@ export interface ReservationQuote {
   totalPrice: number;
   helperVerifyFee: number;
   legalTaskRows: SelfMaintenanceTaskRow[];
+  catalogTaskRows: SelfMaintenanceCatalogItem[];
+  safetyContentSnapshot: Array<{
+    id: string;
+    code: string;
+    taskId: string | null;
+    title: string;
+    contentType: "CARD" | "VIDEO";
+    version: number;
+  }>;
   packageId: string | null;
   packageSnapshot: {
     id: string;
@@ -120,6 +136,111 @@ export interface ReservationQuote {
     durationMinutes: number;
     laborPrice: number;
   } | null;
+}
+
+async function assertCommonSafetyTrainingCompleted(params: {
+  db: SupabaseClient;
+  userId: string;
+}): Promise<LookupResult<Record<string, never>>> {
+  const { db, userId } = params;
+  const { data: contents, error: contentsError } = await db
+    .from("self_safety_contents")
+    .select("id,version")
+    .eq("scope", "COMMON")
+    .eq("is_active", true)
+    .eq("is_required", true)
+    .returns<Array<{ id: string; version: number }>>();
+
+  if (contentsError) {
+    console.error("COMMON SAFETY CONTENT LOOKUP ERROR:", contentsError);
+    return {
+      error: apiError(
+        500,
+        "DB_ERROR",
+        "공통 안전교육 확인 중 오류가 발생했습니다.",
+      ),
+    };
+  }
+
+  const requiredContents = contents ?? [];
+  if (requiredContents.length === 0) {
+    return {
+      error: apiError(
+        409,
+        "SAFETY_CONTENT_NOT_READY",
+        "공통 안전교육 콘텐츠가 준비되지 않았습니다.",
+      ),
+    };
+  }
+
+  const { data: completions, error: completionsError } = await db
+    .from("user_safety_training_completions")
+    .select("content_id,content_version")
+    .eq("user_id", userId)
+    .in(
+      "content_id",
+      requiredContents.map((content) => content.id),
+    );
+
+  if (completionsError) {
+    console.error("COMMON SAFETY COMPLETION LOOKUP ERROR:", completionsError);
+    return {
+      error: apiError(
+        500,
+        "DB_ERROR",
+        "공통 안전교육 완료 여부를 확인하지 못했습니다.",
+      ),
+    };
+  }
+
+  const completionKeys = new Set(
+    (completions ?? []).map(
+      (completion) =>
+        `${completion.content_id}:${completion.content_version}`,
+    ),
+  );
+  const completed = requiredContents.every((content) =>
+    completionKeys.has(`${content.id}:${content.version}`),
+  );
+
+  if (!completed) {
+    return {
+      error: apiError(
+        409,
+        "COMMON_SAFETY_TRAINING_REQUIRED",
+        "SELF 예약 전에 공통 안전교육을 먼저 완료해 주세요.",
+      ),
+    };
+  }
+
+  return {};
+}
+
+function toSafetyContentSnapshot(params: {
+  commonContents: SelfSafetyContent[];
+  tasks: SelfMaintenanceCatalogItem[];
+}) {
+  const { commonContents, tasks } = params;
+  return [
+    ...commonContents.map((content) => ({
+      id: content.id,
+      code: content.code,
+      taskId: null,
+      title: content.title,
+      contentType: content.contentType,
+      version: content.version,
+    })),
+    ...tasks.flatMap((task) =>
+      task.safetyContents.map((content) => ({
+        id: content.id,
+        code: content.code,
+        taskId: task.id,
+        title: content.title,
+        contentType: content.contentType,
+        version: content.version,
+      })),
+    ),
+  ];
 }
 
 export interface ConfirmedReservationResult {
@@ -615,7 +736,7 @@ export function reservationDbErrorToApiError(
       return apiError(
         400,
         "INVALID_HELPER_VERIFY_FEE",
-        "카 마스터 검수 금액 조건이 올바르지 않습니다.",
+        "정비사 작업 확인 금액 조건이 올바르지 않습니다.",
       );
     }
 
@@ -739,10 +860,20 @@ export async function quoteReservation(params: {
   let totalPrice = 0;
   let helperVerifyFee = 0;
   let legalTaskRows: SelfMaintenanceTaskRow[] = [];
+  let catalogTaskRows: SelfMaintenanceCatalogItem[] = [];
+  let safetyContentSnapshot: ReservationQuote["safetyContentSnapshot"] = [];
   let packageId: string | null = null;
   let packageSnapshot: ReservationQuote["packageSnapshot"] = null;
 
   if (body.reservationType === "SELF_SERVICE") {
+    const trainingResult = await assertCommonSafetyTrainingCompleted({
+      db,
+      userId,
+    });
+    if ("error" in trainingResult) {
+      return { ok: false, error: trainingResult.error };
+    }
+
     const taskResult = await getLegalSelfTasks(db, body.taskIds);
 
     if ("error" in taskResult) {
@@ -750,6 +881,57 @@ export async function quoteReservation(params: {
     }
 
     legalTaskRows = taskResult.tasks;
+    let catalog;
+    try {
+      catalog = await getSelfMaintenanceCatalog({ db, partnerId });
+    } catch (error) {
+      console.error("SELF CATALOG LOOKUP ERROR:", error);
+      return {
+        ok: false,
+        error: apiError(
+          500,
+          "DB_ERROR",
+          "SELF 작업 카탈로그를 불러오지 못했습니다.",
+        ),
+      };
+    }
+
+    const catalogByCode = new Map(
+      catalog.tasks.map((task) => [task.code, task]),
+    );
+    catalogTaskRows = body.taskIds
+      .map((code) => catalogByCode.get(code) ?? null)
+      .filter((task): task is SelfMaintenanceCatalogItem => task !== null);
+
+    if (catalogTaskRows.length !== body.taskIds.length) {
+      return {
+        ok: false,
+        error: apiError(
+          400,
+          "INVALID_SELF_TASK_CATALOG",
+          "선택한 SELF 작업 정보를 확인할 수 없습니다.",
+        ),
+      };
+    }
+
+    if (
+      body.helperVerifyRequested &&
+      catalogTaskRows.some((task) => !task.workCheckEnabled)
+    ) {
+      return {
+        ok: false,
+        error: apiError(
+          409,
+          "WORK_CHECK_UNAVAILABLE",
+          "선택한 작업 중 이 정비소에서 작업 확인을 제공하지 않는 항목이 있습니다.",
+        ),
+      };
+    }
+
+    safetyContentSnapshot = toSafetyContentSnapshot({
+      commonContents: catalog.commonSafetyContents,
+      tasks: catalogTaskRows,
+    });
     helperVerifyFee = body.helperVerifyRequested
       ? HELPER_VERIFY_BASE_FEE +
         legalTaskRows.reduce((sum, task) => {
@@ -798,6 +980,8 @@ export async function quoteReservation(params: {
       totalPrice,
       helperVerifyFee,
       legalTaskRows,
+      catalogTaskRows,
+      safetyContentSnapshot,
       packageId,
       packageSnapshot,
     },
@@ -867,10 +1051,24 @@ export async function createConfirmedReservation(params: {
   }
 
   if (body.reservationType === "SELF_SERVICE") {
-    const reservationTasks = quote.legalTaskRows.map((task) => ({
-      reservation_id: data.id,
-      task_id: task.id,
-    }));
+    const catalogByTaskId = new Map(
+      quote.catalogTaskRows.map((task) => [task.id, task]),
+    );
+    const reservationTasks = quote.legalTaskRows.map((task) => {
+      const catalogTask = catalogByTaskId.get(task.id);
+      return {
+        reservation_id: data.id,
+        task_id: task.id,
+        work_check_unit_fee_snapshot: catalogTask?.workCheckUnitFee ?? 0,
+        check_scope_snapshot:
+          catalogTask?.checkItems.map((item) => ({
+            id: item.id,
+            label: item.label,
+            version: item.version,
+            sortOrder: item.sortOrder,
+          })) ?? [],
+      };
+    });
 
     const { error: taskInsertError } = await db
       .from("reservation_tasks")
@@ -893,6 +1091,9 @@ export async function createConfirmedReservation(params: {
         consent_method: body.consentMethod,
         signature_image_url:
           body.consentMethod === "SIGNATURE" ? body.signatureImageUrl : null,
+        agreement_text: SELF_AGREEMENT_TEXT,
+        agreement_version: 1,
+        safety_content_snapshot: quote.safetyContentSnapshot,
       });
 
     if (agreementInsertError) {
@@ -903,6 +1104,30 @@ export async function createConfirmedReservation(params: {
         ok: false,
         error: apiError(500, "DB_ERROR", "작업 동의 정보 저장에 실패했습니다."),
       };
+    }
+
+    if (body.helperVerifyRequested) {
+      const { error: workCheckInsertError } = await db
+        .from("reservation_work_checks")
+        .insert({
+          reservation_id: data.id,
+          partner_id: quote.partnerId,
+          status: "PENDING",
+          prepaid_fee: quote.helperVerifyFee,
+        });
+
+      if (workCheckInsertError) {
+        console.error("WORK CHECK INSERT ERROR:", workCheckInsertError);
+        await db.from("reservations").delete().eq("id", data.id);
+        return {
+          ok: false,
+          error: apiError(
+            500,
+            "DB_ERROR",
+            "정비사 작업 확인 요청 저장에 실패했습니다.",
+          ),
+        };
+      }
     }
   }
 
