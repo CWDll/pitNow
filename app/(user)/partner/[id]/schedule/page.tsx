@@ -21,6 +21,7 @@ import {
 } from "@/src/lib/bay-compatibility";
 import { hasSupabaseEnv, supabase } from "@/src/lib/supabase";
 import { kstWallTimeToUtcIso } from "@/src/lib/timezone";
+import { getWorkCheckSelection } from "@/src/lib/work-check-selection";
 
 const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"] as const;
 const fallbackTimeBoundaries = [
@@ -643,17 +644,14 @@ function PartnerSchedulePageContent() {
       .includes(option.code),
   );
 
-  const workCheckAvailable =
-    selectedSelfTasks.length > 0 &&
-    selectedSelfTasks.every((task) => task.workCheckEnabled);
+  const {
+    eligibleTasks: workCheckEligibleTasks,
+    excludedTasks: workCheckExcludedTasks,
+    fee: selectedWorkCheckFee,
+  } = getWorkCheckSelection(selectedSelfTasks);
+  const workCheckAvailable = workCheckEligibleTasks.length > 0;
   const workCheckFee =
-    bookingMode === "SELF" && workCheckRequested
-      ? 5000 +
-        selectedSelfTasks.reduce(
-          (sum, task) => sum + task.workCheckUnitFee,
-          0,
-        )
-      : 0;
+    bookingMode === "SELF" && workCheckRequested ? selectedWorkCheckFee : 0;
 
   const totalPriceWithVerify = totalPrice + workCheckFee;
 
@@ -1141,7 +1139,13 @@ function PartnerSchedulePageContent() {
       </section>
 
       {bookingMode === "SELF" ? (
-        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-sm">
+        <label
+          className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-sm ${
+            workCheckAvailable
+              ? "border-slate-200 bg-white text-slate-800"
+              : "border-slate-200 bg-slate-100 text-slate-400"
+          }`}
+        >
           <input
             type="checkbox"
             className="mt-0.5 size-5 accent-blue-600"
@@ -1149,14 +1153,32 @@ function PartnerSchedulePageContent() {
             disabled={!workCheckAvailable}
             onChange={() => setWorkCheckRequested((prev) => !prev)}
           />
-          <span>
+          <span className="min-w-0">
             정비사 작업 확인
             <br />
-            <span className="text-xs font-semibold text-slate-500">
+            <span
+              className={`text-xs font-semibold ${
+                workCheckAvailable ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
               {workCheckAvailable
                 ? "기본 5,000원 + 선택 작업별 확인 비용"
-                : "선택한 작업 중 이 정비소에서 확인을 제공하지 않는 항목이 있습니다."}
+                : "선택한 작업은 이 정비소에서 작업 확인을 제공하지 않습니다."}
             </span>
+            {workCheckAvailable ? (
+              <span className="mt-2 block space-y-1 text-xs leading-5">
+                <span className="block font-bold text-emerald-700">
+                  확인 포함:{" "}
+                  {workCheckEligibleTasks.map((task) => task.name).join(", ")}
+                </span>
+                {workCheckExcludedTasks.length > 0 ? (
+                  <span className="block font-semibold text-slate-500">
+                    확인 제외:{" "}
+                    {workCheckExcludedTasks.map((task) => task.name).join(", ")}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
           </span>
         </label>
       ) : null}

@@ -12,8 +12,8 @@ import {
   isReservationStatusLogFailureFatal,
   logReservationStatusChange,
 } from "@/src/lib/reservation-status";
+import { getWorkCheckSelection } from "@/src/lib/work-check-selection";
 
-const HELPER_VERIFY_BASE_FEE = 5000;
 const SELF_AGREEMENT_TEXT =
   "선택한 작업만 수행하며 예약하지 않은 작업은 진행하지 않습니다. 예약하지 않은 작업을 수행하거나 추가 분해를 하는 경우 정비사 작업 확인이 제한될 수 있습니다.";
 
@@ -120,6 +120,7 @@ export interface ReservationQuote {
   helperVerifyFee: number;
   legalTaskRows: SelfMaintenanceTaskRow[];
   catalogTaskRows: SelfMaintenanceCatalogItem[];
+  workCheckTaskIds: string[];
   safetyContentSnapshot: Array<{
     id: string;
     code: string;
@@ -195,8 +196,7 @@ async function assertCommonSafetyTrainingCompleted(params: {
 
   const completionKeys = new Set(
     (completions ?? []).map(
-      (completion) =>
-        `${completion.content_id}:${completion.content_version}`,
+      (completion) => `${completion.content_id}:${completion.content_version}`,
     ),
   );
   const completed = requiredContents.every((content) =>
@@ -861,6 +861,7 @@ export async function quoteReservation(params: {
   let helperVerifyFee = 0;
   let legalTaskRows: SelfMaintenanceTaskRow[] = [];
   let catalogTaskRows: SelfMaintenanceCatalogItem[] = [];
+  let workCheckTaskIds: string[] = [];
   let safetyContentSnapshot: ReservationQuote["safetyContentSnapshot"] = [];
   let packageId: string | null = null;
   let packageSnapshot: ReservationQuote["packageSnapshot"] = null;
@@ -914,16 +915,16 @@ export async function quoteReservation(params: {
       };
     }
 
-    if (
-      body.helperVerifyRequested &&
-      catalogTaskRows.some((task) => !task.workCheckEnabled)
-    ) {
+    const workCheckSelection = getWorkCheckSelection(catalogTaskRows);
+    workCheckTaskIds = workCheckSelection.eligibleTasks.map((task) => task.id);
+
+    if (body.helperVerifyRequested && workCheckTaskIds.length === 0) {
       return {
         ok: false,
         error: apiError(
           409,
           "WORK_CHECK_UNAVAILABLE",
-          "선택한 작업 중 이 정비소에서 작업 확인을 제공하지 않는 항목이 있습니다.",
+          "선택한 작업에는 이 정비소가 제공하는 작업 확인 항목이 없습니다.",
         ),
       };
     }
@@ -933,11 +934,7 @@ export async function quoteReservation(params: {
       tasks: catalogTaskRows,
     });
     helperVerifyFee = body.helperVerifyRequested
-      ? HELPER_VERIFY_BASE_FEE +
-        legalTaskRows.reduce((sum, task) => {
-          const unitFee = parseNumber(task.helper_verify_unit_fee);
-          return sum + Math.max(0, unitFee ?? 0);
-        }, 0)
+      ? workCheckSelection.fee
       : 0;
     totalPrice =
       windowResult.durationHours * bayResult.hourlyPrice + helperVerifyFee;
@@ -981,6 +978,7 @@ export async function quoteReservation(params: {
       helperVerifyFee,
       legalTaskRows,
       catalogTaskRows,
+      workCheckTaskIds,
       safetyContentSnapshot,
       packageId,
       packageSnapshot,
@@ -1056,17 +1054,22 @@ export async function createConfirmedReservation(params: {
     );
     const reservationTasks = quote.legalTaskRows.map((task) => {
       const catalogTask = catalogByTaskId.get(task.id);
+      const isWorkCheckIncluded =
+        body.helperVerifyRequested && quote.workCheckTaskIds.includes(task.id);
       return {
         reservation_id: data.id,
         task_id: task.id,
-        work_check_unit_fee_snapshot: catalogTask?.workCheckUnitFee ?? 0,
-        check_scope_snapshot:
-          catalogTask?.checkItems.map((item) => ({
-            id: item.id,
-            label: item.label,
-            version: item.version,
-            sortOrder: item.sortOrder,
-          })) ?? [],
+        work_check_unit_fee_snapshot: isWorkCheckIncluded
+          ? (catalogTask?.workCheckUnitFee ?? 0)
+          : 0,
+        check_scope_snapshot: isWorkCheckIncluded
+          ? (catalogTask?.checkItems.map((item) => ({
+              id: item.id,
+              label: item.label,
+              version: item.version,
+              sortOrder: item.sortOrder,
+            })) ?? [])
+          : [],
       };
     });
 

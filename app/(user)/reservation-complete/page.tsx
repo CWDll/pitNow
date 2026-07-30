@@ -145,9 +145,7 @@ function ReservationCompletePageContent() {
   });
   const checkinOpensAt = getCheckinOpensAt(detail.startTime);
   const canOpenCheckin =
-    Boolean(detail.id) &&
-    !isDetailLoading &&
-    checkinWindowState === "OPEN";
+    Boolean(detail.id) && !isDetailLoading && checkinWindowState === "OPEN";
   const checkinButtonLabel =
     checkinWindowState === "NOT_OPEN" && checkinOpensAt
       ? `${new Intl.DateTimeFormat("ko-KR", {
@@ -221,8 +219,8 @@ function ReservationCompletePageContent() {
       </div>
 
       <p className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold leading-6 text-blue-800">
-        체크인은 예약 시작 {CHECKIN_EARLY_MINUTES}분 전부터 가능합니다.
-        정비소에 비치된 QR을 스캔하거나 안내된 수동 코드를 입력해 주세요.
+        체크인은 예약 시작 {CHECKIN_EARLY_MINUTES}분 전부터 가능합니다. 정비소에
+        비치된 QR을 스캔하거나 안내된 수동 코드를 입력해 주세요.
       </p>
 
       <div className="mt-4 rounded-2xl bg-zinc-100 p-4 text-base text-zinc-700">
@@ -251,9 +249,13 @@ function ReservationCompletePageContent() {
           <span>차량</span>
           <span>{detail.carLabel}</span>
         </p>
-        <p className="mt-2 flex justify-between">
-          <span>예약 ID</span>
-          <span className="max-w-55 truncate">{detail.id || "(없음)"}</span>
+        <p className="mt-3 border-t border-zinc-200 pt-3">
+          <span className="block text-sm font-medium text-zinc-500">
+            예약 ID
+          </span>
+          <span className="mt-1 block break-all text-sm font-semibold text-zinc-700">
+            {detail.id || "(없음)"}
+          </span>
         </p>
       </div>
 

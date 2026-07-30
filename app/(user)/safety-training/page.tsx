@@ -44,6 +44,11 @@ function SafetyTrainingContent() {
         const response = await authFetch("/api/self-safety-training", {
           cache: "no-store",
         });
+        if (response.status === 401) {
+          const trainingPath = `/safety-training?next=${encodeURIComponent(nextPath)}`;
+          router.replace(`/login?next=${encodeURIComponent(trainingPath)}`);
+          return;
+        }
         const payload = (await response.json()) as TrainingResponse;
         if (!response.ok || !payload.success) {
           throw new Error("공통 안전교육을 불러오지 못했습니다.");
@@ -71,7 +76,7 @@ function SafetyTrainingContent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [nextPath, router]);
 
   async function completeTraining() {
     setIsSaving(true);

@@ -85,7 +85,11 @@ export async function PUT(req: Request, context: Context) {
       : null;
   const results = status === "RECORDED" ? parseResults(body?.results) : [];
   if (!reservationId || !status || results === null) {
-    return jsonError(400, "INVALID_PAYLOAD", "작업 확인 결과가 올바르지 않습니다.");
+    return jsonError(
+      400,
+      "INVALID_PAYLOAD",
+      "작업 확인 결과가 올바르지 않습니다.",
+    );
   }
 
   const db = supabaseAdmin ?? authResult.auth.client;
@@ -167,13 +171,34 @@ export async function PUT(req: Request, context: Context) {
   }
 
   const rounds = [...new Set(results.map((result) => result.checkRound))];
+  if (status === "RECORDED" && rounds.includes(2)) {
+    const { count: firstCheckCount, error: firstCheckError } = await db
+      .from("reservation_work_check_results")
+      .select("id", { count: "exact", head: true })
+      .eq("work_check_id", workCheck.id)
+      .eq("check_round", 1);
+    if (firstCheckError) {
+      return jsonError(500, "DB_ERROR", "1차 확인 결과를 확인하지 못했습니다.");
+    }
+    if (!firstCheckCount) {
+      return jsonError(
+        409,
+        "FIRST_CHECK_REQUIRED",
+        "재확인 결과를 저장하려면 1차 확인 결과가 먼저 필요합니다.",
+      );
+    }
+  }
   if (status === "NOT_PERFORMED") {
     const { error: deleteError } = await db
       .from("reservation_work_check_results")
       .delete()
       .eq("work_check_id", workCheck.id);
     if (deleteError) {
-      return jsonError(500, "DB_ERROR", "기존 확인 결과를 정리하지 못했습니다.");
+      return jsonError(
+        500,
+        "DB_ERROR",
+        "기존 확인 결과를 정리하지 못했습니다.",
+      );
     }
   } else if (rounds.length > 0) {
     const { error: deleteError } = await db
@@ -182,7 +207,11 @@ export async function PUT(req: Request, context: Context) {
       .eq("work_check_id", workCheck.id)
       .in("check_round", rounds);
     if (deleteError) {
-      return jsonError(500, "DB_ERROR", "기존 확인 결과를 정리하지 못했습니다.");
+      return jsonError(
+        500,
+        "DB_ERROR",
+        "기존 확인 결과를 정리하지 못했습니다.",
+      );
     }
   }
 
@@ -203,7 +232,11 @@ export async function PUT(req: Request, context: Context) {
       );
     if (insertError) {
       console.error("WORK CHECK RESULT INSERT ERROR:", insertError);
-      return jsonError(500, "DB_ERROR", "작업 확인 결과를 저장하지 못했습니다.");
+      return jsonError(
+        500,
+        "DB_ERROR",
+        "작업 확인 결과를 저장하지 못했습니다.",
+      );
     }
   }
 

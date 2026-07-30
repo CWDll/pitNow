@@ -482,7 +482,7 @@ function PartnerWorkPageContent() {
                   </span>
                   {!option.workCheckEnabled ? (
                     <span className="rounded-md bg-slate-100 px-2 py-1 font-bold text-slate-500">
-                      이 정비소는 작업 확인 미제공
+                      작업 확인 미제공
                     </span>
                   ) : null}
                 </div>

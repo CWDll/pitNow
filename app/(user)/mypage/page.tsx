@@ -12,6 +12,7 @@ import {
   LogIn,
   LogOut,
   Save,
+  ShieldCheck,
   Star,
   UserRound,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const menuItems = [
   { label: "예약 내역", description: "예정된 예약과 지난 이용", href: "/reservation", icon: CalendarDays },
   { label: "내 차 관리", description: "예약 차량과 정비 이력", href: "/my-car", icon: CarFront },
   { label: "이용 가이드", description: "체크인과 체크아웃 절차", href: "/guide", icon: BookOpen },
+  { label: "SELF 공통 안전교육", description: "최초 이용 전 시설·장비 안전수칙", href: "/safety-training?next=/mypage", icon: ShieldCheck },
 ];
 
 interface UserProfile {

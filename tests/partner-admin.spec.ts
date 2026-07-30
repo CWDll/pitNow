@@ -7,6 +7,44 @@ import {
   getE2ECredentials,
   getSelfReservationSeed,
 } from "./helpers/supabase-e2e";
+import { getWorkCheckSelection } from "../src/lib/work-check-selection";
+
+test("calculates work-check pricing from eligible selected tasks only", () => {
+  const tasks = [
+    {
+      id: "engine-oil",
+      code: "engine-oil",
+      name: "엔진오일 교환",
+      difficulty: "BEGINNER" as const,
+      description: "",
+      sortOrder: 1,
+      workCheckUnitFee: 2000,
+      workCheckEnabled: false,
+      checkItems: [{ id: "oil", label: "오일량", sortOrder: 1, version: 1 }],
+      safetyContents: [],
+    },
+    {
+      id: "brake-pad",
+      code: "brake-pad",
+      name: "브레이크 패드 교환",
+      difficulty: "INTERMEDIATE" as const,
+      description: "",
+      sortOrder: 2,
+      workCheckUnitFee: 3000,
+      workCheckEnabled: true,
+      checkItems: [
+        { id: "pad", label: "패드 장착 상태", sortOrder: 1, version: 1 },
+      ],
+      safetyContents: [],
+    },
+  ];
+
+  const result = getWorkCheckSelection(tasks);
+
+  expect(result.eligibleTasks.map((task) => task.id)).toEqual(["brake-pad"]);
+  expect(result.excludedTasks.map((task) => task.id)).toEqual(["engine-oil"]);
+  expect(result.fee).toBe(8000);
+});
 
 const testPartnerImage = {
   name: "pitnow-e2e-partner.jpg",
@@ -140,10 +178,15 @@ test.describe("partner admin dashboard", () => {
       await page.goto("/login?next=/partner-admin");
       await page.getByLabel("이메일").fill(user.email);
       await page.getByLabel("비밀번호").fill(user.password);
-      await page.locator("form").getByRole("button", { name: "로그인" }).click();
+      await page
+        .locator("form")
+        .getByRole("button", { name: "로그인" })
+        .click();
 
       await expect(page).toHaveURL(/\/partner-admin/);
-      await expect(page.locator("header").getByText(seed.partnerName)).toBeVisible({
+      await expect(
+        page.locator("header").getByText(seed.partnerName),
+      ).toBeVisible({
         timeout: 15_000,
       });
       await initialReservationResponse;
@@ -169,7 +212,9 @@ test.describe("partner admin dashboard", () => {
         { timeout: 15_000 },
       );
       await expect(
-        checkinCredentialSection.locator(`img[alt="${seed.partnerName} 체크인 QR"]`),
+        checkinCredentialSection.locator(
+          `img[alt="${seed.partnerName} 체크인 QR"]`,
+        ),
       ).toBeVisible({
         timeout: 15_000,
       });
@@ -221,9 +266,7 @@ test.describe("partner admin dashboard", () => {
       }
 
       uploadedImageIds = uploadedImages.map((image) => image.id);
-      uploadedStoragePaths = uploadedImages.map(
-        (image) => image.storage_path,
-      );
+      uploadedStoragePaths = uploadedImages.map((image) => image.storage_path);
 
       const coverCandidate = uploadedImages[1];
       const coverCandidateCard = imageSection
@@ -254,9 +297,7 @@ test.describe("partner admin dashboard", () => {
         has: page.getByRole("heading", { name: seed.partnerName }),
       });
       await expect(
-        publicPartnerCard.locator(
-          `img[src*="${coverCandidate.storage_path}"]`,
-        ),
+        publicPartnerCard.locator(`img[src*="${coverCandidate.storage_path}"]`),
       ).toBeVisible({ timeout: 15_000 });
 
       await page.goto(`/partner/${seed.partnerId}`);
@@ -266,9 +307,7 @@ test.describe("partner admin dashboard", () => {
       await page
         .locator("button")
         .filter({
-          has: page.locator(
-            `img[src*="${coverCandidate.storage_path}"]`,
-          ),
+          has: page.locator(`img[src*="${coverCandidate.storage_path}"]`),
         })
         .click();
       await expect(
@@ -333,7 +372,9 @@ test.describe("partner admin dashboard", () => {
       );
       const controlYPositions = alignedControls.map(({ box }) => {
         if (!box) {
-          throw new Error("예약 차단 입력 컨트롤의 위치를 확인하지 못했습니다.");
+          throw new Error(
+            "예약 차단 입력 컨트롤의 위치를 확인하지 못했습니다.",
+          );
         }
         return box.y;
       });
@@ -347,7 +388,11 @@ test.describe("partner admin dashboard", () => {
       const durationInput = page.getByLabel("소요시간(분) 필수");
       await durationInput.fill("60");
       await expect(durationInput).toHaveValue("60");
-      expect(await durationInput.evaluate((input) => (input as HTMLInputElement).checkValidity())).toBe(true);
+      expect(
+        await durationInput.evaluate((input) =>
+          (input as HTMLInputElement).checkValidity(),
+        ),
+      ).toBe(true);
 
       const userAppLink = page.getByRole("link", { name: "사용자 앱 열기" });
       const logoutLink = page.getByRole("link", { name: "로그아웃" });
@@ -516,7 +561,10 @@ test.describe("partner admin dashboard", () => {
         .select("id")
         .single<{ id: string }>();
       if (reservationError || !reservation) {
-        throw reservationError ?? new Error("Work-check reservation was not created");
+        throw (
+          reservationError ??
+          new Error("Work-check reservation was not created")
+        );
       }
       reservationId = reservation.id;
 
@@ -558,7 +606,10 @@ test.describe("partner admin dashboard", () => {
       await page.goto("/login?next=/partner-admin");
       await page.getByLabel("이메일").fill(user.email);
       await page.getByLabel("비밀번호").fill(user.password);
-      await page.locator("form").getByRole("button", { name: "로그인" }).click();
+      await page
+        .locator("form")
+        .getByRole("button", { name: "로그인" })
+        .click();
       await expect(page).toHaveURL(/\/partner-admin/);
 
       const reservationRow = page.locator("button").filter({
@@ -573,17 +624,75 @@ test.describe("partner admin dashboard", () => {
           name: "정비사 작업 확인 결과",
         }),
       ).toBeVisible({ timeout: 15_000 });
+      await expect(detailDialog.getByText(checkItems[0].label)).toBeVisible();
       await expect(
-        detailDialog.getByText(checkItems[0].label),
-      ).toBeVisible();
-      await detailDialog.getByLabel("전체 메모").fill(
-        "E2E 1차 작업 확인 결과입니다.",
+        detailDialog.getByRole("button", { name: "재확인" }),
+      ).toBeDisabled();
+
+      const prematureRecheck = await page.evaluate(
+        async ({ id, reservationTaskId, item }) => {
+          const storageKey = Object.keys(localStorage).find((key) =>
+            key.endsWith("-auth-token"),
+          );
+          const session = storageKey
+            ? (JSON.parse(localStorage.getItem(storageKey) ?? "{}") as {
+                access_token?: string;
+              })
+            : {};
+          const response = await fetch(
+            `/api/partner-admin/reservations/${id}/work-check`,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                ...(session.access_token
+                  ? { Authorization: `Bearer ${session.access_token}` }
+                  : {}),
+              },
+              body: JSON.stringify({
+                status: "RECORDED",
+                summaryNote: "잘못된 선행 재확인",
+                results: [
+                  {
+                    reservationTaskId,
+                    checkItemId: item.id,
+                    itemLabel: item.label,
+                    result: "NO_ISSUE",
+                    note: "",
+                    checkRound: 2,
+                    sortOrder: item.sort_order,
+                  },
+                ],
+              }),
+            },
+          );
+          return { status: response.status, body: await response.json() };
+        },
+        {
+          id: reservationId,
+          reservationTaskId: reservationTask.id,
+          item: checkItems[0],
+        },
       );
+      expect(prematureRecheck).toMatchObject({
+        status: 409,
+        body: { error: { code: "FIRST_CHECK_REQUIRED" } },
+      });
+
       await detailDialog
-        .getByRole("button", { name: "1차 결과 저장" })
-        .click();
+        .getByLabel("전체 메모")
+        .fill("E2E 1차 작업 확인 결과입니다.");
+      await detailDialog.getByRole("button", { name: "1차 결과 저장" }).click();
       await expect(
         detailDialog.getByText("1차 작업 확인 결과를 저장했습니다."),
+      ).toBeVisible({ timeout: 15_000 });
+      await detailDialog.getByRole("button", { name: "재확인" }).click();
+      await detailDialog.getByLabel("전체 메모").fill("E2E 재확인 결과입니다.");
+      await detailDialog
+        .getByRole("button", { name: "재확인 결과 저장" })
+        .click();
+      await expect(
+        detailDialog.getByText("2차 작업 확인 결과를 저장했습니다."),
       ).toBeVisible({ timeout: 15_000 });
 
       const customerPayload = await page.evaluate(async (id) => {
@@ -609,17 +718,23 @@ test.describe("partner admin dashboard", () => {
       expect(customerPayload.status).toBe(200);
       expect(customerPayload.body.workCheck).toMatchObject({
         status: "RECORDED",
-        summaryNote: "E2E 1차 작업 확인 결과입니다.",
+        summaryNote: "E2E 재확인 결과입니다.",
       });
       expect(customerPayload.body.workCheck.results).toHaveLength(
-        checkItems.length,
+        checkItems.length * 2,
       );
       expect(
-        customerPayload.body.workCheck.results.every(
+        customerPayload.body.workCheck.results.filter(
           (result: { result: string; checkRound: number }) =>
             result.result === "NO_ISSUE" && result.checkRound === 1,
         ),
-      ).toBe(true);
+      ).toHaveLength(checkItems.length);
+      expect(
+        customerPayload.body.workCheck.results.filter(
+          (result: { result: string; checkRound: number }) =>
+            result.result === "NO_ISSUE" && result.checkRound === 2,
+        ),
+      ).toHaveLength(checkItems.length);
     } finally {
       if (reservationId) {
         await db.from("reservations").delete().eq("id", reservationId);
