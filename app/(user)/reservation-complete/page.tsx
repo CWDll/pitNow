@@ -229,25 +229,27 @@ function ReservationCompletePageContent() {
             {error}
           </p>
         ) : null}
-        <p className="flex justify-between">
-          <span>날짜/시간</span>
-          <span>{detail.dateLabel}</span>
+        <p className="grid grid-cols-[max-content_minmax(0,1fr)] gap-4">
+          <span className="whitespace-nowrap">날짜/시간</span>
+          <span className="text-right">{detail.dateLabel}</span>
         </p>
-        <p className="mt-2 flex justify-between">
-          <span>지점</span>
-          <span>{detail.garageName}</span>
+        <p className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-4">
+          <span className="whitespace-nowrap">지점</span>
+          <span className="text-right">{detail.garageName}</span>
         </p>
-        <p className="mt-2 flex justify-between">
-          <span>선택 작업</span>
-          <span>{detail.taskLabels}</span>
+        <p className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] items-start gap-4">
+          <span className="whitespace-nowrap">선택 작업</span>
+          <span className="min-w-0 text-right leading-6">
+            {detail.taskLabels}
+          </span>
         </p>
-        <p className="mt-2 flex justify-between">
-          <span>베이</span>
-          <span>{detail.bayLabel}</span>
+        <p className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-4">
+          <span className="whitespace-nowrap">베이</span>
+          <span className="text-right">{detail.bayLabel}</span>
         </p>
-        <p className="mt-2 flex justify-between">
-          <span>차량</span>
-          <span>{detail.carLabel}</span>
+        <p className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-4">
+          <span className="whitespace-nowrap">차량</span>
+          <span className="text-right">{detail.carLabel}</span>
         </p>
         <p className="mt-3 border-t border-zinc-200 pt-3">
           <span className="block text-sm font-medium text-zinc-500">

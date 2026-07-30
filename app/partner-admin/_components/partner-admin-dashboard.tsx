@@ -2990,6 +2990,44 @@ export function PartnerAdminDashboard() {
                       </section>
                     ) : null}
 
+                    {detail.reservation.reservationType === "SELF_SERVICE" ? (
+                      <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.12em] text-zinc-500">
+                              SELF 예약 작업
+                            </p>
+                            <h3 className="mt-1 text-sm font-bold text-zinc-950">
+                              예약자가 선택한 전체 작업
+                            </h3>
+                          </div>
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-zinc-600">
+                            {detail.selfTasks.length}개
+                          </span>
+                        </div>
+                        {detail.selfTasks.length > 0 ? (
+                          <ul className="mt-3 flex flex-wrap gap-2">
+                            {detail.selfTasks.map((task) => (
+                              <li
+                                key={task.reservationTaskId}
+                                className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800"
+                              >
+                                {task.taskName}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-3 text-sm text-zinc-500">
+                            예약 작업 정보가 없습니다.
+                          </p>
+                        )}
+                        <p className="mt-3 text-xs leading-5 text-zinc-500">
+                          아래 정비사 작업 확인 결과에는 선결제한 확인 대상 작업만
+                          표시됩니다.
+                        </p>
+                      </section>
+                    ) : null}
+
                     {detail.reservation.reservationType === "SELF_SERVICE" &&
                     detail.reservation.helperVerifyRequested &&
                     detail.workCheck ? (
@@ -3004,18 +3042,6 @@ export function PartnerAdminDashboard() {
                           })
                         }
                       />
-                    ) : detail.reservation.reservationType ===
-                      "SELF_SERVICE" ? (
-                      <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                        <h3 className="text-sm font-semibold text-zinc-900">
-                          선택한 SELF 작업
-                        </h3>
-                        <p className="mt-2 text-sm text-zinc-600">
-                          {detail.selfTasks
-                            .map((task) => task.taskName)
-                            .join(", ") || "작업 정보 없음"}
-                        </p>
-                      </section>
                     ) : null}
 
                     <dl className="space-y-2 text-sm">

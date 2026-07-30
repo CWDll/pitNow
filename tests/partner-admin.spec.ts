@@ -549,9 +549,13 @@ test.describe("partner admin dashboard", () => {
 
       const { data: task, error: taskError } = await db
         .from("self_maintenance_tasks")
-        .select("id,helper_verify_unit_fee")
+        .select("id,name,helper_verify_unit_fee")
         .eq("code", seed.taskCode)
-        .single<{ id: string; helper_verify_unit_fee: number | string }>();
+        .single<{
+          id: string;
+          name: string;
+          helper_verify_unit_fee: number | string;
+        }>();
       if (taskError || !task) {
         throw taskError ?? new Error("SELF task was not found");
       }
@@ -660,6 +664,16 @@ test.describe("partner admin dashboard", () => {
       await reservationRow.click();
 
       const detailDialog = page.getByRole("dialog", { name: "예약 상세" });
+      await expect(
+        detailDialog.getByRole("heading", {
+          name: "예약자가 선택한 전체 작업",
+        }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(
+        detailDialog.getByRole("listitem").filter({
+          hasText: task.name,
+        }),
+      ).toBeVisible();
       await expect(
         detailDialog.getByRole("heading", {
           name: "정비사 작업 확인 결과",

@@ -2471,3 +2471,15 @@ npm run qa:open-checkin-window
   실제 DB로 확인했다.
 - `npm run verify:partner-admin-ui` 4 passed, `npm run lint`,
   `npx tsc --noEmit`, `npm run build`, `npm run check:supabase` 성공.
+
+### 2026-07-30 SELF 작업 확인 대상 수동 QA 완료
+
+- iPhone 배포 환경에서 SELF 작업 3개를 예약하고, 확인 가능한 2개 중 1개만
+  정비사 작업 확인 대상으로 선택했다.
+- 기본 확인 비용 5,000원과 선택 작업 가산 2,000원만 결제되는 것을 확인했다.
+- Partner-admin 결과 등록과 User 지난 이용 상세에는 결제한 작업만 표시되고,
+  제외 작업은 확인 비용과 결과에서 빠지는 것을 확인했다.
+- 예약 완료 요약은 `선택 작업` 라벨을 한 줄로 고정하고 긴 작업명만 여러 줄로
+  표시한다.
+- Partner-admin 예약 상세에는 예약자가 선택한 전체 SELF 작업을 별도 영역에
+  표시하고, 아래 결과 편집 영역에는 선결제한 확인 대상만 유지한다.
