@@ -2451,3 +2451,23 @@ npm run qa:open-checkin-window
   전역 동작임을 명시한다.
 - 예약 완료 화면은 전체 예약 UUID를 줄바꿈해 표시한다.
 - 공통 안전교육은 예약 흐름 외에도 `/guide`, `/mypage`에서 바로 시작할 수 있다.
+
+### 2026-07-30 SELF 작업 확인 대상 개별 선택
+
+- 정비사 작업 확인을 켜면 Partner가 제공하는 선택 작업을 모두 기본 체크한다.
+- 사용자는 결제 전 하위 체크박스에서 확인받지 않을 작업을 해제할 수 있다.
+- 마지막 작업을 해제하면 작업 확인 옵션도 꺼지며 기본료와 가산액이 모두
+  제거된다.
+- 결제 준비·승인 요청에 `workCheckTaskIds`를 보존하고 서버에서 예약 작업 및
+  Partner 제공 범위의 부분집합인지 다시 검증한다.
+- 기본 5,000원은 예약당 한 번, 선택된 작업의 가산액만 더하며 결제 당시
+  항목·단가 스냅샷에는 실제 선택된 작업만 저장한다.
+- 별도 migration은 필요하지 않다. 기존 `reservation_tasks`의
+  `work_check_unit_fee_snapshot`, `check_scope_snapshot` 구조를 사용한다.
+- iPhone 14 Pro Max 기준 430×932에서 전체 기본 선택, 일부 해제, 10,000원에서
+  8,000원으로 실시간 요금 갱신, 고정 CTA와 하단 내비게이션 비겹침을 확인했다.
+- `npm run e2e:ui:fake` 성공. 3개 SELF 작업 중 확인 제공 2개를 기본 선택한 뒤
+  1개를 해제하고 결제하여 선택 작업만 단가·항목 스냅샷에 저장되는 것을
+  실제 DB로 확인했다.
+- `npm run verify:partner-admin-ui` 4 passed, `npm run lint`,
+  `npx tsc --noEmit`, `npm run build`, `npm run check:supabase` 성공.

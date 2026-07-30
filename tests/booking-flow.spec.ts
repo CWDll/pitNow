@@ -221,6 +221,23 @@ test.describe("booking flow smoke", () => {
         timeout: 10_000,
       });
       await expect(page.getByText(seed.taskTitle)).toBeVisible();
+      const availableWorkCheckTasks = page
+        .locator("button")
+        .filter({ hasText: "작업 확인 가산" })
+        .filter({ hasNotText: "작업 확인 미제공" });
+      const availableWorkCheckTaskCount = await availableWorkCheckTasks.count();
+
+      expect(availableWorkCheckTaskCount).toBeGreaterThan(0);
+      for (
+        let index = 0;
+        index < Math.min(2, availableWorkCheckTaskCount);
+        index += 1
+      ) {
+        const taskButton = availableWorkCheckTasks.nth(index);
+        if ((await taskButton.getAttribute("aria-pressed")) !== "true") {
+          await taskButton.click();
+        }
+      }
       await page.getByRole("button", { name: "시간 선택으로 이동" }).click();
 
       await expect(page).toHaveURL(
@@ -254,15 +271,39 @@ test.describe("booking flow smoke", () => {
       expect(selected).toBe(true);
       await expect(page.getByText(/작업 시간: (?!-)/)).toBeVisible();
       await page
-        .getByRole("checkbox", { name: /정비사 작업 확인/ })
+        .getByRole("checkbox", { name: "정비사 작업 확인 신청" })
         .check();
+      const workCheckTaskCheckboxes = page.getByRole("checkbox", {
+        name: /정비사 작업 확인 대상:/,
+      });
+      const workCheckTaskCheckboxCount = await workCheckTaskCheckboxes.count();
+      expect(workCheckTaskCheckboxCount).toBeGreaterThan(0);
+      if (workCheckTaskCheckboxCount > 1) {
+        await workCheckTaskCheckboxes.nth(1).uncheck();
+      }
       await page.getByRole("button", { name: "안전 동의" }).click();
 
       await expect(page).toHaveURL(/\/safety\?/);
       await expect(
         page.getByRole("heading", { name: "작업별 안전 확인" }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "안전수칙 확인" }).click();
+      const safetyConfirmButtons = page.getByRole("button", {
+        name: "안전수칙 확인",
+        exact: true,
+      });
+      await expect(safetyConfirmButtons.nth(0)).toBeVisible({
+        timeout: 15_000,
+      });
+      for (let index = 0; index < 10; index += 1) {
+        const remainingSafetyButtons = await safetyConfirmButtons.count();
+        if (remainingSafetyButtons === 0) {
+          break;
+        }
+        await safetyConfirmButtons.nth(0).click();
+        await expect(safetyConfirmButtons).toHaveCount(
+          remainingSafetyButtons - 1,
+        );
+      }
       await page.getByLabel(/위에서 선택한 작업만 수행/).check();
       await page.getByLabel(/작업별 안전수칙과 선택 작업 한정/).check();
       await page.getByRole("button", { name: "동의하고 결제" }).click();
@@ -346,13 +387,21 @@ test.describe("booking flow smoke", () => {
           new Error("Reservation work-check task snapshot was not found")
         );
       }
-      expect(
-        reservationTasks.every(
-          (task) =>
-            Number(task.work_check_unit_fee_snapshot) > 0 &&
-            task.check_scope_snapshot.length > 0,
-        ),
-      ).toBe(true);
+      const includedWorkCheckTasks = reservationTasks.filter(
+        (task) =>
+          Number(task.work_check_unit_fee_snapshot) > 0 &&
+          task.check_scope_snapshot.length > 0,
+      );
+      expect(includedWorkCheckTasks).toHaveLength(1);
+      if (reservationTasks.length > 1) {
+        expect(
+          reservationTasks.some(
+            (task) =>
+              Number(task.work_check_unit_fee_snapshot) === 0 &&
+              task.check_scope_snapshot.length === 0,
+          ),
+        ).toBe(true);
+      }
 
       const { data: pendingWorkCheck, error: pendingWorkCheckError } = await db
         .from("reservation_work_checks")
@@ -698,7 +747,9 @@ test.describe("booking flow smoke", () => {
         .getByPlaceholder("서비스 리뷰를 남겨주세요.")
         .fill("E2E 예약 루프 검증 후기입니다.");
       await page.getByRole("button", { name: "후기 제출" }).click();
-      await expect(page.getByText("리뷰 저장이 완료되었습니다.")).toBeVisible();
+      await expect(
+        page.getByText("리뷰 저장이 완료되었습니다."),
+      ).toBeVisible({ timeout: 15_000 });
 
       const { data: review, error: reviewError } = await db
         .from("reviews")

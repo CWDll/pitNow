@@ -91,6 +91,8 @@ function SafetyPageContent() {
       "totalPrice",
       "helperVerifyRequested",
       "helperVerifyFee",
+      "workCheckTaskIds",
+      "workCheckTaskLabels",
     ];
     keys.forEach((key) => {
       const value = searchParams.get(key);

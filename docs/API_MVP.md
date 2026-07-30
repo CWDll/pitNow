@@ -65,6 +65,7 @@ agreeOnlySelectedTasks: boolean,
 consentMethod: 'CHECKBOX' | 'SIGNATURE',
 signatureImageUrl?: string,
 helperVerifyRequested: boolean,
+workCheckTaskIds?: string[],
 startTime: string (ISO),
 endTime: string (ISO)
 }
@@ -83,7 +84,12 @@ endTime: string (ISO)
 • 선택 차량의 차종과 공차중량이 bay의 허용 차종/최대 중량 조건을 만족해야 함
 • blockedUntil = endTime + 1시간
 • SELF_SERVICE에서 helperVerifyRequested=true 이면 helperVerifyFee 계산
-(기본 5,000 + 선택 작업별 단가 합산)
+(기본 5,000 + workCheckTaskIds로 선택한 확인 작업별 단가 합산)
+• workCheckTaskIds는 taskIds의 부분집합이며 해당 Partner가 작업 확인을
+  제공하는 작업만 허용
+• helperVerifyRequested=true이고 workCheckTaskIds가 명시되면 최소 1개 필수
+• 구형 결제 탭 호환을 위해 workCheckTaskIds 필드가 누락된 요청만 제공 가능한
+  작업 전체를 선택한 것으로 처리
 • helperVerifyFee는 클라이언트 입력을 신뢰하지 않고 서버에서 계산
 • user_id는 Supabase Auth `auth.users.id` 사용
 • 로컬 개발 fallback은 `PITNOW_DEV_USER_ID` 기준
@@ -103,6 +109,7 @@ endTime: string (ISO)
 • bay 최대 허용 중량 초과 (`VEHICLE_WEIGHT_EXCEEDED`)
 • 법적 허용 외 작업 선택
 • 서약/동의 누락
+• 예약 작업 또는 Partner 제공 범위에 없는 작업 확인 대상
 
 성공 응답:
 {

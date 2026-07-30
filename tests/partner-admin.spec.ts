@@ -46,6 +46,47 @@ test("calculates work-check pricing from eligible selected tasks only", () => {
   expect(result.fee).toBe(8000);
 });
 
+test("calculates work-check pricing from the user's explicit task selection", () => {
+  const tasks = [
+    {
+      id: "engine-oil",
+      code: "engine-oil",
+      name: "엔진오일 교환",
+      difficulty: "BEGINNER" as const,
+      description: "",
+      sortOrder: 1,
+      workCheckUnitFee: 2000,
+      workCheckEnabled: true,
+      checkItems: [{ id: "oil", label: "오일량", sortOrder: 1, version: 1 }],
+      safetyContents: [],
+    },
+    {
+      id: "brake-pad",
+      code: "brake-pad",
+      name: "브레이크 패드 교환",
+      difficulty: "INTERMEDIATE" as const,
+      description: "",
+      sortOrder: 2,
+      workCheckUnitFee: 3000,
+      workCheckEnabled: true,
+      checkItems: [
+        { id: "pad", label: "패드 장착 상태", sortOrder: 1, version: 1 },
+      ],
+      safetyContents: [],
+    },
+  ];
+
+  const result = getWorkCheckSelection(tasks, ["brake-pad"]);
+
+  expect(result.eligibleTasks.map((task) => task.id)).toEqual([
+    "engine-oil",
+    "brake-pad",
+  ]);
+  expect(result.selectedTasks.map((task) => task.id)).toEqual(["brake-pad"]);
+  expect(result.excludedTasks).toEqual([]);
+  expect(result.fee).toBe(8000);
+});
+
 const testPartnerImage = {
   name: "pitnow-e2e-partner.jpg",
   mimeType: "image/jpeg",

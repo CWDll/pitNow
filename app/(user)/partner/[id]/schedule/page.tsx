@@ -243,6 +243,9 @@ function PartnerSchedulePageContent() {
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState<boolean>(false);
   const [workCheckRequested, setWorkCheckRequested] =
     useState<boolean>(false);
+  const [selectedWorkCheckTaskIds, setSelectedWorkCheckTaskIds] = useState<
+    string[]
+  >([]);
   const [selfCatalog, setSelfCatalog] =
     useState<SelfMaintenanceCatalog | null>(null);
   const [bayIds, setBayIds] = useState<string[]>([]);
@@ -646,14 +649,46 @@ function PartnerSchedulePageContent() {
 
   const {
     eligibleTasks: workCheckEligibleTasks,
+    selectedTasks: selectedWorkCheckTasks,
     excludedTasks: workCheckExcludedTasks,
     fee: selectedWorkCheckFee,
-  } = getWorkCheckSelection(selectedSelfTasks);
+  } = getWorkCheckSelection(selectedSelfTasks, selectedWorkCheckTaskIds);
   const workCheckAvailable = workCheckEligibleTasks.length > 0;
   const workCheckFee =
     bookingMode === "SELF" && workCheckRequested ? selectedWorkCheckFee : 0;
 
   const totalPriceWithVerify = totalPrice + workCheckFee;
+
+  function toggleWorkCheckRequested() {
+    if (workCheckRequested) {
+      setWorkCheckRequested(false);
+      setSelectedWorkCheckTaskIds([]);
+      return;
+    }
+
+    if (!workCheckAvailable) {
+      return;
+    }
+
+    setSelectedWorkCheckTaskIds(
+      workCheckEligibleTasks.map((task) => task.id),
+    );
+    setWorkCheckRequested(true);
+  }
+
+  function toggleWorkCheckTask(taskId: string) {
+    setSelectedWorkCheckTaskIds((current) => {
+      const next = current.includes(taskId)
+        ? current.filter((id) => id !== taskId)
+        : [...current, taskId];
+
+      if (next.length === 0) {
+        setWorkCheckRequested(false);
+      }
+
+      return next;
+    });
+  }
 
   const meetsMinimum = selectedBlocks >= MIN_BLOCKS;
   const selectedRangeSelectable =
@@ -869,6 +904,12 @@ function PartnerSchedulePageContent() {
       totalPrice: String(totalPriceWithVerify),
       helperVerifyRequested: String(workCheckRequested),
       helperVerifyFee: String(workCheckFee),
+      workCheckTaskIds: selectedWorkCheckTasks
+        .map((task) => task.code)
+        .join(","),
+      workCheckTaskLabels: selectedWorkCheckTasks
+        .map((task) => task.name)
+        .join(", "),
     });
 
     if (bookingMode === "PACKAGE") {
@@ -1139,48 +1180,78 @@ function PartnerSchedulePageContent() {
       </section>
 
       {bookingMode === "SELF" ? (
-        <label
+        <div
           className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-sm ${
             workCheckAvailable
               ? "border-slate-200 bg-white text-slate-800"
               : "border-slate-200 bg-slate-100 text-slate-400"
           }`}
         >
-          <input
-            type="checkbox"
-            className="mt-0.5 size-5 accent-blue-600"
-            checked={workCheckRequested}
-            disabled={!workCheckAvailable}
-            onChange={() => setWorkCheckRequested((prev) => !prev)}
-          />
-          <span className="min-w-0">
-            정비사 작업 확인
-            <br />
-            <span
-              className={`text-xs font-semibold ${
-                workCheckAvailable ? "text-slate-500" : "text-slate-400"
-              }`}
-            >
-              {workCheckAvailable
-                ? "기본 5,000원 + 선택 작업별 확인 비용"
-                : "선택한 작업은 이 정비소에서 작업 확인을 제공하지 않습니다."}
-            </span>
-            {workCheckAvailable ? (
-              <span className="mt-2 block space-y-1 text-xs leading-5">
-                <span className="block font-bold text-emerald-700">
-                  확인 포함:{" "}
-                  {workCheckEligibleTasks.map((task) => task.name).join(", ")}
+          <div className="min-w-0 flex-1">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                aria-label="정비사 작업 확인 신청"
+                className="mt-0.5 size-5 shrink-0 accent-blue-600"
+                checked={workCheckRequested}
+                disabled={!workCheckAvailable}
+                onChange={toggleWorkCheckRequested}
+              />
+              <span className="min-w-0">
+                <span className="block">정비사 작업 확인</span>
+                <span
+                  className={`mt-0.5 block text-xs font-semibold ${
+                    workCheckAvailable ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
+                  {workCheckAvailable
+                    ? "기본 5,000원 + 확인할 작업별 비용"
+                    : "선택한 작업은 이 정비소에서 작업 확인을 제공하지 않습니다."}
                 </span>
-                {workCheckExcludedTasks.length > 0 ? (
-                  <span className="block font-semibold text-slate-500">
-                    확인 제외:{" "}
-                    {workCheckExcludedTasks.map((task) => task.name).join(", ")}
-                  </span>
-                ) : null}
               </span>
+            </label>
+
+            {workCheckRequested ? (
+              <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                <p className="text-xs font-black text-slate-700">
+                  확인받을 작업
+                </p>
+                {workCheckEligibleTasks.map((task) => (
+                  <label
+                    key={task.id}
+                    className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`정비사 작업 확인 대상: ${task.name}`}
+                        className="size-4 shrink-0 accent-blue-600"
+                        checked={selectedWorkCheckTaskIds.includes(task.id)}
+                        onChange={() => toggleWorkCheckTask(task.id)}
+                      />
+                      <span className="truncate text-xs font-bold text-slate-700">
+                        {task.name}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-black text-blue-600">
+                      +{task.workCheckUnitFee.toLocaleString("ko-KR")}원
+                    </span>
+                  </label>
+                ))}
+                <p className="text-xs font-semibold leading-5 text-slate-500">
+                  선택한 작업만 확인 범위와 결과에 포함됩니다.
+                </p>
+              </div>
             ) : null}
-          </span>
-        </label>
+
+            {workCheckExcludedTasks.length > 0 ? (
+              <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                확인 미제공:{" "}
+                {workCheckExcludedTasks.map((task) => task.name).join(", ")}
+              </p>
+            ) : null}
+          </div>
+        </div>
       ) : null}
 
       <div className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur">

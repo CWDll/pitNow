@@ -119,6 +119,7 @@ export interface CreateReservationPayload {
   agreeOnlySelectedTasks?: boolean;
   consentMethod?: "CHECKBOX" | "SIGNATURE";
   helperVerifyRequested?: boolean;
+  workCheckTaskIds?: string[];
   signatureImageUrl?: string;
   startTime: string;
   endTime: string;

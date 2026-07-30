@@ -194,6 +194,12 @@ function PaymentPageContent() {
   const helperVerifyRequested =
     searchParams.get("helperVerifyRequested") === "true";
   const helperVerifyFee = Number(searchParams.get("helperVerifyFee") ?? "0");
+  const workCheckTaskIds = (searchParams.get("workCheckTaskIds") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const workCheckTaskLabels =
+    searchParams.get("workCheckTaskLabels") ?? "";
 
   const workTitle = useMemo(
     () => (bookingMode === "PACKAGE" ? packageTitle : taskLabels),
@@ -256,6 +262,10 @@ function PaymentPageContent() {
             : undefined,
         helperVerifyRequested:
           bookingMode === "SELF" ? helperVerifyRequested : false,
+        workCheckTaskIds:
+          bookingMode === "SELF" && helperVerifyRequested
+            ? workCheckTaskIds
+            : undefined,
         startTime,
         endTime,
       };
@@ -435,12 +445,22 @@ function PaymentPageContent() {
             </p>
           ) : null}
           {bookingMode === "SELF" ? (
-            <p className="flex justify-between">
-              <span>정비사 작업 확인</span>
-              <span>
-                {Math.max(0, helperVerifyFee).toLocaleString("ko-KR")}원
-              </span>
-            </p>
+            <>
+              <p className="flex justify-between">
+                <span>정비사 작업 확인</span>
+                <span>
+                  {Math.max(0, helperVerifyFee).toLocaleString("ko-KR")}원
+                </span>
+              </p>
+              {helperVerifyRequested && workCheckTaskLabels ? (
+                <p className="flex items-start justify-between gap-4 text-sm">
+                  <span className="shrink-0 text-zinc-500">확인 작업</span>
+                  <span className="text-right font-semibold text-zinc-700">
+                    {workCheckTaskLabels}
+                  </span>
+                </p>
+              ) : null}
+            </>
           ) : null}
           <p className="flex justify-between">
             <span>지점</span>

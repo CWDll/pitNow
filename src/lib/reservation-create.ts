@@ -28,6 +28,7 @@ export interface ReservationRequestBody {
   agreeOnlySelectedTasks: boolean;
   consentMethod?: ConsentMethod;
   helperVerifyRequested: boolean;
+  workCheckTaskIds?: string[];
   signatureImageUrl?: string;
   startTime: string;
   endTime: string;
@@ -306,6 +307,7 @@ export function parseReservationRequestPayload(
     agreeOnlySelectedTasks,
     consentMethod,
     helperVerifyRequested,
+    workCheckTaskIds,
     signatureImageUrl,
     startTime,
     endTime,
@@ -319,7 +321,9 @@ export function parseReservationRequestPayload(
     typeof startTime !== "string" ||
     typeof endTime !== "string" ||
     (typeof helperVerifyRequested !== "undefined" &&
-      typeof helperVerifyRequested !== "boolean")
+      typeof helperVerifyRequested !== "boolean") ||
+    (typeof workCheckTaskIds !== "undefined" &&
+      !Array.isArray(workCheckTaskIds))
   ) {
     return null;
   }
@@ -344,6 +348,19 @@ export function parseReservationRequestPayload(
     typeof packageId === "string" && packageId.trim()
       ? packageId.trim()
       : undefined;
+  const normalizedWorkCheckTaskIds = Array.isArray(workCheckTaskIds)
+    ? workCheckTaskIds
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : undefined;
+
+  if (
+    Array.isArray(workCheckTaskIds) &&
+    normalizedWorkCheckTaskIds?.length !== workCheckTaskIds.length
+  ) {
+    return null;
+  }
 
   const normalizedConsentMethod =
     consentMethod === "CHECKBOX" || consentMethod === "SIGNATURE"
@@ -394,6 +411,12 @@ export function parseReservationRequestPayload(
       reservationType === "SELF_SERVICE"
         ? Boolean(helperVerifyRequested)
         : false,
+    workCheckTaskIds:
+      reservationType === "SELF_SERVICE" && helperVerifyRequested
+        ? normalizedWorkCheckTaskIds === undefined
+          ? undefined
+          : [...new Set(normalizedWorkCheckTaskIds)]
+        : [],
     signatureImageUrl:
       typeof signatureImageUrl === "string" && signatureImageUrl.trim()
         ? signatureImageUrl.trim()
@@ -915,8 +938,41 @@ export async function quoteReservation(params: {
       };
     }
 
-    const workCheckSelection = getWorkCheckSelection(catalogTaskRows);
-    workCheckTaskIds = workCheckSelection.eligibleTasks.map((task) => task.id);
+    const availableWorkCheckSelection = getWorkCheckSelection(catalogTaskRows);
+    const eligibleWorkCheckCodes = new Set(
+      availableWorkCheckSelection.eligibleTasks.map((task) => task.code),
+    );
+    const requestedWorkCheckCodes =
+      body.workCheckTaskIds ??
+      availableWorkCheckSelection.eligibleTasks.map((task) => task.code);
+
+    if (
+      body.helperVerifyRequested &&
+      requestedWorkCheckCodes.some(
+        (code) =>
+          !body.taskIds.includes(code) || !eligibleWorkCheckCodes.has(code),
+      )
+    ) {
+      return {
+        ok: false,
+        error: apiError(
+          400,
+          "INVALID_WORK_CHECK_TASKS",
+          "정비사 작업 확인 대상이 예약 작업 또는 정비소 제공 범위와 맞지 않습니다.",
+        ),
+      };
+    }
+
+    const requestedWorkCheckIds = new Set(
+      catalogTaskRows
+        .filter((task) => requestedWorkCheckCodes.includes(task.code))
+        .map((task) => task.id),
+    );
+    const workCheckSelection = getWorkCheckSelection(
+      catalogTaskRows,
+      requestedWorkCheckIds,
+    );
+    workCheckTaskIds = workCheckSelection.selectedTasks.map((task) => task.id);
 
     if (body.helperVerifyRequested && workCheckTaskIds.length === 0) {
       return {
