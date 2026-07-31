@@ -20,6 +20,14 @@ test.describe("mobile public smoke", () => {
     await expect(page.getByRole("heading", { name: "이용 가이드" })).toBeVisible();
     await expect(page.getByText("체크인 사진 4장")).toBeVisible();
 
+    await page.goto("/legal");
+    await expect(
+      page.getByRole("heading", { name: "사업자 정보 및 정책", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("통신판매중개자 고지")).toBeVisible();
+    await expect(page.getByText("개인정보 처리 안내")).toBeVisible();
+    await expect(page.getByText("취소·환불 및 노쇼")).toBeVisible();
+
     await page.goto("/login");
     await expect(
       page.getByRole("heading", { name: "정비 루프를 이어가려면 로그인해 주세요" }),

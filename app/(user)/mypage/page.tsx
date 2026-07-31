@@ -12,6 +12,7 @@ import {
   LogIn,
   LogOut,
   Save,
+  Scale,
   ShieldCheck,
   Star,
   UserRound,
@@ -21,6 +22,7 @@ import { authFetch } from "@/src/lib/auth-fetch";
 import { supabase } from "@/src/lib/supabase";
 
 import { ImageLightbox } from "../_components/image-lightbox";
+import LegalFooter from "../_components/legal-footer";
 import { Card, Line, Screen, StatePanel } from "../_components/mobile-ui";
 
 const menuItems = [
@@ -28,6 +30,7 @@ const menuItems = [
   { label: "내 차 관리", description: "예약 차량과 정비 이력", href: "/my-car", icon: CarFront },
   { label: "이용 가이드", description: "체크인과 체크아웃 절차", href: "/guide", icon: BookOpen },
   { label: "SELF 공통 안전교육", description: "최초 이용 전 시설·장비 안전수칙", href: "/safety-training?next=/mypage", icon: ShieldCheck },
+  { label: "사업자 정보 및 정책", description: "이용기준, 개인정보, 취소·환불 안내", href: "/legal", icon: Scale },
 ];
 
 interface UserProfile {
@@ -466,6 +469,8 @@ export default function MyPage() {
           )}
         </section>
       ) : null}
+
+      <LegalFooter />
 
       <ImageLightbox
         images={previewImages}
