@@ -177,7 +177,7 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 9 | availability block 반영 | partner-admin에서 block 생성 후 사용자 schedule 확인 | block된 slot disabled | 대기 |  |
 | 10 | Self 예약 결제 | Self 작업 선택 → 일정 → Toss sandbox 결제 | 결제 성공 후 예약 확정 | 성공 | iPhone Safari 실결제 QA |
 | 11 | Self 예약 목록 | `/reservation` | 방금 만든 예약이 예정 예약에 표시됨 | 성공 | iPhone 전체 예약 흐름에서 확인 |
-| 12 | Self 취소 가능 경로 | 취소 가능한 예약에서 cancel 실행 | 예약 취소/환불 상태가 일관됨 | 대기 |  |
+| 12 | Self 취소 가능 경로 | 체크인 전 `CONFIRMED` 예약에서 cancel 실행 | 예약 `CANCELLED`, 선결제 전액 `REFUNDED` 또는 `REFUND_PENDING`, 원 결제액과 환불액 일치 | 자동 검증 성공·배포 재확인 | 결제 고지·API·payment metadata 전액 환불 기준 통일 |
 | 13 | Self 체크인 시간 제한 | 예약 시작 15분보다 일찍 `/checkin` 진입/제출 | 입장 가능 시각 안내, API `CHECKIN_NOT_OPEN`, 사진 제출 불가 | 성공 | iPhone에서 15분 전 제한 확인 |
 | 14 | Self 체크인 | 예약 시작 15분 전 이후 정비소 QR 또는 수동 코드 + 4 photos | 다른 정비소/오류 코드는 거부, 사진 4장 없으면 진행 불가, 완료 시 CHECKED_IN | 성공 | iPhone에서 Partner QR 인증, 사진 4장 제출 및 타이머 화면 이동 확인 |
 | 15 | Self 이용 시작 | 체크인 후 in-use 진입 | 서버 시간 기준 타이머, IN_USE 전환, 연장/SOS/매장 연락 버튼 없음 | 성공 | iPhone 이용 시작 확인 |
@@ -271,7 +271,7 @@ Preview 배포 URL 기준으로 실제 브라우저에서 확인한 결과를 �
 | 1 | 예약 카드 결제 | Self 또는 Shop 선결제 | `RESERVATION_CONFIRMED` | 성공 | Safari Sandbox 최소 확인 조합 |
 | 2 | 예약 간편결제 | KakaoPay 등 Toss easy-pay | `RESERVATION_CONFIRMED` | 성공 | Safari Sandbox 최소 확인 조합 |
 | 3 | 결제 실패/취소 | Toss 창에서 취소 또는 실패 | payment `FAILED` 또는 `CANCELLED` 기록 | 성공 | Safari Sandbox 최소 확인 조합 |
-| 4 | 예약 취소 환불 | admin/user 취소 가능 경로 | payment `REFUNDED` 또는 refund pending 상태 확인 | 성공 | Safari Sandbox 최소 확인 조합 |
+| 4 | 예약 취소 환불 | admin/user 체크인 전 취소 가능 경로 | 전액 환불 요청, payment `REFUNDED` 또는 `REFUND_PENDING`, metadata 원 결제액/환불액 일치 | 성공 | Safari Sandbox 최소 확인 조합, FAKE Admin E2E 금액 검증 |
 | 5 | 사후정산 카드 결제 | checkout 후 추가 결제 | `SETTLEMENT_CONFIRMED` | 성공 | Safari Sandbox 최소 확인 조합 |
 | 6 | 사후정산 간편결제 | checkout 후 easy-pay | `SETTLEMENT_CONFIRMED` | 대기 |  |
 

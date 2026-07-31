@@ -368,7 +368,7 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
           </p>
           <p className="mt-1 text-xs leading-5 opacity-80">
             {item.reservationPaymentStatus === "REFUNDED"
-              ? `${formatRefundedAt(item.reservationRefundedAt)} 환불 처리되었습니다.`
+              ? `${formatRefundedAt(item.reservationRefundedAt)} ${item.totalPrice.toLocaleString("ko-KR")}원 전액이 환불 처리되었습니다.`
               : item.reservationPaymentStatus === "REFUND_PENDING"
                 ? "결제사 환불 확인이 필요합니다. 운영자가 확인 후 정리합니다."
                 : "취소된 예약의 결제 상태입니다."}
@@ -388,6 +388,9 @@ function ReservationCard({ item, onCancelled }: ReservationCardProps) {
             </button>
           ) : (
             <form onSubmit={handleCancelSubmit} className="space-y-3">
+              <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold leading-5 text-blue-700">
+                체크인 전 취소 시 결제 금액 {item.totalPrice.toLocaleString("ko-KR")}원 전액을 환불합니다.
+              </p>
               <label className="block">
                 <span className="text-sm font-medium text-zinc-700">
                   취소 사유

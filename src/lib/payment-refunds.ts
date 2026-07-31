@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { calculateConfirmedReservationRefundAmount } from "@/src/domain/cancellation-policy";
 import { cancelTossPayment, toPaymentAmount } from "@/src/lib/payments";
 
 interface ReservationPaymentForRefund {
@@ -14,6 +15,8 @@ export interface ReservationRefundResult {
   paymentId: string | null;
   paymentStatus: "REFUNDED" | "REFUND_PENDING" | "NO_PAYMENT";
   provider: "FAKE" | "TOSS" | null;
+  originalAmount: number;
+  refundAmount: number;
   message: string;
 }
 
@@ -86,6 +89,8 @@ export async function refundReservationPayment(params: {
       paymentId: null,
       paymentStatus: "REFUND_PENDING",
       provider: null,
+      originalAmount: 0,
+      refundAmount: 0,
       message: "예약 결제 정보를 조회하지 못해 환불 확인이 필요합니다.",
     };
   }
@@ -95,6 +100,8 @@ export async function refundReservationPayment(params: {
       paymentId: null,
       paymentStatus: "NO_PAYMENT",
       provider: null,
+      originalAmount: 0,
+      refundAmount: 0,
       message: "환불할 예약 선결제 내역이 없습니다.",
     };
   }
@@ -103,6 +110,34 @@ export async function refundReservationPayment(params: {
     params.reason,
     params.actorType === "ADMIN" ? "관리자 예약 취소" : "사용자 예약 취소",
   );
+  const originalAmount = toPaymentAmount(payment.amount);
+  const refundAmount = calculateConfirmedReservationRefundAmount(payment.amount);
+
+  if (refundAmount <= 0) {
+    await markPaymentRefundPending({
+      db: params.db,
+      payment,
+      code: "INVALID_REFUND_AMOUNT",
+      message: "환불 금액을 계산하지 못해 수동 확인이 필요합니다.",
+      metadata: {
+        refund: {
+          actorType: params.actorType,
+          reason: cancelReason,
+          originalAmount,
+          refundAmount,
+        },
+      },
+    });
+
+    return {
+      paymentId: payment.id,
+      paymentStatus: "REFUND_PENDING",
+      provider: payment.provider,
+      originalAmount,
+      refundAmount,
+      message: "환불 금액을 계산하지 못해 수동 확인이 필요합니다.",
+    };
+  }
 
   if (payment.provider === "FAKE") {
     await markPaymentRefunded({
@@ -113,6 +148,8 @@ export async function refundReservationPayment(params: {
           mode: "FAKE",
           actorType: params.actorType,
           reason: cancelReason,
+          originalAmount,
+          refundAmount,
         },
       },
     });
@@ -121,6 +158,8 @@ export async function refundReservationPayment(params: {
       paymentId: payment.id,
       paymentStatus: "REFUNDED",
       provider: payment.provider,
+      originalAmount,
+      refundAmount,
       message: "FAKE 결제를 환불 처리했습니다.",
     };
   }
@@ -135,6 +174,8 @@ export async function refundReservationPayment(params: {
         refund: {
           actorType: params.actorType,
           reason: cancelReason,
+          originalAmount,
+          refundAmount,
         },
       },
     });
@@ -143,6 +184,8 @@ export async function refundReservationPayment(params: {
       paymentId: payment.id,
       paymentStatus: "REFUND_PENDING",
       provider: payment.provider,
+      originalAmount,
+      refundAmount,
       message: "Toss paymentKey가 없어 수동 환불 확인이 필요합니다.",
     };
   }
@@ -150,7 +193,7 @@ export async function refundReservationPayment(params: {
   const cancelResult = await cancelTossPayment({
     paymentKey: payment.provider_payment_key,
     cancelReason,
-    cancelAmount: toPaymentAmount(payment.amount),
+    cancelAmount: refundAmount,
   });
 
   if (!cancelResult.ok) {
@@ -163,6 +206,8 @@ export async function refundReservationPayment(params: {
         refund: {
           actorType: params.actorType,
           reason: cancelReason,
+          originalAmount,
+          refundAmount,
           tossCancelError: cancelResult.providerPayload,
         },
       },
@@ -172,6 +217,8 @@ export async function refundReservationPayment(params: {
       paymentId: payment.id,
       paymentStatus: "REFUND_PENDING",
       provider: payment.provider,
+      originalAmount,
+      refundAmount,
       message: cancelResult.message,
     };
   }
@@ -183,6 +230,8 @@ export async function refundReservationPayment(params: {
       refund: {
         actorType: params.actorType,
         reason: cancelReason,
+        originalAmount,
+        refundAmount,
         tossCancelPayload: cancelResult.providerPayload,
       },
     },
@@ -192,6 +241,8 @@ export async function refundReservationPayment(params: {
     paymentId: payment.id,
     paymentStatus: "REFUNDED",
     provider: payment.provider,
+    originalAmount,
+    refundAmount,
     message: "Toss 결제를 취소/환불 처리했습니다.",
   };
 }

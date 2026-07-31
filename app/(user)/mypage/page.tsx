@@ -7,7 +7,9 @@ import {
   BookOpen,
   CalendarDays,
   CarFront,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   ImageIcon,
   LogIn,
   LogOut,
@@ -73,6 +75,7 @@ export default function MyPage() {
   const [profileError, setProfileError] = useState("");
   const [myReviews, setMyReviews] = useState<MyReview[]>([]);
   const [isReviewsLoading, setIsReviewsLoading] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
   const [reviewPreview, setReviewPreview] = useState<{
     reviewId: string;
     imageIndex: number;
@@ -85,6 +88,7 @@ export default function MyPage() {
       src: image.url,
       alt: `${previewReview.partnerName} 리뷰 사진 ${index + 1} 상세보기`,
     })) ?? [];
+  const visibleReviews = showAllReviews ? myReviews : myReviews.slice(0, 3);
 
   useEffect(() => {
     let mounted = true;
@@ -127,6 +131,7 @@ export default function MyPage() {
       if (!user) {
         setProfile(null);
         setMyReviews([]);
+        setShowAllReviews(false);
         return;
       }
 
@@ -164,6 +169,7 @@ export default function MyPage() {
         };
         if (reviewResult.value.ok) {
           setMyReviews(payload.reviews ?? []);
+          setShowAllReviews(false);
         }
       }
 
@@ -393,7 +399,7 @@ export default function MyPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {myReviews.map((review) => (
+              {visibleReviews.map((review) => (
                 <article
                   key={review.id}
                   className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
@@ -465,6 +471,26 @@ export default function MyPage() {
                   </Link>
                 </article>
               ))}
+              {myReviews.length > 3 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllReviews((current) => !current)}
+                  aria-expanded={showAllReviews}
+                  className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-700 shadow-sm"
+                >
+                  {showAllReviews ? (
+                    <>
+                      리뷰 접기
+                      <ChevronUp className="size-4" />
+                    </>
+                  ) : (
+                    <>
+                      전체 리뷰 {myReviews.length}개 보기
+                      <ChevronDown className="size-4" />
+                    </>
+                  )}
+                </button>
+              ) : null}
             </div>
           )}
         </section>

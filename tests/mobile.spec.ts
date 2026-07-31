@@ -1,5 +1,19 @@
 import { expect, test } from "@playwright/test";
 
+import {
+  calculateConfirmedReservationRefundAmount,
+  reservationCancellationPolicy,
+} from "@/src/domain/cancellation-policy";
+
+test("confirmed reservation refund policy returns the full payment amount", () => {
+  expect(calculateConfirmedReservationRefundAmount(22000)).toBe(22000);
+  expect(calculateConfirmedReservationRefundAmount("15000")).toBe(15000);
+  expect(calculateConfirmedReservationRefundAmount("invalid")).toBe(0);
+  expect(reservationCancellationPolicy).toContain(
+    "체크인 전 예약 취소 시 결제 금액 전액 환불",
+  );
+});
+
 test.describe("mobile public smoke", () => {
   test("home, login, and auth-required user pages render on mobile", async ({
     page,
@@ -27,6 +41,15 @@ test.describe("mobile public smoke", () => {
     await expect(page.getByText("통신판매중개자 고지")).toBeVisible();
     await expect(page.getByText("개인정보 처리 안내")).toBeVisible();
     await expect(page.getByText("취소·환불 및 노쇼")).toBeVisible();
+    await expect(
+      page.getByText(/체크인 전 예약 확정 상태에서는.*전액 환불합니다/),
+    ).toBeVisible();
+
+    await page.goto("/payment");
+    await expect(
+      page.getByText("체크인 전 예약 취소 시 결제 금액 전액 환불"),
+    ).toBeVisible();
+    await expect(page.getByText(/24시간 전 전액 환불/)).toHaveCount(0);
 
     await page.goto("/login");
     await expect(

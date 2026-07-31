@@ -72,6 +72,18 @@ function getFutureWindowForAttempt(attempt: number) {
   };
 }
 
+function formatKstDateValue(value: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
 async function createConfirmedReservationForAdminE2E() {
   const db = requireAdminSupabaseForE2E();
   const credentials = {
@@ -153,6 +165,7 @@ async function createConfirmedReservationForAdminE2E() {
         reservationId: reservation.id,
         paymentId: payment.id,
         partnerId: seed.partnerId,
+        reservationDate: formatKstDateValue(startTime),
       };
     }
 
@@ -471,10 +484,12 @@ test.describe("admin smoke", () => {
 
     const db = requireAdminSupabaseForE2E();
     let reservationId: string | null = null;
+    let reservationDate = "";
 
     try {
       const created = await createConfirmedReservationForAdminE2E();
       reservationId = created.reservationId;
+      reservationDate = created.reservationDate;
 
       const missingReasonResponse = await page.request.post(
         `/api/admin/reservations/${reservationId}/cancel`,
@@ -533,7 +548,14 @@ test.describe("admin smoke", () => {
         .single<{
           status: string;
           refunded_at: string | null;
-          metadata: { refund?: { actorType?: string; reason?: string } } | null;
+          metadata: {
+            refund?: {
+              actorType?: string;
+              reason?: string;
+              originalAmount?: number;
+              refundAmount?: number;
+            };
+          } | null;
         }>();
 
       if (paymentError || !payment) {
@@ -546,6 +568,8 @@ test.describe("admin smoke", () => {
       expect(payment.metadata?.refund?.reason).toBe(
         "E2E 관리자 취소 안전장치 검증",
       );
+      expect(payment.metadata?.refund?.originalAmount).toBe(10000);
+      expect(payment.metadata?.refund?.refundAmount).toBe(10000);
 
       const { data: statusLog, error: statusLogError } = await db
         .from("reservation_status_logs")
@@ -586,13 +610,13 @@ test.describe("admin smoke", () => {
         refundedPaymentRow.getByText("환불 완료").first(),
       ).toBeVisible();
 
-      await page.goto("/admin/reservations");
+      await page.goto(`/admin/reservations?startDate=${reservationDate}`);
       const cancelledReservationRow = page.locator("tbody tr").filter({
         has: page.locator(`a[href="/admin/reservations/${reservationId}"]`),
       });
       await expect(cancelledReservationRow).toHaveCount(1);
       await expect(
-        cancelledReservationRow.getByText("CANCELLED"),
+        cancelledReservationRow.getByText("취소", { exact: true }),
       ).toBeVisible();
       await expect(cancelledReservationRow.getByText("REFUNDED")).toBeVisible();
     } finally {

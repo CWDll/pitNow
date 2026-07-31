@@ -23,6 +23,16 @@
 - `NO_SHOW` no longer blocks a bay and cannot be checked in, completed, or
   reviewed.
 
+## Cancellation and Refund
+
+- A user may directly cancel only a `CONFIRMED` reservation before check-in.
+- Direct user cancellation refunds the full reservation prepayment.
+- `CHECKED_IN`, `IN_USE`, and `COMPLETED` reservations require operational
+  review instead of direct in-app cancellation.
+- A `NO_SHOW` reservation is not automatically refunded.
+- The payment screen, cancellation API, payment ledger, and user reservation
+  history must use these same rules.
+
 ## Extra Fee
 
 - Overtime calculated per 1 hour

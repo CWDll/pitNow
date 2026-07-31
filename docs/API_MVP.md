@@ -280,10 +280,17 @@ reason?: string
 • reservations.status → CANCELLED
 • reservation_status_logs에 상태 전환 로그 저장
 • 취소 사유는 metadata.reason에 저장
+• 예약 선결제 전액을 provider 취소/환불 처리
+• 환불 원 결제액과 실제 환불액을 payment metadata에 저장
 
 성공 응답:
 {
-status: “CANCELLED”
+status: “CANCELLED”,
+refund: {
+  paymentStatus: “REFUNDED” | “REFUND_PENDING” | “NO_PAYMENT”,
+  originalAmount: number,
+  refundAmount: number
+}
 }
 
 ⸻

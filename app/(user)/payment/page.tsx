@@ -8,6 +8,7 @@ import type {
   PaymentMethod,
   PreparePaymentPayload,
 } from "@/src/domain/types";
+import { reservationCancellationPolicy } from "@/src/domain/cancellation-policy";
 import { extractApiErrorMessage } from "@/src/lib/api-error";
 import { authFetch } from "@/src/lib/auth-fetch";
 import { requireClientSession } from "@/src/lib/client-auth";
@@ -490,10 +491,10 @@ function PaymentPageContent() {
 
       <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">
         <p className="font-semibold">취소/환불 규정</p>
-        <ul className="mt-2 list-disc pl-5">
-          <li>이용 24시간 전 전액 환불</li>
-          <li>이용 2시간 전 50% 환불</li>
-          <li>패키지 예약은 업장 정책에 따라 일정이 조정될 수 있습니다.</li>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          {reservationCancellationPolicy.map((policy) => (
+            <li key={policy}>{policy}</li>
+          ))}
         </ul>
       </div>
 
