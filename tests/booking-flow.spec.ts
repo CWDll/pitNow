@@ -743,10 +743,12 @@ test.describe("booking flow smoke", () => {
       await expect(page.getByText("1/4")).toBeVisible();
 
       await page.getByLabel("5점 선택").click();
+      await expect(page.getByText("매우 만족했어요")).toBeVisible();
       await page
-        .getByPlaceholder("서비스 리뷰를 남겨주세요.")
+        .getByLabel("이용 후기", { exact: true })
         .fill("E2E 예약 루프 검증 후기입니다.");
-      await page.getByRole("button", { name: "후기 제출" }).click();
+      await expect(page.getByText(/^[1-9]\d*\/500$/)).toBeVisible();
+      await page.getByRole("button", { name: "후기 등록" }).click();
       await expect(
         page.getByText("리뷰 저장이 완료되었습니다."),
       ).toBeVisible({ timeout: 15_000 });

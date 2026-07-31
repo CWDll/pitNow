@@ -113,6 +113,10 @@ function parsePayload(payload: unknown): ReviewPayload | null {
     return null;
   }
 
+  if (typeof comment === "string" && comment.trim().length > 500) {
+    return null;
+  }
+
   if (
     imagePaths !== undefined &&
     (!Array.isArray(imagePaths) ||

@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, ImagePlus, LoaderCircle, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
+  ImagePlus,
+  LoaderCircle,
+  Star,
+  X,
+} from "lucide-react";
 
 import type {
   CreateReviewPayload,
@@ -33,6 +41,15 @@ interface PendingReviewImage {
 interface ReviewApiError {
   error?: string | { message?: string };
 }
+
+const reviewRatingLabels = [
+  "별점을 선택해 주세요",
+  "아쉬웠어요",
+  "조금 아쉬웠어요",
+  "괜찮았어요",
+  "만족했어요",
+  "매우 만족했어요",
+] as const;
 
 function extractErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") {
@@ -738,42 +755,84 @@ function CompletePageContent() {
       ) : null}
 
       <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
-        <h2 className="text-2xl font-semibold text-zinc-900">
-          후기를 남겨주세요
-        </h2>
-
-        <div className="mt-3 flex items-center gap-2">
-          {Array.from({ length: 5 }).map((_, index) => {
-            const starNumber = index + 1;
-            const active = starNumber <= rating;
-
-            return (
-              <button
-                key={starNumber}
-                type="button"
-                onClick={() => setRating(starNumber)}
-                className={`text-4xl leading-none ${active ? "text-amber-400" : "text-zinc-300"}`}
-                aria-label={`${starNumber}점 선택`}
-              >
-                ★
-              </button>
-            );
-          })}
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600">
+            <Star className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-black text-blue-600">이용 후기</p>
+            <h2 className="mt-1 text-xl font-black text-slate-950">
+              정비 경험은 어떠셨나요?
+            </h2>
+            <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+              {detail.garageName} · {detail.workTitle}
+            </p>
+          </div>
         </div>
 
-        <textarea
-          className="mt-3 h-24 w-full rounded-xl bg-zinc-100 p-3 text-sm"
-          placeholder="서비스 리뷰를 남겨주세요."
-          value={reviewText}
-          onChange={(event) => setReviewText(event.target.value)}
-        />
+        <div className="mt-5 rounded-xl bg-slate-50 px-3 py-4 text-center">
+          <p aria-live="polite" className="text-sm font-black text-slate-700">
+            {reviewRatingLabels[rating]}
+          </p>
+          <div className="mt-3 flex items-center justify-center gap-1">
+            {Array.from({ length: 5 }).map((_, index) => {
+              const starNumber = index + 1;
+              const active = starNumber <= rating;
 
-        <div className="mt-4">
+              return (
+                <button
+                  key={starNumber}
+                  type="button"
+                  onClick={() => {
+                    setRating(starNumber);
+                    setReviewSaved(false);
+                  }}
+                  className="grid size-11 place-items-center rounded-lg transition-colors active:bg-amber-50"
+                  aria-label={`${starNumber}점 선택`}
+                  aria-pressed={rating === starNumber}
+                >
+                  <Star
+                    className={`size-8 ${active ? "fill-amber-400 text-amber-400" : "text-slate-300"}`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <label htmlFor="review-comment" className="text-sm font-black text-slate-900">
+                이용 후기
+              </label>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                정비 과정과 매장 이용 경험을 알려주세요.
+              </p>
+            </div>
+            <span className="shrink-0 text-[11px] font-bold text-slate-400">
+              {reviewText.length}/500
+            </span>
+          </div>
+          <textarea
+            id="review-comment"
+            maxLength={500}
+            className="mt-3 min-h-32 w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium leading-6 text-slate-800 outline-none ring-blue-100 placeholder:text-slate-400 focus:border-blue-400 focus:ring-4"
+            placeholder="어떤 점이 좋았는지, 다른 이용자에게 도움이 될 내용을 남겨주세요."
+            value={reviewText}
+            onChange={(event) => {
+              setReviewText(event.target.value);
+              setReviewSaved(false);
+            }}
+          />
+        </div>
+
+        <div className="mt-5 border-t border-slate-100 pt-5">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-black text-slate-900">사진</h3>
               <p className="mt-1 text-xs font-semibold text-slate-500">
-                정비 결과나 매장 이용 모습을 최대 4장까지 남길 수 있습니다.
+                정비 결과나 매장 모습을 최대 4장까지 추가하세요.
               </p>
             </div>
             <span className="text-xs font-bold text-slate-500">
@@ -792,11 +851,11 @@ function CompletePageContent() {
             }
           />
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-4 gap-2">
             {reviewImages.map((image, index) => (
               <div
                 key={image.path}
-                className="relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+                className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
               >
                 {/* Public review media is intentionally displayed as a direct image. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -810,7 +869,7 @@ function CompletePageContent() {
                   aria-label={`등록된 리뷰 사진 ${index + 1} 삭제`}
                   disabled={deletingImagePath === image.path}
                   onClick={() => void removeSavedReviewImage(image)}
-                  className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-slate-950/80 text-white disabled:opacity-60"
+                  className="absolute right-1 top-1 grid size-7 place-items-center rounded-lg bg-slate-950/80 text-white disabled:opacity-60"
                 >
                   {deletingImagePath === image.path ? (
                     <LoaderCircle className="size-4 animate-spin" />
@@ -824,7 +883,7 @@ function CompletePageContent() {
             {pendingReviewImages.map((image, index) => (
               <div
                 key={image.id}
-                className="relative aspect-square overflow-hidden rounded-lg border border-blue-200 bg-blue-50"
+                className="relative aspect-square overflow-hidden rounded-xl border border-blue-200 bg-blue-50"
               >
                 {/* Browser object URLs are local previews and cannot use next/image. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -837,7 +896,7 @@ function CompletePageContent() {
                   type="button"
                   aria-label={`추가할 리뷰 사진 ${index + 1} 삭제`}
                   onClick={() => removePendingReviewImage(image.id)}
-                  className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-slate-950/80 text-white"
+                  className="absolute right-1 top-1 grid size-7 place-items-center rounded-lg bg-slate-950/80 text-white"
                 >
                   <X className="size-4" />
                 </button>
@@ -848,16 +907,16 @@ function CompletePageContent() {
               <button
                 type="button"
                 onClick={() => reviewImageInputRef.current?.click()}
-                className="flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50 text-blue-700"
+                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-blue-300 bg-blue-50 text-blue-700"
               >
-                <span className="grid size-10 place-items-center rounded-xl bg-white">
+                <span className="grid size-8 place-items-center rounded-lg bg-white">
                   {reviewImages.length + pendingReviewImages.length === 0 ? (
-                    <Camera className="size-5" />
+                    <Camera className="size-4" />
                   ) : (
-                    <ImagePlus className="size-5" />
+                    <ImagePlus className="size-4" />
                   )}
                 </span>
-                <span className="text-xs font-black">사진 추가</span>
+                <span className="text-[11px] font-black">사진 추가</span>
               </button>
             ) : null}
           </div>
@@ -879,7 +938,8 @@ function CompletePageContent() {
           </p>
         ) : null}
         {reviewSaved ? (
-          <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          <p className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+            <CheckCircle2 className="size-4 shrink-0" />
             리뷰 저장이 완료되었습니다.
           </p>
         ) : null}
@@ -888,13 +948,20 @@ function CompletePageContent() {
           type="button"
           onClick={handleSubmitReview}
           disabled={isSubmittingReview || isLoadingReview}
-          className="mt-3 h-11 w-full rounded-xl bg-zinc-900 text-base font-semibold text-white disabled:bg-zinc-200 disabled:text-zinc-500"
+          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-base font-black text-white disabled:bg-slate-200 disabled:text-slate-500"
         >
-          {reviewSaved
-            ? "후기 제출 완료"
-            : isSubmittingReview
-              ? "제출 중..."
-              : "후기 제출"}
+          {reviewSaved ? (
+            "저장 완료"
+          ) : isSubmittingReview ? (
+            <>
+              <LoaderCircle className="size-4 animate-spin" />
+              저장 중
+            </>
+          ) : hasExistingReview ? (
+            "후기 수정 저장"
+          ) : (
+            "후기 등록"
+          )}
         </button>
       </div>
 

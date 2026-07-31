@@ -463,7 +463,7 @@ export default function MyPage() {
                     )}
                   </div>
                   <Link
-                    href={`/partner/${review.partnerId}/reviews`}
+                    href={`/partner/${review.partnerId}/reviews?from=mypage`}
                     className="flex h-10 items-center justify-center gap-1 border-t border-slate-100 text-xs font-black text-blue-600"
                   >
                     정비소 리뷰 보기

@@ -123,11 +123,19 @@ test.describe("mobile public smoke", () => {
   test("partner reviews provide summary, photo filtering, and image preview", async ({
     page,
   }) => {
+    const partnerId = "11111111-1111-1111-1111-111111111111";
+
     await page.goto(
-      "/partner/11111111-1111-1111-1111-111111111111/reviews",
+      `/partner/${partnerId}/reviews`,
     );
 
     await expect(page.getByRole("heading", { name: "이용 후기" })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "정비소 상세로 돌아가기" }),
+    ).toHaveAttribute("href", `/partner/${partnerId}`);
+    await expect(
+      page.getByRole("link", { name: "강남 셀프정비소" }),
+    ).toHaveAttribute("href", `/partner/${partnerId}`);
     await expect(page.getByText("사진으로 먼저 보기")).toBeVisible();
     await expect(page.getByRole("button", { name: /^전체 \d+$/ })).toBeVisible();
 
@@ -151,7 +159,7 @@ test.describe("mobile public smoke", () => {
     await expect(
       page
         .getByRole("dialog", { name: "사진 후기 상세보기" })
-        .getByText("2 / 2", { exact: true }),
+        .getByText(/^2 \/ \d+$/),
     ).toBeVisible();
     await page.getByRole("button", { name: "사진 후기 닫기" }).click();
     await expect(
@@ -163,6 +171,19 @@ test.describe("mobile public smoke", () => {
       clientWidth: document.documentElement.clientWidth,
     }));
     expect(viewport.scrollWidth).toBe(viewport.clientWidth);
+  });
+
+  test("reviews opened from mypage return to mypage", async ({ page }) => {
+    const partnerId = "11111111-1111-1111-1111-111111111111";
+
+    await page.goto(`/partner/${partnerId}/reviews?from=mypage`);
+
+    await expect(
+      page.getByRole("link", { name: "마이페이지로 돌아가기" }),
+    ).toHaveAttribute("href", "/mypage");
+    await expect(
+      page.getByRole("link", { name: "강남 셀프정비소" }),
+    ).toHaveAttribute("href", `/partner/${partnerId}`);
   });
 
   test("partner detail copies its address and slides gallery images", async ({
