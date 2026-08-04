@@ -236,10 +236,9 @@ test.describe("partner admin dashboard", () => {
         { timeout: 15_000 },
       );
       expect(pollingReservationResponse.ok()).toBe(true);
-      await expect(
-        page.getByRole("heading", { name: "정비소 사진" }),
-      ).toBeVisible();
-      await expect(page.getByText(/최대 8장 등록/)).toBeVisible();
+
+      await page.getByRole("link", { name: "체크인 인증" }).click();
+      await expect(page).toHaveURL(/\/partner-admin\/checkin$/);
       const checkinCredentialSection = page.locator(
         "section#checkin-credential",
       );
@@ -264,6 +263,13 @@ test.describe("partner admin dashboard", () => {
           name: "QR 이미지 저장",
         }),
       ).toBeVisible();
+
+      await page.getByRole("link", { name: "정비소 사진" }).click();
+      await expect(page).toHaveURL(/\/partner-admin\/images$/);
+      await expect(
+        page.getByRole("heading", { name: "정비소 사진" }),
+      ).toBeVisible();
+      await expect(page.getByText(/최대 8장 등록/)).toBeVisible();
 
       const imageSection = page.locator("section#images");
       const uploadStartedAt = new Date(Date.now() - 1_000).toISOString();
@@ -357,7 +363,7 @@ test.describe("partner admin dashboard", () => {
         }),
       ).toBeVisible();
 
-      await page.goto("/partner-admin");
+      await page.goto("/partner-admin/images");
       await expect(
         page.getByRole("heading", { name: "정비소 사진" }),
       ).toBeVisible({ timeout: 15_000 });
@@ -383,6 +389,8 @@ test.describe("partner admin dashboard", () => {
       }
       expect(remainingUploadCount).toBe(0);
 
+      await page.getByRole("link", { name: "패키지·가격" }).click();
+      await expect(page).toHaveURL(/\/partner-admin\/packages$/);
       const pendingRequestCard = page
         .getByTestId("package-creation-request")
         .filter({ hasText: requestName });
@@ -392,6 +400,17 @@ test.describe("partner admin dashboard", () => {
         page.getByText(oldFulfilledRequest.requested_name),
       ).toHaveCount(0);
 
+      const durationInput = page.getByLabel("소요시간(분) 필수");
+      await durationInput.fill("60");
+      await expect(durationInput).toHaveValue("60");
+      expect(
+        await durationInput.evaluate((input) =>
+          (input as HTMLInputElement).checkValidity(),
+        ),
+      ).toBe(true);
+
+      await page.getByRole("link", { name: "예약 차단" }).click();
+      await expect(page).toHaveURL(/\/partner-admin\/availability$/);
       const availabilitySection = page.locator("section#availability");
       const alignedControlLocators = [
         ["범위", availabilitySection.getByLabel("범위")],
@@ -425,15 +444,6 @@ test.describe("partner admin dashboard", () => {
           alignedControls.map(({ name, box }) => ({ name, y: box?.y })),
         ),
       ).toBeLessThanOrEqual(1);
-
-      const durationInput = page.getByLabel("소요시간(분) 필수");
-      await durationInput.fill("60");
-      await expect(durationInput).toHaveValue("60");
-      expect(
-        await durationInput.evaluate((input) =>
-          (input as HTMLInputElement).checkValidity(),
-        ),
-      ).toBe(true);
 
       const userAppLink = page.getByRole("link", { name: "사용자 앱 열기" });
       const logoutLink = page.getByRole("link", { name: "로그아웃" });
@@ -656,6 +666,12 @@ test.describe("partner admin dashboard", () => {
         .getByRole("button", { name: "로그인" })
         .click();
       await expect(page).toHaveURL(/\/partner-admin/);
+      await expect(
+        page.locator("header").getByText(seed.partnerName),
+      ).toBeVisible({ timeout: 15_000 });
+
+      await page.goto("/partner-admin/reservations");
+      await expect(page).toHaveURL(/\/partner-admin\/reservations$/);
 
       const reservationRow = page.locator("button").filter({
         hasText: reservationId,

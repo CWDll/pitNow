@@ -19,6 +19,12 @@ interface PartnerRow {
   lng: number | null;
 }
 
+interface PartnerServiceModeRow {
+  id: string;
+  supports_self_service: boolean;
+  supports_shop_service: boolean;
+}
+
 interface BayRow {
   id: string;
   partner_id: string;
@@ -49,10 +55,16 @@ interface HomePartnerCard {
   cheapestPackagePrice: number | null;
   hourlyPrice: number | null;
   coverImageUrl: string | null;
+  supportsSelfService: boolean;
+  supportsShopService: boolean;
 }
 
 async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
   const partnerImagesPromise = getPartnerImages();
+  const partnerServiceModesPromise = supabase
+    .from("partners")
+    .select("id,supports_self_service,supports_shop_service")
+    .returns<PartnerServiceModeRow[]>();
   const { data: partners, error: partnerError } = await supabase
     .from("partners")
     .select("id,name,address,hourly_price,lat,lng")
@@ -92,6 +104,17 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
   }
 
   const partnerImages = await partnerImagesPromise;
+  const { data: partnerServiceModes, error: partnerServiceModesError } =
+    await partnerServiceModesPromise;
+  if (partnerServiceModesError) {
+    console.warn(
+      "HOME PARTNER SERVICE MODE LOOKUP FALLBACK:",
+      partnerServiceModesError.message,
+    );
+  }
+  const serviceModeByPartner = new Map(
+    (partnerServiceModes ?? []).map((partner) => [partner.id, partner]),
+  );
   const coverByPartner = new Map<string, string>();
   for (const image of partnerImages) {
     if (image.isCover || !coverByPartner.has(image.partnerId)) {
@@ -141,6 +164,7 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
 
   return partners.map((partner) => {
     const reviewStats = reviewStatsByPartner.get(partner.id);
+    const serviceModes = serviceModeByPartner.get(partner.id);
 
     return {
       id: partner.id,
@@ -160,6 +184,10 @@ async function getHomePartnerCards(): Promise<HomePartnerCard[]> {
       reviewCount: reviewStats?.count ?? 0,
       cheapestPackagePrice: cheapestPackageByPartner.get(partner.id) ?? null,
       coverImageUrl: coverByPartner.get(partner.id) ?? null,
+      supportsSelfService: serviceModes?.supports_self_service ?? true,
+      supportsShopService:
+        serviceModes?.supports_shop_service ??
+        cheapestPackageByPartner.has(partner.id),
     };
   });
 }

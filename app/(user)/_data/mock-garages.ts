@@ -60,6 +60,7 @@ export interface GarageSummary {
   address: string;
   hours: string;
   phone: string;
+  supportedServiceTypes: ReservationType[];
 }
 
 export interface SelfWorkOption {
@@ -106,6 +107,7 @@ export const garageList: GarageSummary[] = [
     address: "서울 강남구 테헤란로 123",
     hours: "09:00 - 21:00",
     phone: "02-1234-5678",
+    supportedServiceTypes: ["SELF_SERVICE", "SHOP_SERVICE"],
   },
   {
     id: seochoPartnerId,
@@ -121,6 +123,7 @@ export const garageList: GarageSummary[] = [
     address: "서울 서초구 반포대로 42",
     hours: "10:00 - 20:00",
     phone: "02-9876-5432",
+    supportedServiceTypes: ["SELF_SERVICE"],
   },
   {
     id: songpaPartnerId,
@@ -136,6 +139,7 @@ export const garageList: GarageSummary[] = [
     address: "서울 송파구 올림픽로 300",
     hours: "09:00 - 22:00",
     phone: "02-3322-1100",
+    supportedServiceTypes: ["SHOP_SERVICE"],
   },
   {
     id: mapoPartnerId,
@@ -151,6 +155,7 @@ export const garageList: GarageSummary[] = [
     address: "서울 마포구 월드컵북로 55",
     hours: "10:00 - 21:00",
     phone: "02-4455-7788",
+    supportedServiceTypes: ["SELF_SERVICE", "SHOP_SERVICE"],
   },
   {
     id: seongsuPartnerId,
@@ -166,6 +171,7 @@ export const garageList: GarageSummary[] = [
     address: "서울 성동구 성수이로 77",
     hours: "08:30 - 21:30",
     phone: "02-9900-2244",
+    supportedServiceTypes: ["SELF_SERVICE", "SHOP_SERVICE"],
   },
 ];
 

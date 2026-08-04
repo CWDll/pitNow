@@ -198,6 +198,22 @@ test.describe("mobile public smoke", () => {
       page.getByRole("button", { name: "주소 복사 완료" }),
     ).toBeVisible();
 
+    const inlineGallery = page.getByTestId("partner-inline-gallery");
+    await expect(page.getByTestId("partner-gallery-position")).toContainText(
+      "1 / 3",
+    );
+    await inlineGallery.evaluate((track) => {
+      const secondSlide = track.children.item(1) as HTMLElement | null;
+      if (!secondSlide) {
+        throw new Error("두 번째 정비소 사진을 찾지 못했습니다.");
+      }
+      track.scrollTo({ left: secondSlide.offsetLeft, behavior: "instant" });
+      track.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await expect(page.getByTestId("partner-gallery-position")).toContainText(
+      "2 / 3",
+    );
+
     await page
       .getByRole("button", {
         name: "강남 셀프정비소 사진 1 크게 보기",

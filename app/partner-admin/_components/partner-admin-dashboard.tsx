@@ -881,10 +881,70 @@ function SelfWorkCheckEditor({
   );
 }
 
-export function PartnerAdminDashboard() {
+export type PartnerAdminView =
+  | "overview"
+  | "reservations"
+  | "images"
+  | "checkin"
+  | "bays"
+  | "packages"
+  | "availability";
+
+const partnerAdminViewCopy: Record<
+  PartnerAdminView,
+  { eyebrow: string; title: string; description: string }
+> = {
+  overview: {
+    eyebrow: "TODAY'S OPERATIONS",
+    title: "현장 운영 현황",
+    description: "오늘의 예약과 베이 운영 상태를 빠르게 확인합니다.",
+  },
+  reservations: {
+    eyebrow: "RESERVATIONS",
+    title: "예약 현황",
+    description: "날짜별 예약, 작업 상태와 현장 이슈를 관리합니다.",
+  },
+  images: {
+    eyebrow: "PARTNER PHOTOS",
+    title: "정비소 사진",
+    description: "사용자에게 공개할 시설 사진과 대표 사진을 관리합니다.",
+  },
+  checkin: {
+    eyebrow: "ARRIVAL CHECK-IN",
+    title: "체크인 인증",
+    description: "현장 도착 인증에 사용할 QR과 수동 코드를 관리합니다.",
+  },
+  bays: {
+    eyebrow: "BAY OPERATIONS",
+    title: "베이 관리",
+    description: "베이 운영 상태와 이용 가능한 차량 조건을 관리합니다.",
+  },
+  packages: {
+    eyebrow: "SERVICE CATALOG",
+    title: "패키지·가격",
+    description: "SHOP 패키지 가격과 SELF 작업 확인 제공 범위를 관리합니다.",
+  },
+  availability: {
+    eyebrow: "AVAILABILITY",
+    title: "예약 차단",
+    description: "업장 또는 베이별 예약 불가 시간을 등록하고 관리합니다.",
+  },
+};
+
+export function PartnerAdminDashboard({
+  view = "overview",
+  initialDate,
+}: {
+  view?: PartnerAdminView;
+  initialDate?: string;
+}) {
   const [partners, setPartners] = useState<PartnerMembership[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
-  const [selectedDate, setSelectedDate] = useState(todayKstDate);
+  const [selectedDate, setSelectedDate] = useState(() =>
+    initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)
+      ? initialDate
+      : todayKstDate(),
+  );
   const [reservations, setReservations] = useState<PartnerAdminReservation[]>(
     [],
   );
@@ -963,6 +1023,7 @@ export function PartnerAdminDashboard() {
     () => partners.find((partner) => partner.partnerId === selectedPartnerId),
     [partners, selectedPartnerId],
   );
+  const viewCopy = partnerAdminViewCopy[view];
 
   useEffect(() => {
     window.dispatchEvent(
@@ -982,7 +1043,9 @@ export function PartnerAdminDashboard() {
       const response = await authFetch("/api/partner-admin/me");
 
       if (response.status === 401) {
-        redirectToLogin("/partner-admin");
+        redirectToLogin(
+          view === "overview" ? "/partner-admin" : `/partner-admin/${view}`,
+        );
         return;
       }
 
@@ -1018,10 +1081,13 @@ export function PartnerAdminDashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [view]);
 
   useEffect(() => {
-    if (!selectedPartnerId) {
+    if (
+      !selectedPartnerId ||
+      (view !== "overview" && view !== "reservations")
+    ) {
       return;
     }
 
@@ -1084,10 +1150,10 @@ export function PartnerAdminDashboard() {
       mounted = false;
       window.clearInterval(pollingId);
     };
-  }, [selectedDate, selectedPartnerId]);
+  }, [selectedDate, selectedPartnerId, view]);
 
   useEffect(() => {
-    if (!selectedPartnerId) {
+    if (!selectedPartnerId || view !== "packages") {
       return;
     }
     let mounted = true;
@@ -1123,10 +1189,13 @@ export function PartnerAdminDashboard() {
     return () => {
       mounted = false;
     };
-  }, [selectedPartnerId]);
+  }, [selectedPartnerId, view]);
 
   useEffect(() => {
-    if (!selectedPartnerId) {
+    if (
+      !selectedPartnerId ||
+      (view !== "overview" && view !== "bays" && view !== "availability")
+    ) {
       return;
     }
 
@@ -1173,10 +1242,10 @@ export function PartnerAdminDashboard() {
     return () => {
       mounted = false;
     };
-  }, [selectedPartnerId]);
+  }, [selectedPartnerId, view]);
 
   useEffect(() => {
-    if (!selectedPartnerId) {
+    if (!selectedPartnerId || view !== "packages") {
       return;
     }
 
@@ -1242,10 +1311,10 @@ export function PartnerAdminDashboard() {
     return () => {
       mounted = false;
     };
-  }, [packageReloadKey, selectedPartnerId]);
+  }, [packageReloadKey, selectedPartnerId, view]);
 
   useEffect(() => {
-    if (!selectedPartnerId) {
+    if (!selectedPartnerId || view !== "availability") {
       return;
     }
 
@@ -1293,7 +1362,7 @@ export function PartnerAdminDashboard() {
     return () => {
       mounted = false;
     };
-  }, [selectedPartnerId]);
+  }, [selectedPartnerId, view]);
 
   async function loadReservationDetail(
     reservationId: string,
@@ -2038,13 +2107,13 @@ export function PartnerAdminDashboard() {
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <p className="text-xs font-bold text-blue-700">
-            TODAY&apos;S OPERATIONS
+            {viewCopy.eyebrow}
           </p>
           <h1 className="mt-2 text-3xl font-bold text-slate-950">
-            현장 운영 현황
+            {viewCopy.title}
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            예약, 베이 상태와 현장 이슈를 한 화면에서 관리합니다.
+            {viewCopy.description}
           </p>
         </div>
       </header>
@@ -2090,7 +2159,11 @@ export function PartnerAdminDashboard() {
             </label>
           </section>
 
-          <section className="grid gap-3 md:grid-cols-4">
+          <section
+            className={`grid gap-3 md:grid-cols-4 ${
+              view === "overview" ? "" : "hidden"
+            }`}
+          >
             {[
               ["예약 확정", confirmedCount],
               ["이용 중", activeCount],
@@ -2109,19 +2182,25 @@ export function PartnerAdminDashboard() {
             ))}
           </section>
 
-          <PartnerImageManager
-            partnerId={selectedPartnerId}
-            partnerName={selectedPartner?.partnerName ?? "정비소"}
-          />
+          {view === "images" ? (
+            <PartnerImageManager
+              partnerId={selectedPartnerId}
+              partnerName={selectedPartner?.partnerName ?? "정비소"}
+            />
+          ) : null}
 
-          <PartnerCheckinCredentialManager
-            partnerId={selectedPartnerId}
-            partnerName={selectedPartner?.partnerName ?? "정비소"}
-          />
+          {view === "checkin" ? (
+            <PartnerCheckinCredentialManager
+              partnerId={selectedPartnerId}
+              partnerName={selectedPartner?.partnerName ?? "정비소"}
+            />
+          ) : null}
 
           <section
             id="bays"
-            className="scroll-mt-24 rounded-lg border border-zinc-200 bg-white"
+            className={`scroll-mt-24 rounded-lg border border-zinc-200 bg-white ${
+              view === "bays" ? "" : "hidden"
+            }`}
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
               <div>
@@ -2199,15 +2278,18 @@ export function PartnerAdminDashboard() {
                               key={reservation.id}
                               type="button"
                               onClick={() => {
-                                setSelectedDate(
+                                const reservationDate =
                                   new Intl.DateTimeFormat("en-CA", {
                                     timeZone: "Asia/Seoul",
                                     year: "numeric",
                                     month: "2-digit",
                                     day: "2-digit",
-                                  }).format(new Date(reservation.startTime)),
+                                  }).format(new Date(reservation.startTime));
+                                window.location.assign(
+                                  `/partner-admin/reservations?date=${encodeURIComponent(
+                                    reservationDate,
+                                  )}`,
                                 );
-                                window.location.hash = "reservations";
                               }}
                               className="block w-full rounded px-1 py-1 text-left text-xs text-amber-900 hover:bg-amber-100"
                             >
@@ -2263,7 +2345,9 @@ export function PartnerAdminDashboard() {
 
           <section
             id="packages"
-            className="scroll-mt-24 rounded-lg border border-zinc-200 bg-white"
+            className={`scroll-mt-24 rounded-lg border border-zinc-200 bg-white ${
+              view === "packages" ? "" : "hidden"
+            }`}
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
               <div>
@@ -2632,7 +2716,9 @@ export function PartnerAdminDashboard() {
 
           <section
             id="availability"
-            className="scroll-mt-24 rounded-lg border border-zinc-200 bg-white"
+            className={`scroll-mt-24 rounded-lg border border-zinc-200 bg-white ${
+              view === "availability" ? "" : "hidden"
+            }`}
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
               <div>
@@ -2798,7 +2884,9 @@ export function PartnerAdminDashboard() {
 
           <section
             id="reservations"
-            className="scroll-mt-24 overflow-hidden rounded-lg border border-zinc-200 bg-white"
+            className={`scroll-mt-24 overflow-hidden rounded-lg border border-zinc-200 bg-white ${
+              view === "reservations" ? "" : "hidden"
+            }`}
           >
             <div className="flex items-center justify-between gap-4 border-b border-zinc-200 px-4 py-3">
               <div>

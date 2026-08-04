@@ -41,20 +41,16 @@ const adminNavItems = [
 
 const partnerNavItems = [
   { href: "/partner-admin", label: "운영 현황", icon: LayoutDashboard },
-  { href: "/partner-admin#images", label: "정비소 사진", icon: Images },
+  { href: "/partner-admin/reservations", label: "예약 현황", icon: ClipboardCheck },
+  { href: "/partner-admin/images", label: "정비소 사진", icon: Images },
   {
-    href: "/partner-admin#checkin-credential",
+    href: "/partner-admin/checkin",
     label: "체크인 인증",
     icon: QrCode,
   },
-  { href: "/partner-admin#bays", label: "베이 관리", icon: Wrench },
-  { href: "/partner-admin#packages", label: "패키지·가격", icon: Boxes },
-  { href: "/partner-admin#availability", label: "예약 차단", icon: Ban },
-  {
-    href: "/partner-admin#reservations",
-    label: "예약 현황",
-    icon: ClipboardCheck,
-  },
+  { href: "/partner-admin/bays", label: "베이 관리", icon: Wrench },
+  { href: "/partner-admin/packages", label: "패키지·가격", icon: Boxes },
+  { href: "/partner-admin/availability", label: "예약 차단", icon: Ban },
 ] as const;
 
 const sidebarActionClassName =
@@ -63,18 +59,10 @@ const sidebarActionClassName =
 export function DashboardShell({ children, variant }: DashboardShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [hash, setHash] = useState("");
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [partnerName, setPartnerName] = useState("정비소 운영 콘솔");
   const isAdmin = variant === "admin";
   const navItems = isAdmin ? adminNavItems : partnerNavItems;
-
-  useEffect(() => {
-    const updateHash = () => setHash(window.location.hash);
-    updateHash();
-    window.addEventListener("hashchange", updateHash);
-    return () => window.removeEventListener("hashchange", updateHash);
-  }, []);
 
   useEffect(() => {
     if (isAdmin) {
@@ -92,14 +80,8 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
   }, [isAdmin]);
 
   const isActive = (href: string) => {
-    const [itemPath, itemHash = ""] = href.split("#");
-
-    if (itemHash) {
-      return pathname === itemPath && hash === `#${itemHash}`;
-    }
-
     if (href === "/admin" || href === "/partner-admin") {
-      return pathname === href && hash === "";
+      return pathname === href;
     }
 
     return pathname.startsWith(href);
@@ -109,7 +91,7 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
     navItems.find((item) => isActive(item.href)) ??
     [...navItems]
       .reverse()
-      .find((item) => pathname.startsWith(item.href.split("#")[0]));
+      .find((item) => pathname.startsWith(item.href));
 
   async function signOutPartner() {
     setIsSigningOut(true);
@@ -149,12 +131,6 @@ export function DashboardShell({ children, variant }: DashboardShellProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => {
-                  const nextHash = item.href.includes("#")
-                    ? `#${item.href.split("#")[1]}`
-                    : "";
-                  setHash(nextHash);
-                }}
                 className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
                   isAdmin && active
                     ? "bg-blue-50 text-blue-700"

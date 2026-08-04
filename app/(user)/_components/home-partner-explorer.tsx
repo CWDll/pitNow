@@ -25,6 +25,8 @@ export interface HomePartnerExplorerItem extends PartnerMapItem {
   cheapestPackagePrice: number | null;
   hourlyPrice: number | null;
   coverImageUrl: string | null;
+  supportsSelfService: boolean;
+  supportsShopService: boolean;
 }
 
 interface GeoPoint {
@@ -96,6 +98,7 @@ function sortPartners(
   partners: HomePartnerExplorerItem[],
   sortMode: SortMode,
   userLocation: GeoPoint | null,
+  serviceMode: ServiceMode,
 ) {
   return [...partners].sort((a, b) => {
     if (sortMode === "DISTANCE") {
@@ -118,9 +121,13 @@ function sortPartners(
     }
 
     if (sortMode === "PRICE") {
+      const aPrice =
+        serviceMode === "SELF" ? a.hourlyPrice : a.cheapestPackagePrice;
+      const bPrice =
+        serviceMode === "SELF" ? b.hourlyPrice : b.cheapestPackagePrice;
       return (
-        (a.cheapestPackagePrice ?? Number.POSITIVE_INFINITY) -
-        (b.cheapestPackagePrice ?? Number.POSITIVE_INFINITY)
+        (aPrice ?? Number.POSITIVE_INFINITY) -
+        (bPrice ?? Number.POSITIVE_INFINITY)
       );
     }
 
@@ -155,9 +162,18 @@ export function HomePartnerExplorer({
   const [toastMessage, setToastMessage] = useState<string>("");
   const cardRefs = useRef(new Map<string, HTMLElement>());
 
+  const filteredPartners = useMemo(
+    () =>
+      partners.filter((partner) =>
+        serviceMode === "SELF"
+          ? partner.supportsSelfService
+          : partner.supportsShopService,
+      ),
+    [partners, serviceMode],
+  );
   const sortedPartners = useMemo(
-    () => sortPartners(partners, sortMode, userLocation),
-    [partners, sortMode, userLocation],
+    () => sortPartners(filteredPartners, sortMode, userLocation, serviceMode),
+    [filteredPartners, serviceMode, sortMode, userLocation],
   );
 
   const handlePartnerSelect = useCallback((partnerId: string) => {
@@ -241,7 +257,7 @@ export function HomePartnerExplorer({
       </section>
 
       <PartnerMap
-        partners={partners}
+        partners={filteredPartners}
         kakaoMapAppKey={kakaoMapAppKey}
         selectedPartnerId={selectedPartnerId}
         onPartnerSelect={handlePartnerSelect}
@@ -254,7 +270,9 @@ export function HomePartnerExplorer({
             <p className="text-xs font-bold text-blue-600">NEARBY GARAGES</p>
             <h2 className="mt-1 text-xl font-black text-slate-950">예약 가능한 정비소</h2>
           </div>
-          <span className="shrink-0 text-xs font-bold text-slate-400">{partners.length}곳</span>
+          <span className="shrink-0 text-xs font-bold text-slate-400">
+            {filteredPartners.length}곳
+          </span>
         </div>
 
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -290,6 +308,17 @@ export function HomePartnerExplorer({
       </section>
 
       <div className="space-y-3 pb-3">
+        {sortedPartners.length === 0 ? (
+          <div className="rounded-lg border border-slate-200 bg-white px-5 py-8 text-center">
+            <Warehouse className="mx-auto size-6 text-slate-400" />
+            <p className="mt-3 text-sm font-black text-slate-800">
+              이 방식을 제공하는 정비소가 없습니다
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              다른 정비 방식을 선택해 확인해 주세요.
+            </p>
+          </div>
+        ) : null}
         {sortedPartners.map((partner) => {
           const ratingLabel =
             partner.averageRating === null
@@ -381,34 +410,38 @@ export function HomePartnerExplorer({
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div
                   className={`rounded-xl border p-3 ${
-                    serviceMode === "SELF"
+                    serviceMode === "SELF" && partner.supportsSelfService
                       ? "border-blue-200 bg-blue-50"
                       : "border-slate-100 bg-slate-50"
-                  }`}
+                  } ${partner.supportsSelfService ? "" : "opacity-50"}`}
                 >
                   <p className="flex items-center gap-1.5 text-xs font-black text-blue-700">
                     <Wrench className="size-3.5" /> Self
                   </p>
                   <p className="mt-2 text-xs font-medium text-slate-500">시간제 베이 예약</p>
                   <p className="mt-1 text-base font-black text-slate-950">
-                    {partner.hourlyPrice
+                    {!partner.supportsSelfService
+                      ? "미제공"
+                      : partner.hourlyPrice
                       ? `${formatPrice(partner.hourlyPrice)}/시간`
                       : "요금 준비중"}
                   </p>
                 </div>
                 <div
                   className={`rounded-xl border p-3 ${
-                    serviceMode === "SHOP"
+                    serviceMode === "SHOP" && partner.supportsShopService
                       ? "border-emerald-200 bg-emerald-50"
                       : "border-slate-100 bg-slate-50"
-                  }`}
+                  } ${partner.supportsShopService ? "" : "opacity-50"}`}
                 >
                   <p className="flex items-center gap-1.5 text-xs font-black text-emerald-700">
                     <ShieldCheck className="size-3.5" /> Shop
                   </p>
                   <p className="mt-2 text-xs font-medium text-slate-500">정비 패키지 예약</p>
                   <p className="mt-1 text-base font-black text-slate-950">
-                    {partner.cheapestPackagePrice
+                    {!partner.supportsShopService
+                      ? "미제공"
+                      : partner.cheapestPackagePrice
                       ? `${formatPrice(partner.cheapestPackagePrice)}부터`
                       : "패키지 준비중"}
                   </p>

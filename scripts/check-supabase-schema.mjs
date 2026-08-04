@@ -106,7 +106,16 @@ const checks = [
   {
     label: "20260329 seed catalog: partners/bays/service package tables",
     table: "partners",
-    columns: ["id", "name", "address", "hourly_price", "lat", "lng"],
+    columns: [
+      "id",
+      "name",
+      "address",
+      "hourly_price",
+      "lat",
+      "lng",
+      "supports_self_service",
+      "supports_shop_service",
+    ],
   },
   {
     label: "20260329 seed catalog: bays",

@@ -29,11 +29,20 @@ create table partners (
   name text not null,
   address text not null,
   hourly_price numeric not null check (hourly_price > 0),
+  supports_self_service boolean not null default true,
+  supports_shop_service boolean not null default true,
   lat float8,
   lng float8,
   created_at timestamptz default now()
 );
 ````
+
+Rules:
+
+- `supports_self_service`는 사용자가 직접 작업하는 시간제 SELF 예약 노출 여부다.
+- `supports_shop_service`는 정비소가 수행하는 SHOP 패키지 예약 노출 여부다.
+- 홈 지도와 목록은 사용자가 선택한 방식에 대응하는 정비소만 노출한다.
+- 두 값은 입점 시 확인하고 운영 정책 변경 시 Admin 관리 대상으로 확장한다.
 
 ---
 
