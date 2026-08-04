@@ -4,6 +4,29 @@ import {
   calculateConfirmedReservationRefundAmount,
   reservationCancellationPolicy,
 } from "@/src/domain/cancellation-policy";
+import { partnerSupportsServiceMode } from "@/app/(user)/_components/home-partner-explorer";
+
+test("home service mode filter respects each partner's offered services", () => {
+  const selfOnly = {
+    supportsSelfService: true,
+    supportsShopService: false,
+  };
+  const shopOnly = {
+    supportsSelfService: false,
+    supportsShopService: true,
+  };
+  const both = {
+    supportsSelfService: true,
+    supportsShopService: true,
+  };
+
+  expect(partnerSupportsServiceMode(selfOnly, "SELF")).toBe(true);
+  expect(partnerSupportsServiceMode(selfOnly, "SHOP")).toBe(false);
+  expect(partnerSupportsServiceMode(shopOnly, "SELF")).toBe(false);
+  expect(partnerSupportsServiceMode(shopOnly, "SHOP")).toBe(true);
+  expect(partnerSupportsServiceMode(both, "SELF")).toBe(true);
+  expect(partnerSupportsServiceMode(both, "SHOP")).toBe(true);
+});
 
 test("confirmed reservation refund policy returns the full payment amount", () => {
   expect(calculateConfirmedReservationRefundAmount(22000)).toBe(22000);

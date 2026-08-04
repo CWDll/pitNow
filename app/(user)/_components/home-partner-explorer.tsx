@@ -34,6 +34,18 @@ interface GeoPoint {
   lng: number;
 }
 
+export function partnerSupportsServiceMode(
+  partner: Pick<
+    HomePartnerExplorerItem,
+    "supportsSelfService" | "supportsShopService"
+  >,
+  serviceMode: ServiceMode,
+) {
+  return serviceMode === "SELF"
+    ? partner.supportsSelfService
+    : partner.supportsShopService;
+}
+
 interface HomePartnerExplorerProps {
   partners: HomePartnerExplorerItem[];
   kakaoMapAppKey: string | null;
@@ -165,9 +177,7 @@ export function HomePartnerExplorer({
   const filteredPartners = useMemo(
     () =>
       partners.filter((partner) =>
-        serviceMode === "SELF"
-          ? partner.supportsSelfService
-          : partner.supportsShopService,
+        partnerSupportsServiceMode(partner, serviceMode),
       ),
     [partners, serviceMode],
   );
